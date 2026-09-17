@@ -472,6 +472,13 @@ p:last-child {
   object-position: right center !important;
 }
 
+@media (min-width: 1025px) {
+  .hero-image-cover {
+    object-fit: cover !important;
+    object-position: right center !important;
+  }
+}
+
 .hero-gradient-overlay {
   position: absolute;
   inset: 0;
