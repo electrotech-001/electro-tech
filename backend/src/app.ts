@@ -1,15 +1,15 @@
 import cors, { type CorsOptions } from "cors";
 import express, { type ErrorRequestHandler, type RequestHandler } from "express";
 import multer from "multer";
-import type { RuntimeConfig } from "./config.js";
+import { DEFAULT_OPERATIONAL_CONFIG, type RuntimeConfig } from "./config.js";
 import { createQuoteRouter, MAX_QUOTE_BODY_BYTES } from "./routes/quote.js";
 import { createSolarAnalyzerRouter, MAX_CALCULATE_BODY_BYTES, type SolarAnalyzerRouterDependencies } from "./routes/solar-analyzer.js";
-import type { SupabaseAdmin } from "./services/supabase.js";
+import type { QuoteEmailSender } from "./services/email.js";
 
 type AppDependencies = {
-  config: Pick<RuntimeConfig, "nodeEnv" | "frontendOrigin">;
-  getSupabaseAdmin?: () => SupabaseAdmin | null;
+  config: Pick<RuntimeConfig, "nodeEnv" | "frontendOrigin"> & Partial<Pick<RuntimeConfig, "geminiTimeoutMs" | "solarAnalyzerMaxFileMb" | "solarAnalyzerMaxFileBytes" | "solarAnalyzerExtractRateLimitMax" | "solarAnalyzerCalculateRateLimitMax" | "quoteRateLimitMax">>;
   extractBill?: SolarAnalyzerRouterDependencies["extractBill"];
+  sendQuoteEmail?: QuoteEmailSender;
 };
 
 function isLocalDevelopmentOrigin(origin: string): boolean {
@@ -50,6 +50,13 @@ const quoteContentLengthGuard: RequestHandler = (request, response, next) => {
 
 export function createApp(dependencies: AppDependencies) {
   const app = express();
+  const solarAnalyzerMaxFileMb = dependencies.config.solarAnalyzerMaxFileMb ?? DEFAULT_OPERATIONAL_CONFIG.solarAnalyzerMaxFileMb;
+  const operationalConfig = {
+    geminiTimeoutMs: dependencies.config.geminiTimeoutMs ?? DEFAULT_OPERATIONAL_CONFIG.geminiTimeoutMs,
+    solarAnalyzerMaxFileBytes: dependencies.config.solarAnalyzerMaxFileBytes ?? solarAnalyzerMaxFileMb * 1024 * 1024,
+    solarAnalyzerExtractRateLimitMax: dependencies.config.solarAnalyzerExtractRateLimitMax ?? DEFAULT_OPERATIONAL_CONFIG.solarAnalyzerExtractRateLimitMax,
+    solarAnalyzerCalculateRateLimitMax: dependencies.config.solarAnalyzerCalculateRateLimitMax ?? DEFAULT_OPERATIONAL_CONFIG.solarAnalyzerCalculateRateLimitMax,
+  };
 
   app.disable("x-powered-by");
   // Belmo routes edge traffic directly through one load balancer hop.
@@ -60,18 +67,17 @@ export function createApp(dependencies: AppDependencies) {
   app.use("/api/quote", express.json({ limit: MAX_QUOTE_BODY_BYTES }));
   app.use(
     "/api/quote",
-    createQuoteRouter(
-      dependencies.getSupabaseAdmin
-        ? { getSupabaseAdmin: dependencies.getSupabaseAdmin }
-        : {},
-    ),
+    createQuoteRouter({
+      ...(dependencies.sendQuoteEmail ? { sendEmail: dependencies.sendQuoteEmail } : {}),
+      rateLimitMax: dependencies.config.quoteRateLimitMax ?? DEFAULT_OPERATIONAL_CONFIG.quoteRateLimitMax,
+    }),
   );
   app.use(
     "/api/solar-analyzer",
     express.json({ limit: MAX_CALCULATE_BODY_BYTES }),
     createSolarAnalyzerRouter({
-      ...(dependencies.getSupabaseAdmin ? { getSupabaseAdmin: dependencies.getSupabaseAdmin } : {}),
       ...(dependencies.extractBill ? { extractBill: dependencies.extractBill } : {}),
+      config: operationalConfig,
     }),
   );
 
@@ -79,7 +85,7 @@ export function createApp(dependencies: AppDependencies) {
     void _next;
     if (error instanceof multer.MulterError) {
       if (error.code === "LIMIT_FILE_SIZE") {
-        response.status(413).json({ code: "file_too_large", message: "The bill must be 10 MB or smaller." });
+        response.status(413).json({ code: "file_too_large", message: `The bill must be ${solarAnalyzerMaxFileMb} MB or smaller.` });
         return;
       }
       response.status(400).json({ code: "malformed_upload", message: "Upload one bill file using the bill field." });

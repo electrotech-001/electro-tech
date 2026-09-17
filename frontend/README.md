@@ -1,39 +1,34 @@
 # Electro Tech one-page website
 
-Production-oriented one-page lead-generation site for Electro Tech — Electrical & Solar Solutions. It includes an accessible mobile menu, interactive solar-system flow, solar starting-point prefill, conditional quote form, Supabase persistence, database-backed rate limiting, SEO metadata and structured data.
+Production-oriented one-page lead-generation site for Electro Tech — Electrical & Solar Solutions. It includes an accessible mobile menu, interactive solar-system flow, solar starting-point prefill, no-storage email quote delivery with a WhatsApp fallback, SEO metadata and structured data.
 
 ## Requirements
 
 - Node.js 22.13 or newer
 - npm
-- A Supabase project for live enquiries
+- The standalone backend for bill extraction, calculations, and quote validation
 
 ## Local setup
 
 1. Run `npm install`.
 2. Copy `.env.example` to `.env.local` and add the required values.
-3. Apply `../backend/supabase/migrations/202608140001_quote_enquiries.sql` in the Supabase SQL editor or CLI.
+3. Run the backend locally on port `3001`.
 4. Run `npm run dev`.
-
-The website still renders without Supabase credentials; form submissions then return a safe message directing visitors to WhatsApp.
 
 ## Environment variables
 
 - `NEXT_PUBLIC_SITE_URL`: canonical production URL.
-- `NEXT_PUBLIC_API_ORIGIN`: public origin of the standalone Belmo API, without a trailing slash. The analyzer falls back to `http://localhost:3001` only outside production. Changing this Vercel build variable requires a new frontend deployment.
-- `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL used only by the server route.
-- `SUPABASE_SERVICE_ROLE_KEY`: server-only insert and rate-limit key. Never expose it to browser code.
-- `QUOTE_NOTIFICATION_EMAIL`: reserved notification destination.
+- `NEXT_PUBLIC_API_ORIGIN`: public origin of the standalone Belmo API, without a trailing slash. API requests fall back to `http://localhost:3001` only outside production. Changing this Vercel build variable requires a new frontend deployment.
 
 ## Validation and tests
 
 - `npm run lint` checks TypeScript/React quality rules.
 - `npm test` runs a production build and server-rendered HTML/security checks.
-- `npm run build` creates the Cloudflare-compatible production output.
+- `npm run build` creates the Nitro/Vercel production output in `.output`.
 
 ## Enquiries and security
 
-`POST /api/quote` validates every payload with Zod, normalizes phone and email values, rejects a honeypot field, enforces input limits and inserts through the server-only service role. The SQL migration enables RLS, grants no browser read/update/delete policies, and includes a transactional database-backed 5-requests-per-30-minutes limiter keyed by a one-way hash of the request IP.
+The quote form sends project details to the standalone API configured by `NEXT_PUBLIC_API_ORIGIN`. The backend validates each payload with Zod, normalizes phone and email values, rejects a honeypot field, enforces input and rate limits, and delivers the request to Electrotech through Resend. Success is shown only after the provider accepts the email. No quote is stored; WhatsApp remains available as a secondary action and failure fallback.
 
 The dedicated `/solar-bill-analyzer` route calls the standalone backend configured by `NEXT_PUBLIC_API_ORIGIN`. Bill bytes are processed in memory and are not stored by Electrotech; only non-PII verified consumption and location are sent to the deterministic calculation endpoint.
 
@@ -47,7 +42,7 @@ Business details, services, projects and technology names live in `lib/site-conf
 - Node runtime: 22+
 - Build command: `npm run build`
 - Add frontend production environment variables in the frontend hosting platform.
-- Set `NEXT_PUBLIC_SITE_URL` to the final HTTPS domain, apply the Supabase migration, and verify `/`, `/robots.txt`, `/sitemap.xml`, and one test enquiry.
-- Roll back by redeploying the prior successful build. The migration is additive; do not drop enquiry tables during an application rollback.
+- Set `NEXT_PUBLIC_SITE_URL` to the final HTTPS domain and `NEXT_PUBLIC_API_ORIGIN` to the Belmo API origin, then verify `/`, `/robots.txt`, `/sitemap.xml`, the analyzer, and one quote handoff.
+- Roll back by redeploying the prior successful build.
 
 The included Sites/vinext runtime also supports Cloudflare-compatible previews and publishing.

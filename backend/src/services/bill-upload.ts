@@ -1,6 +1,7 @@
 import path from "node:path";
+import { DEFAULT_OPERATIONAL_CONFIG } from "../config.js";
 
-export const MAX_BILL_FILE_BYTES = 10 * 1024 * 1024;
+export const MAX_BILL_FILE_BYTES = DEFAULT_OPERATIONAL_CONFIG.solarAnalyzerMaxFileMb * 1024 * 1024;
 
 export type ValidBillMimeType = "application/pdf" | "image/jpeg" | "image/png";
 
@@ -9,6 +10,12 @@ const ALLOWED_BY_EXTENSION: Readonly<Record<string, ValidBillMimeType>> = Object
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".png": "image/png",
+});
+
+const PERMITTED_BROWSER_MIMES: Readonly<Record<ValidBillMimeType, ReadonlySet<string>>> = Object.freeze({
+  "application/pdf": new Set(["application/pdf", "application/x-pdf", "application/octet-stream", ""]),
+  "image/jpeg": new Set(["image/jpeg", "image/jpg", "image/pjpeg", "application/octet-stream", ""]),
+  "image/png": new Set(["image/png", "image/x-png", "application/octet-stream", ""]),
 });
 
 function detectedMimeType(buffer: Buffer): ValidBillMimeType | null {
@@ -34,7 +41,12 @@ export function validateBillUpload(file: Express.Multer.File): { bytes: Buffer; 
     throw new BillUploadError("unsupported", "Upload a PDF, JPG, JPEG, or PNG bill.");
   }
   const signatureMime = detectedMimeType(file.buffer);
-  if (!signatureMime || signatureMime !== expectedMime || file.mimetype.toLowerCase() !== expectedMime) {
+  if (!signatureMime || signatureMime !== expectedMime) {
+    throw new BillUploadError("mismatch", "The bill file type does not match its contents.");
+  }
+  const browserMime = file.mimetype?.trim().toLowerCase() ?? "";
+  const allowedBrowserMimes = PERMITTED_BROWSER_MIMES[expectedMime];
+  if (browserMime && !allowedBrowserMimes.has(browserMime)) {
     throw new BillUploadError("mismatch", "The bill file type does not match its contents.");
   }
   return { bytes: file.buffer, mimeType: signatureMime };

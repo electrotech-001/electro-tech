@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { ProjectCards } from "./project-cards";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -10,16 +11,15 @@ import {
   ArrowUp,
   ArrowUpRight,
   Check,
-  FileSearch,
   Mail,
   MessageCircle,
   Phone,
-  Waves,
   Sun,
   ShieldCheck,
   Zap,
 } from "lucide-react";
-import { siteConfig } from "@/lib/site-config";
+import { siteConfig, type ServiceName } from "@/lib/site-config";
+import { apiUrl } from "@/lib/api-origin";
 import { analyzerLeadMessage, consumeAnalyzerLeadContext } from "@/lib/solar-analyzer";
 import { QuoteInput, quoteSchema } from "@/lib/validation";
 
@@ -33,20 +33,29 @@ const navItems = [
 
 const solarContent = {
   Hybrid: {
-    eyebrow: "Flexible continuity",
+    eyebrow: "FLEXIBLE CONTINUITY",
+    title: "Hybrid Solar System",
     description: "Solar, battery storage, and the grid work seamlessly together in one adaptable configuration.",
+    descriptor: "SOLAR + STORAGE + GRID",
+    badge: "HYBRID SYSTEM",
     battery: true,
     grid: true,
   },
   "On-Grid": {
-    eyebrow: "Direct connection",
+    eyebrow: "DIRECT CONNECTION",
+    title: "On-Grid Solar System",
     description: "Solar generation directly offsets grid electricity during peak daytime consumption hours.",
+    descriptor: "SOLAR + GRID",
+    badge: "ON-GRID SYSTEM",
     battery: false,
     grid: true,
   },
   "Off-Grid": {
-    eyebrow: "Independent supply",
+    eyebrow: "INDEPENDENT SUPPLY",
+    title: "Off-Grid Solar System",
     description: "Solar generation and dedicated battery storage support the property without any grid connection.",
+    descriptor: "SOLAR + STORAGE",
+    badge: "OFF-GRID SYSTEM",
     battery: true,
     grid: false,
   },
@@ -90,6 +99,28 @@ function LinkIcon({ direction = "up-right" }: { direction?: "up-right" | "right"
   return <Icon className="link-icon" size={16} strokeWidth={1.8} aria-hidden="true" />;
 }
 
+function WhatsAppIcon({ size = 28, className }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#25D366"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      focusable="false"
+      className={className}
+    >
+      <path d="M3 21l1.65 -3.8a9 9 0 1 1 3.4 2.9l-5.05 .9" />
+      <path d="M9 10a.5 .5 0 0 0 1 0v-1a.5 .5 0 0 0 -1 0v1a5 5 0 0 0 5 5h1a.5 .5 0 0 0 0 -1h-1a.5 .5 0 0 0 0 1" />
+    </svg>
+  );
+}
+
 function SectionIntro({
   label,
   title,
@@ -108,46 +139,266 @@ function SectionIntro({
   );
 }
 
-function EnergyDiagram({ active }: { active: SolarType }) {
-  const details = solarContent[active];
+function SolarPanelIcon({ size = 20, className = "" }: { size?: number; className?: string }) {
   return (
-    <div className="energy-diagram" aria-label={`${active} solar energy flow`}>
-      <div className="energy-node sun-node">
-        <span className="sun-shape"><Sun size={20} strokeWidth={1.8} /></span>
-        <b>Sun</b>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <polygon points="3 17 6 5 18 5 21 17 3 17" />
+      <line x1="12" y1="5" x2="12" y2="17" />
+      <line x1="4.5" y1="11" x2="19.5" y2="11" />
+      <line x1="7" y1="17" x2="5" y2="21" />
+      <line x1="17" y1="17" x2="19" y2="21" />
+      <line x1="5" y1="21" x2="19" y2="21" />
+    </svg>
+  );
+}
+
+function InverterIcon({ size = 20, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <rect x="4" y="3" width="16" height="18" rx="2.5" />
+      <rect x="7.5" y="6" width="9" height="4" rx="1" strokeWidth="1.5" />
+      <path d="M7.5 15c1.2-1.8 2.4-1.8 3.6 0s2.4 1.8 3.6 0" />
+      <circle cx="9" cy="18" r="0.75" fill="currentColor" />
+      <circle cx="12" cy="18" r="0.75" fill="currentColor" />
+      <circle cx="15" cy="18" r="0.75" fill="currentColor" />
+    </svg>
+  );
+}
+
+function PropertyIcon({ size = 20, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M3 10.5L12 3l9 7.5V20a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 20v-9.5z" />
+      <path d="M9.5 21v-6.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V21" fill="rgba(212, 160, 23, 0.25)" stroke="#9A7500" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function BatteryIcon({ size = 20, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <rect x="2" y="7" width="16" height="11" rx="2" />
+      <path d="M19 10.5v4" strokeLinecap="round" />
+      <rect x="5" y="9.5" width="7" height="6" rx="1" fill="#D4A017" stroke="none" />
+    </svg>
+  );
+}
+
+function GridTowerIcon({ size = 20, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M7 21l3.5-17h3L17 21" />
+      <line x1="6" y1="7" x2="18" y2="7" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="8.5" y1="12" x2="14" y2="17" />
+      <line x1="15.5" y1="12" x2="10" y2="17" />
+      <line x1="9" y1="17" x2="15" y2="17" />
+    </svg>
+  );
+}
+
+function ArchitectureDiagram({ active }: { active: SolarType }) {
+  const isBatteryActive = active === "Hybrid" || active === "Off-Grid";
+  const isGridActive = active === "Hybrid" || active === "On-Grid";
+  const details = solarContent[active];
+
+  return (
+    <div className="architecture-card" aria-label={`${active} solar architecture diagram`}>
+      <div className="architecture-card-header">
+        <span className="architecture-descriptor">{details.descriptor}</span>
+        <span className="architecture-pill">
+          <span className="pill-dot" aria-hidden="true" />
+          {details.badge}
+        </span>
       </div>
-      <span className="flow-line vertical active" aria-hidden="true" />
-      <div className="energy-node panel-node">
-        <span className="panel-shape"><i /><i /><i /><i /></span>
-        <b>Solar panels</b>
-      </div>
-      <span className="flow-line vertical active" aria-hidden="true" />
-      <div className="energy-node inverter-node">
-        <span className="inverter-shape"><Waves size={22} strokeWidth={1.8} aria-hidden="true" /></span>
-        <b>Inverter</b>
-      </div>
-      <span className="flow-line vertical active" aria-hidden="true" />
-      <div className="energy-node property-node">
-        <span className="house-shape"><i /></span>
-        <b>Property</b>
-      </div>
-      <div className="branch-lines" aria-hidden="true">
-        <span className={`branch left ${details.battery ? "active" : "inactive"}`} />
-        <span className={`branch right ${details.grid ? "active" : "inactive"}`} />
-      </div>
-      <div className="energy-branches">
-        <div className={`energy-node compact ${details.battery ? "enabled" : "disabled"}`}>
-          <span className="battery-shape"><i /></span>
-          <b>Battery</b>
+
+      <div className="architecture-canvas">
+        {/* Node 1: Sun */}
+        <div className="diagram-node node-sun">
+          <div className="node-icon-card sun-card" aria-hidden="true">
+            <Sun size={22} strokeWidth={1.8} />
+          </div>
+          <div className="node-text-block">
+            <div className="node-title">Sun</div>
+            <div className="node-subtitle">Renewable energy source</div>
+          </div>
         </div>
-        <div className={`energy-node compact ${details.grid ? "enabled" : "disabled"}`}>
-          <span className="grid-shape"><i /><i /><i /></span>
-          <b>Grid</b>
+
+        {/* Spine Connector: Sun -> Solar panels */}
+        <div className="spine-connector" aria-hidden="true">
+          <svg width="2" height="22" viewBox="0 0 2 22" fill="none">
+            <line x1="1" y1="0" x2="1" y2="22" className="connector-line active" />
+          </svg>
+        </div>
+
+        {/* Node 2: Solar panels */}
+        <div className="diagram-node node-panels">
+          <div className="node-icon-card" aria-hidden="true">
+            <SolarPanelIcon size={22} />
+          </div>
+          <div className="node-text-block">
+            <div className="node-title">Solar panels</div>
+            <div className="node-subtitle">Convert sunlight to DC electricity</div>
+          </div>
+        </div>
+
+        {/* Spine Connector: Solar panels -> Inverter */}
+        <div className="spine-connector" aria-hidden="true">
+          <svg width="2" height="22" viewBox="0 0 2 22" fill="none">
+            <line x1="1" y1="0" x2="1" y2="22" className="connector-line active" />
+          </svg>
+        </div>
+
+        {/* Node 3: Inverter */}
+        <div className="diagram-node node-inverter">
+          <div className="node-icon-card" aria-hidden="true">
+            <InverterIcon size={22} />
+          </div>
+          <div className="node-text-block">
+            <div className="node-title">Inverter</div>
+            <div className="node-subtitle">Converts DC to AC for your property</div>
+          </div>
+        </div>
+
+        {/* Spine Connector: Inverter -> Property */}
+        <div className="spine-connector" aria-hidden="true">
+          <svg width="2" height="22" viewBox="0 0 2 22" fill="none">
+            <line x1="1" y1="0" x2="1" y2="22" className="connector-line active" />
+          </svg>
+        </div>
+
+        {/* Node 4: Property (Emphasized Destination Node) */}
+        <div className="diagram-node node-property">
+          <div className="node-icon-card property-card" aria-hidden="true">
+            <PropertyIcon size={24} />
+          </div>
+          <div className="node-text-block">
+            <div className="node-title">Property</div>
+            <div className="node-subtitle">Powers your home and appliances</div>
+          </div>
+        </div>
+
+        {/* Branch Connector: Property -> Battery & Grid */}
+        <div className="branch-connector-wrap" aria-hidden="true">
+          <svg viewBox="0 0 400 38" preserveAspectRatio="none" className="branch-svg" fill="none">
+            <path
+              d="M 200 0 L 200 10 Q 200 19 191 19 L 109 19 Q 100 19 100 28 L 100 38"
+              className={`connector-line ${isBatteryActive ? "active" : "inactive"}`}
+            />
+            <path
+              d="M 200 0 L 200 10 Q 200 19 209 19 L 291 19 Q 300 19 300 28 L 300 38"
+              className={`connector-line ${isGridActive ? "active" : "inactive"}`}
+            />
+          </svg>
+        </div>
+
+        {/* Bottom Row: Battery (left) & Grid (right) */}
+        <div className="architecture-bottom-row">
+          <div className={`diagram-node node-battery ${isBatteryActive ? "node-active" : "node-muted"}`}>
+            <div className="node-icon-card" aria-hidden="true">
+              <BatteryIcon size={22} />
+            </div>
+            <div className="node-text-block">
+              <div className="node-title">Battery</div>
+              <div className="node-subtitle">Stores excess energy for later use</div>
+            </div>
+          </div>
+
+          <div className={`diagram-node node-grid ${isGridActive ? "node-active" : "node-muted"}`}>
+            <div className="node-icon-card" aria-hidden="true">
+              <GridTowerIcon size={22} />
+            </div>
+            <div className="node-text-block">
+              <div className="node-title">Grid</div>
+              <div className="node-subtitle">Provides backup power and enables energy export</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+interface ServiceItem {
+  id: "solar" | "electrical" | "security";
+  number: string;
+  badge: string;
+  title: string;
+  quoteService: ServiceName;
+  image: string;
+  imageAlt: string;
+  shortDesc: string;
+  extendedDesc: string;
+  specs: string[];
+  ctaLabel: string;
+  iconType: "zap" | "shield";
+}
+
+const servicesList: ServiceItem[] = [
+  {
+    id: "solar",
+    number: "01",
+    badge: "PRIMARY SOLUTION",
+    title: "Solar Systems",
+    quoteService: "Solar Energy",
+    image: "/images/solar-energy-solutions.webp",
+    imageAlt: "Solar energy solutions rooftop solar panel installation",
+    shortDesc:
+      "Complete rooftop and ground-mounted solar energy systems engineered for maximum yield, long-term durability, and rapid return on investment.",
+    extendedDesc:
+      "Custom-engineered solar configurations tailored to residential estates, commercial facilities, and industrial compounds across Punjab and Khyber Pakhtunkhwa. We handle comprehensive shading analysis, tier-1 panel mounting, net-metering regulatory approvals, and battery storage integration.",
+    specs: [
+      "On-Grid Direct Connection with Net-Metering",
+      "Hybrid Battery Storage with Zero Load-Shedding",
+      "Off-Grid Independent Rural Supply",
+      "5 kW to 1 MW Commercial & Industrial Capacities",
+    ],
+    ctaLabel: "Discuss Solar Systems",
+    iconType: "zap",
+  },
+  {
+    id: "electrical",
+    number: "02",
+    badge: "INFRASTRUCTURE",
+    title: "Solar Structures & Electrical",
+    quoteService: "Solar Structures",
+    image: "/images/electrical-works.webp",
+    imageAlt: "Electrical works distribution panel and solar structural engineering",
+    shortDesc:
+      "Industrial structural fabrication and distribution engineering ensuring structural integrity and code-compliant electrical distribution.",
+    extendedDesc:
+      "Precision-welded galvanized H-beam and elevated rooftop structures designed for industrial sheds, commercial rooftops, and high-wind zones, integrated with complete low-voltage distribution panels, automatic changeover systems (ATS), and certified earthing infrastructure.",
+    specs: [
+      "Heavy-Duty Galvanized H-Beam Solar Framing",
+      "Automatic (ATS) & Manual Main Distribution Panels",
+      "Single-Phase & Three-Phase Distribution Works",
+      "Industrial Surge Protection (SPD) & Certified Earthing",
+    ],
+    ctaLabel: "Discuss Electrical & Structures",
+    iconType: "shield",
+  },
+  {
+    id: "security",
+    number: "03",
+    badge: "SECURITY",
+    title: "Security Systems",
+    quoteService: "Security Systems",
+    image: "/images/cctv-security-solutions.webp",
+    imageAlt: "CCTV and security systems monitoring equipment",
+    shortDesc:
+      "Professional security and monitoring infrastructure for residential, commercial, and institutional premises.",
+    extendedDesc:
+      "Enterprise-grade perimeter surveillance, smart analytics, and multi-zone access control for residential complexes, commercial plazas, and industrial warehouses. Equipped with high-definition optical clarity, remote mobile streaming, and power-redundant battery/solar backup.",
+    specs: [
+      "4K Ultra-HD IP & Analog CCTV Deployment",
+      "Remote Smartphone & Multi-Display Monitoring",
+      "Premises Access Control & Video Intercoms",
+      "UPS & Solar-Backed Surveillance Power Continuity",
+    ],
+    ctaLabel: "Discuss Security Systems",
+    iconType: "shield",
+  },
+];
 
 export function ElectroTechSite() {
   const reducedMotion = useReducedMotion();
@@ -155,11 +406,13 @@ export function ElectroTechSite() {
   const [headerVisible, setHeaderVisible] = useState(true);
   const [scrolled, setScrolled] = useState(false);
   const [solarType, setSolarType] = useState<SolarType>("Hybrid");
+  const [activeService, setActiveService] = useState<string | null>(null);
   const [propertyType, setPropertyType] = useState("Home");
   const [startingBill, setStartingBill] = useState<(typeof billRanges)[number]>("PKR 25,000–50,000");
   const [startingSystem, setStartingSystem] = useState<SolarType | "Not Sure">("Hybrid");
   const [submitState, setSubmitState] = useState<"idle" | "success" | "error">("idle");
   const [serverMessage, setServerMessage] = useState("");
+  const [whatsappHandoff, setWhatsappHandoff] = useState("");
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const lastScrollY = useRef(0);
 
@@ -231,11 +484,17 @@ export function ElectroTechSite() {
     if (search.get("source") !== "solar_bill_analyzer") return;
     const context = consumeAnalyzerLeadContext();
     if (!context) return;
+    const systemType = context.recommendedArchitecture.includes("Off-Grid")
+      ? "Off-Grid"
+      : context.recommendedArchitecture.includes("Hybrid")
+        ? "Hybrid"
+        : "On-Grid";
     setValue("service", "Solar Energy", { shouldValidate: true });
-    setValue("systemType", context.systemType, { shouldValidate: true });
+    setValue("systemType", systemType, { shouldValidate: true });
     setValue("city", context.city, { shouldValidate: true });
-    setValue("requiredCapacity", `${context.actualInstalledKwp} kWp preliminary`, { shouldValidate: true });
+    setValue("requiredCapacity", `${context.pvCapacityKwp} kWp preliminary`, { shouldValidate: true });
     setValue("message", analyzerLeadMessage(context), { shouldValidate: true });
+    setValue("analyzerContext", context, { shouldValidate: true });
   }, [setValue]);
 
   function scrollToSection(targetId: string) {
@@ -251,6 +510,15 @@ export function ElectroTechSite() {
       });
     }
   }
+
+  const handleToggleService = (id: string) => {
+    setActiveService((prev) => (prev === id ? null : id));
+  };
+
+  const handleDiscussService = (serviceName: ServiceName) => {
+    setValue("service", serviceName, { shouldValidate: true });
+    scrollToSection("contact");
+  };
 
   function continueToQuote() {
     setValue("service", "Solar Energy", { shouldValidate: true });
@@ -269,14 +537,24 @@ export function ElectroTechSite() {
   async function submitQuote(values: QuoteInput) {
     setSubmitState("idle");
     setServerMessage("");
+    setWhatsappHandoff("");
     try {
-      const response = await fetch("/api/quote", {
+      const response = await fetch(apiUrl("/api/quote"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(values),
       });
-      const result = (await response.json()) as { message?: string };
+      const result = (await response.json()) as {
+        message?: string;
+        handoff?: { channel?: string; message?: string };
+      };
+      if (result.handoff?.channel === "whatsapp" && result.handoff.message) {
+        setWhatsappHandoff(
+          `https://wa.me/${siteConfig.whatsappNumber}?text=${encodeURIComponent(result.handoff.message)}`,
+        );
+      }
       if (!response.ok) throw new Error(result.message || "Submission failed");
+      setServerMessage(result.message || "Your request has been sent successfully.");
       setSubmitState("success");
       reset();
     } catch (error) {
@@ -333,7 +611,7 @@ export function ElectroTechSite() {
           <div className="hero-canvas">
             <div className="hero-visual-bg">
               <Image
-                src="/images/hero-solar-architectural.jpg"
+                src="/images/hero-solar-architectural.webp"
                 alt="Modern solar-powered residence with sleek rooftop photovoltaic panels"
                 fill
                 priority
@@ -347,7 +625,7 @@ export function ElectroTechSite() {
             <div className="hero-overlay-content">
               <motion.h1 className="hero-headline" {...motionProps} transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}>
                 Powering Progress<br />
-                With Smarter Energy.
+                With Smarter Energy
               </motion.h1>
 
               <motion.p className="hero-description" {...motionProps} transition={{ duration: 0.55, delay: reducedMotion ? 0 : 0.08 }}>
@@ -369,8 +647,8 @@ export function ElectroTechSite() {
               transition={{ duration: 0.6, delay: reducedMotion ? 0 : 0.24, ease: [0.16, 1, 0.3, 1] }}
             >
               <div className="credibility-header">
-                <span className="credibility-icon" aria-hidden="true"><Sun size={15} strokeWidth={2.2} /></span>
                 <strong>5 kW–1 MW</strong>
+                <span className="credibility-icon" aria-hidden="true"><Sun size={15} strokeWidth={2.2} /></span>
               </div>
               <span className="credibility-label">Solar System Capacity</span>
               <span className="credibility-sub">On-Grid · Hybrid · Off-Grid</span>
@@ -403,41 +681,70 @@ export function ElectroTechSite() {
           </div>
           <div className="about-images">
             <div className="about-image-primary">
-              <Image src="/images/solar-technician.jpg" alt="Solar technician completing a high-precision rooftop installation" fill sizes="(max-width: 800px) 90vw, 42vw" />
+              <Image src="/images/solar-technician.webp" alt="Solar technician completing a high-precision rooftop installation" fill sizes="(max-width: 800px) 90vw, 42vw" />
             </div>
             <div className="about-image-secondary">
-              <Image src="/images/electrical-panel.jpg" alt="Electrician working on an industrial distribution panel" fill sizes="(max-width: 800px) 55vw, 22vw" />
+              <Image src="/images/electrical-panel.webp" alt="Electrician working on an industrial distribution panel" fill sizes="(max-width: 800px) 55vw, 22vw" />
             </div>
           </div>
         </section>
 
-        {/* SOLAR INTERACTIVE EXPLAINER */}
+        {/* SYSTEM ARCHITECTURE INTERACTIVE EXPLAINER */}
         <section id="solar" className="solar-section section-pad">
           <div className="section-shell">
-            <SectionIntro
-              label="SYSTEM ARCHITECTURE"
-              title="Choose the solar system that fits your energy needs."
-              copy="Explore how each configuration connects solar generation to your property."
-            />
             <div className="solar-layout">
               <div className="solar-controls">
+                <div className="solar-heading-wrap">
+                  <p className="eyebrow">SYSTEM ARCHITECTURE</p>
+                  <h2>Choose the solar system that fits your energy needs.</h2>
+                  <p className="section-copy">Explore how each configuration connects solar generation to your property.</p>
+                </div>
                 <div className="solar-tabs" role="tablist" aria-label="Solar system type">
                   {(Object.keys(solarContent) as SolarType[]).map((type) => (
-                    <button key={type} type="button" role="tab" aria-selected={solarType === type} onClick={() => setSolarType(type)}>
+                    <button
+                      key={type}
+                      type="button"
+                      role="tab"
+                      aria-selected={solarType === type}
+                      className={`solar-tab-btn ${solarType === type ? "active" : ""}`}
+                      onClick={() => setSolarType(type)}
+                    >
                       {type}
                     </button>
                   ))}
                 </div>
                 <AnimatePresence mode="wait">
-                  <motion.div key={solarType} className="solar-description" initial={reducedMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                  <motion.div
+                    key={solarType}
+                    className="solar-description"
+                    initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
                     <p className="eyebrow">{solarContent[solarType].eyebrow}</p>
-                    <h3>{solarType} Solar System</h3>
+                    <h3>{solarContent[solarType].title}</h3>
                     <p>{solarContent[solarType].description}</p>
-                    <a className="text-link" href="#contact" onClick={(e) => { e.preventDefault(); scrollToSection("contact"); }}>Discuss this system <LinkIcon /></a>
+                    <a
+                      className="solar-cta desktop-only"
+                      href="#contact"
+                      onClick={(e) => { e.preventDefault(); scrollToSection("contact"); }}
+                    >
+                      Discuss this system <LinkIcon />
+                    </a>
                   </motion.div>
                 </AnimatePresence>
               </div>
-              <EnergyDiagram active={solarType} />
+              <div className="solar-diagram-column">
+                <ArchitectureDiagram active={solarType} />
+                <a
+                  className="solar-cta mobile-only"
+                  href="#contact"
+                  onClick={(e) => { e.preventDefault(); scrollToSection("contact"); }}
+                >
+                  Discuss this system <LinkIcon />
+                </a>
+              </div>
             </div>
           </div>
         </section>
@@ -496,100 +803,148 @@ export function ElectroTechSite() {
           </div>
         </section>
 
-        {/* SERVICES SECTION (Section 2 - Services + Digital Tool) */}
+        {/* SERVICES SECTION */}
         <section id="services" className="services-section section-shell section-pad">
           <SectionIntro
-            label="OUR SOLUTIONS"
-            title="Complete Energy & Electrical Solutions"
-            copy="Integrated solar systems, precision electrical panels, structural mounting, and surveillance infrastructure."
+            label="SERVICES"
+            title="Solutions built around your energy needs"
+            copy="Electro Tech provides complete solar, electrical, structural, and security solutions for residential, commercial, and institutional requirements."
           />
-          <div className="services-presentation">
-            {/* Card 1 — Dominant Solar Systems */}
-            <article className="service-feature-card dominant-card">
-              <div className="service-feature-visual">
-                <Image src="/images/solar-rooftop.jpg" alt="Commercial solar panel installation" fill sizes="(max-width: 900px) 100vw, 62vw" />
-                <span className="service-badge">PRIMARY SOLUTION</span>
-              </div>
-              <div className="service-feature-body">
-                <div className="service-header-row">
-                  <span className="service-number">01</span>
-                  <h3>Solar Systems</h3>
-                </div>
-                <p className="service-desc">Complete rooftop and ground-mounted solar energy systems engineered for maximum yield, long-term durability, and rapid return on investment.</p>
-                <ul className="service-spec-list">
-                  <li><Zap size={14} aria-hidden="true" /> On-Grid Direct Connection</li>
-                  <li><Zap size={14} aria-hidden="true" /> Hybrid Battery Storage</li>
-                  <li><Zap size={14} aria-hidden="true" /> Off-Grid Independent Supply</li>
-                  <li><Zap size={14} aria-hidden="true" /> 5 kW–1 MW Capacity</li>
-                </ul>
-                <div className="service-card-action">
-                  <a className="button button-outline" href="#solar" onClick={(e) => { e.preventDefault(); scrollToSection("solar"); }}>Explore Solar Systems <LinkIcon /></a>
-                </div>
-              </div>
-            </article>
-
-            {/* Card 2 — Solar Structures & Electrical */}
-            <article className="service-feature-card secondary-card">
-              <div className="service-feature-visual">
-                <Image src="/images/electrical-panel.jpg" alt="Electrical distribution panel and mounting structure" fill sizes="(max-width: 900px) 100vw, 38vw" />
-                <span className="service-badge">INFRASTRUCTURE</span>
-              </div>
-              <div className="service-feature-body">
-                <div className="service-header-row">
-                  <span className="service-number">02</span>
-                  <h3>Solar Structures & Electrical</h3>
-                </div>
-                <p className="service-desc">Industrial structural fabrication and distribution engineering ensuring structural integrity and code-compliant electrical distribution.</p>
-                <ul className="service-spec-list">
-                  <li><ShieldCheck size={14} aria-hidden="true" /> H-Beam Solar Structures</li>
-                  <li><ShieldCheck size={14} aria-hidden="true" /> Automatic & Manual DB Panels</li>
-                  <li><ShieldCheck size={14} aria-hidden="true" /> Single-Phase & Three-Phase Works</li>
-                </ul>
-                <div className="service-card-action">
-                  <a className="text-link" href="#contact" onClick={(e) => { e.preventDefault(); scrollToSection("contact"); }}>Request a Quote <LinkIcon /></a>
-                </div>
-              </div>
-            </article>
-
-            {/* Card 3 — Security Systems */}
-            <article className="service-feature-card secondary-card">
-              <div className="service-feature-visual">
-                <Image src="/images/cctv.jpg" alt="High-definition CCTV surveillance system" fill sizes="(max-width: 900px) 100vw, 38vw" />
-                <span className="service-badge">SECURITY</span>
-              </div>
-              <div className="service-feature-body">
-                <div className="service-header-row">
-                  <span className="service-number">03</span>
-                  <h3>Security Systems</h3>
-                </div>
-                <p className="service-desc">Professional security and monitoring infrastructure for residential, commercial, and institutional premises.</p>
-                <ul className="service-spec-list">
-                  <li><ShieldCheck size={14} aria-hidden="true" /> CCTV Surveillance Installation</li>
-                  <li><ShieldCheck size={14} aria-hidden="true" /> Remote Mobile Monitoring</li>
-                  <li><ShieldCheck size={14} aria-hidden="true" /> Property Access Control</li>
-                </ul>
-                <div className="service-card-action">
-                  <a className="text-link" href="#contact" onClick={(e) => { e.preventDefault(); scrollToSection("contact"); }}>Discuss Security <LinkIcon /></a>
-                </div>
-              </div>
-            </article>
+          <div className={`services-presentation ${activeService ? "has-expanded-service" : "all-collapsed"}`}>
+            {servicesList.map((service) => {
+              const isExpanded = activeService === service.id;
+              return (
+                <article
+                  key={service.id}
+                  id={`service-card-${service.id}`}
+                  data-service={service.id}
+                  className={`service-feature-card service-card-${service.id} ${isExpanded ? "is-expanded" : "is-collapsed"}`}
+                >
+                  {isExpanded ? (
+                    <div
+                      id={`service-details-${service.id}`}
+                      role="region"
+                      aria-labelledby={`service-toggle-${service.id}`}
+                      className="service-card-expanded"
+                    >
+                      <div className="service-feature-visual expanded-visual">
+                        <Image
+                          src={service.image}
+                          alt={service.imageAlt}
+                          fill
+                          sizes="(max-width: 900px) 100vw, 45vw"
+                          className="service-feature-img"
+                        />
+                        <span className="service-badge">{service.badge}</span>
+                      </div>
+                      <div className="service-feature-body expanded-body">
+                        <div className="service-header-row">
+                          <span className="service-number">{service.number}</span>
+                          <span className="service-badge-inline">{service.badge}</span>
+                        </div>
+                        <h3>{service.title}</h3>
+                        <p className="service-desc">{service.shortDesc}</p>
+                        <p className="service-desc-extended">{service.extendedDesc}</p>
+                        <ul className="service-spec-list">
+                          {service.specs.map((spec) => (
+                            <li key={spec}>
+                              {service.iconType === "zap" ? (
+                                <Zap size={14} aria-hidden="true" />
+                              ) : (
+                                <ShieldCheck size={14} aria-hidden="true" />
+                              )}
+                              <span>{spec}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="service-card-action expanded-action-row">
+                          <a
+                            className="button button-primary"
+                            href="#contact"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              handleDiscussService(service.quoteService);
+                            }}
+                          >
+                            {service.ctaLabel} <LinkIcon />
+                          </a>
+                          <button
+                            type="button"
+                            className="service-toggle-btn collapse-toggle-btn"
+                            aria-expanded={true}
+                            aria-controls={`service-details-${service.id}`}
+                            onClick={() => handleToggleService(service.id)}
+                          >
+                            <span>Show less</span>
+                            <ArrowUp size={15} strokeWidth={2} aria-hidden="true" className="toggle-arrow" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="service-card-compact">
+                      <div className="service-feature-visual compact-visual">
+                        <Image
+                          src={service.image}
+                          alt={service.imageAlt}
+                          fill
+                          sizes="(max-width: 900px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                          className="service-feature-img"
+                        />
+                        <span className="service-badge">{service.badge}</span>
+                      </div>
+                      <div className="service-feature-body compact-body">
+                        <div className="service-header-row">
+                          <span className="service-number">{service.number}</span>
+                          <h3>{service.title}</h3>
+                        </div>
+                        <p className="service-desc">{service.shortDesc}</p>
+                        <div className="service-card-action compact-action">
+                          <button
+                            type="button"
+                            className="service-toggle-btn"
+                            aria-expanded={false}
+                            aria-controls={`service-details-${service.id}`}
+                            id={`service-toggle-${service.id}`}
+                            onClick={() => handleToggleService(service.id)}
+                          >
+                            <span>View details</span>
+                            <ArrowRight size={15} strokeWidth={2} aria-hidden="true" className="toggle-arrow" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
 
             {/* Featured Digital Tool — Solar Bill Analyzer */}
-            <article className="service-feature-card analyzer-tool-card">
-              <div className="service-feature-body analyzer-tool-body">
-                <div className="analyzer-tool-copy">
-                  <div className="service-header-row analyzer-tool-heading">
-                    <span className="service-number">04</span>
-                    <span className="analyzer-tool-icon" aria-hidden="true"><FileSearch size={21} strokeWidth={1.8} /></span>
-                    <div>
-                      <span className="analyzer-tool-label">DIGITAL SOLAR TOOL</span>
-                      <h3>AI Solar Bill Analyzer</h3>
-                    </div>
-                  </div>
-                  <p className="service-desc">Upload your electricity bill and get a preliminary solar system recommendation based on your actual energy consumption.</p>
+            <article className="service-feature-card analyzer-tool-card is-collapsed" data-service="analyzer">
+              <div className="service-card-compact">
+                <div className="service-feature-visual compact-visual">
+                  <Image
+                    src="/images/ai-solar-bill-analyzer.webp"
+                    alt="AI-assisted electricity bill analysis for solar system recommendation"
+                    fill
+                    sizes="(max-width: 900px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    className="service-feature-img analyzer-feature-img"
+                  />
+                  <span className="service-badge analyzer-badge">DIGITAL SOLAR TOOL</span>
                 </div>
-                <div className="service-card-action analyzer-tool-action">
-                  <a className="button button-primary" href="/solar-bill-analyzer">Analyze My Bill <LinkIcon direction="right" /></a>
+                <div className="service-feature-body compact-body analyzer-body">
+                  <div className="service-header-row">
+                    <span className="service-number">04</span>
+                    <h3>AI Solar Bill Analyzer</h3>
+                  </div>
+                  <p className="service-desc">
+                    Upload your electricity bill and get a preliminary solar system recommendation based on your actual energy consumption.
+                  </p>
+                  <div className="service-card-action compact-action analyzer-action">
+                    <a className="service-direct-link" href="/solar-bill-analyzer">
+                      Analyze My Bill <ArrowRight size={15} strokeWidth={2} aria-hidden="true" className="toggle-arrow" />
+                    </a>
+                  </div>
                 </div>
               </div>
             </article>
@@ -619,34 +974,15 @@ export function ElectroTechSite() {
 
         {/* PROJECTS */}
         <section id="projects" className="projects section-shell section-pad">
-          <SectionIntro label="OUR WORK" title="Selected projects" copy="A selection of commercial, institutional, and local solar installations." />
-          <div className="project-grid">
-            {siteConfig.projects.map((project, index) => {
-              const images = ["/images/solar-rooftop.jpg", "/images/commercial-solar.jpg", "/images/hero-solar.jpg", "/images/solar-technician.jpg", "/images/commercial-solar.jpg"];
-              return (
-                <article className={`project-card project-${index + 1}`} key={project.title}>
-                  <div className="project-image">
-                    <Image src={images[index]} alt={`Solar project reference for ${project.title}`} fill sizes="(max-width: 700px) 100vw, 50vw" />
-                  </div>
-                  <div className="project-info">
-                    <span className="project-index">0{index + 1}</span>
-                    <div className="project-text">
-                      <h3>{project.title}</h3>
-                      {"location" in project ? <p>{project.location}</p> : null}
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-          <p className="project-note">Project imagery is representative until verified project photographs are supplied.</p>
+          <SectionIntro label="OUR WORK" title="Selected projects" copy="Solar installations for homes, businesses, and institutions across Attock." />
+          <ProjectCards />
         </section>
 
         {/* PROCESS */}
         <section id="process" className="process section-shell section-pad">
           <SectionIntro label="HOW WE WORK" title="From first conversation to final installation." />
           <div className="process-photo">
-            <Image src="/images/solar-technician.jpg" alt="Solar installation professional completing rooftop work" fill sizes="100vw" />
+            <Image src="/images/solar-technician.webp" alt="Solar installation professional completing rooftop work" fill sizes="100vw" />
           </div>
           <ol className="process-list">
             {[
@@ -682,11 +1018,11 @@ export function ElectroTechSite() {
               {submitState === "success" ? (
                 <div className="success-state" role="status">
                   <span><Check size={25} strokeWidth={2} aria-hidden="true" /></span>
-                  <h3>Thanks — your enquiry has been received.</h3>
-                  <p>Electro Tech will review your project details and get in touch promptly.</p>
+                  <h3>Thanks — your request has been sent.</h3>
+                  <p>{serverMessage} No quote details were stored by the website.</p>
                   <div>
-                    <a className="button button-primary" href={siteConfig.whatsappHref} target="_blank" rel="noreferrer">
-                      <MessageCircle size={17} aria-hidden="true" /> WhatsApp Us
+                    <a className="button button-primary" href={whatsappHandoff || siteConfig.whatsappHref} target="_blank" rel="noopener noreferrer">
+                      <MessageCircle size={17} aria-hidden="true" /> Also Send via WhatsApp
                     </a>
                     <a className="text-link" href={siteConfig.phoneHref}>Call Electro Tech <LinkIcon /></a>
                   </div>
@@ -721,8 +1057,8 @@ export function ElectroTechSite() {
                     <button className="button button-primary" type="submit" disabled={isSubmitting}>
                       {isSubmitting ? "Sending…" : "Request My Quote"} <LinkIcon />
                     </button>
-                    <a className="text-link" href={siteConfig.whatsappHref} target="_blank" rel="noreferrer">
-                      <MessageCircle size={17} strokeWidth={1.8} aria-hidden="true" /> WhatsApp Us <LinkIcon />
+                    <a className="text-link" href={whatsappHandoff || siteConfig.whatsappHref} target="_blank" rel="noopener noreferrer">
+                      <MessageCircle size={17} strokeWidth={1.8} aria-hidden="true" /> Send via WhatsApp <LinkIcon />
                     </a>
                   </div>
                 </form>
@@ -734,7 +1070,7 @@ export function ElectroTechSite() {
         {/* FINAL PRE-FOOTER CTA BANNER (Section 3) */}
         <section className="final-cta-banner" aria-label="Final call to action">
           <div className="final-cta-visual">
-            <Image src="/images/commercial-solar.jpg" alt="Commercial rooftop solar panels array" fill sizes="100vw" />
+            <Image src="/images/commercial-solar.webp" alt="Commercial rooftop solar panels array" fill sizes="100vw" />
             <div className="final-cta-overlay" />
           </div>
           <div className="section-shell final-cta-content">
@@ -786,20 +1122,42 @@ export function ElectroTechSite() {
           </div>
           <div className="footer-column footer-contact-col">
             <h2>Get In Touch</h2>
-            <p>Office hours: Mon–Sat 9:00 AM – 6:00 PM</p>
+            <p className="footer-office-hours">
+              <span>Office hours:</span>
+              <span>Mon–Sat 9:00 AM – 6:00 PM</span>
+            </p>
             <a className="footer-cta-link" href="#contact" onClick={(e) => { e.preventDefault(); scrollToSection("contact"); }}>
               Book an on-site solar survey <LinkIcon />
             </a>
           </div>
         </div>
         <div className="section-shell footer-bottom">
-          <span>© {new Date().getFullYear()} Electro Tech. All rights reserved.</span>
-          <span>Engineered for Performance and Reliability</span>
-          <a href="#home" onClick={(e) => { e.preventDefault(); scrollToSection("home"); }}>
-            Back to top <ArrowUp size={15} strokeWidth={1.8} aria-hidden="true" />
-          </a>
+          <span className="footer-copyright">© {new Date().getFullYear()} Electro Tech. All rights reserved.</span>
+          <span className="footer-credit">
+            Designed &amp; Developed by{" "}
+            <a
+              href="https://rapidosolutions.vercel.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="footer-credit-link"
+            >
+              Rapido Solutions Co.
+            </a>
+          </span>
+          <div className="footer-bottom-spacer" aria-hidden="true" />
         </div>
       </footer>
+
+      <a
+        href={`https://wa.me/${siteConfig.whatsappNumber}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="floating-whatsapp"
+        aria-label="Chat on WhatsApp"
+        title="Chat on WhatsApp"
+      >
+        <WhatsAppIcon className="floating-whatsapp-icon" />
+      </a>
     </>
   );
 }

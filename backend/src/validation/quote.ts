@@ -8,6 +8,32 @@ const optionalText = (max: number) =>
     .optional()
     .transform((value) => value || undefined);
 
+export const analyzerQuoteContextSchema = z
+  .object({
+    source: z.literal("solar_bill_analyzer"),
+    utility: z.string().trim().max(120).nullable(),
+    tariff: z.string().trim().max(100).nullable(),
+    city: z.string().trim().min(2).max(100),
+    annualConsumptionKwh: z.number().finite().nonnegative().max(1_000_000_000),
+    analysisMode: z.enum(["recommend", "chosen", "both"]),
+    selectedArchitecture: z.string().trim().max(100).nullable(),
+    recommendedArchitecture: z.string().trim().min(2).max(100),
+    pvCapacityKwp: z.number().finite().nonnegative().max(100_000),
+    panels: z.number().int().nonnegative().max(1_000_000),
+    inverterKw: z.number().finite().nonnegative().max(100_000),
+    battery: z.string().trim().max(80).nullable(),
+    estimatedBillReductionPercent: z.number().finite().min(0).max(100).nullable(),
+    estimatedRemainingBillPkr: z.number().finite().nonnegative().max(100_000_000_000).nullable(),
+    greenMeterStatus: z.enum(["yes", "no", "not_sure"]),
+    backupRequirement: z.string().trim().max(100),
+    confidence: z.object({
+      billExtraction: z.enum(["High", "Medium", "Low"]),
+      tariffPolicy: z.enum(["High", "Medium", "Preliminary"]),
+      recommendation: z.enum(["High", "Medium", "Preliminary"]),
+    }).strict(),
+  })
+  .strict();
+
 export const quoteSchema = z
   .object({
     fullName: z.string().trim().min(2, "Enter your full name").max(100),
@@ -43,6 +69,7 @@ export const quoteSchema = z
       ])
       .optional(),
     message: optionalText(1000),
+    analyzerContext: analyzerQuoteContextSchema.optional(),
     website: z.string().max(0, "Invalid submission").optional(),
   })
   .superRefine((data, context) => {

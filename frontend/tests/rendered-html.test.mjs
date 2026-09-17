@@ -53,9 +53,16 @@ test("server-renders the complete Electro Tech page", async () => {
   assert.match(html, /AI Solar Bill Analyzer/);
   assert.match(html, /Upload your electricity bill and get a preliminary solar system recommendation based on your actual energy consumption/);
   assert.match(html, /href="\/solar-bill-analyzer"[^>]*>Analyze My Bill/);
-  assert.match(html, /Bilal Pharmacy/);
+  assert.match(html, /Punjab Ice Factory/);
+  assert.match(html, /Darul Islam Colony Solar Project/);
+  assert.doesNotMatch(html, /Project imagery is representative until|Project details to be updated/);
   assert.match(html, /Request My Quote/);
   assert.match(html, /Electro Tech \| Solar Energy &amp; Electrical Solutions/);
+  assert.match(html, /class="floating-whatsapp"/);
+  assert.match(html, /href="https:\/\/wa\.me\/923105056394"/);
+  assert.match(html, /aria-label="Chat on WhatsApp"/);
+  assert.match(html, /stroke="#25D366"/);
+  assert.match(html, /fill="none"/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
 });
 
@@ -65,20 +72,33 @@ test("adds security headers", async () => {
   assert.match(response.headers.get("content-security-policy") ?? "", /frame-ancestors 'none'/);
 });
 
-test("serves public assets from the Nitro output", async () => {
-  const response = await fetch(`${origin}/logos/electrotech-icon.png`);
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /^image\/png/);
+test("serves public assets and favicon from the Nitro output", async () => {
+  const logoRes = await fetch(`${origin}/logos/electrotech-icon.png`);
+  assert.equal(logoRes.status, 200);
+  assert.match(logoRes.headers.get("content-type") ?? "", /^image\/png/);
+
+  const icoRes = await fetch(`${origin}/favicon.ico`);
+  assert.equal(icoRes.status, 200);
+  assert.match(icoRes.headers.get("content-type") ?? "", /image\/(?:vnd\.microsoft\.icon|x-icon)/);
+
+  const png32Res = await fetch(`${origin}/favicon-32x32.png`);
+  assert.equal(png32Res.status, 200);
+  assert.match(png32Res.headers.get("content-type") ?? "", /^image\/png/);
+
+  const rootRes = await render("/");
+  const html = await rootRes.text();
+  assert.match(html, /<link[^>]+(?:href="\/favicon\.ico"|href="\/favicon-32x32\.png")/);
 });
 
 test("server-renders the dedicated Solar Bill Analyzer route", async () => {
   const response = await render("/solar-bill-analyzer");
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /Turn your electricity usage into a practical solar starting point/);
+  assert.match(html, /Reduce the electricity bill with a practical, policy-aware solar configuration/);
   assert.match(html, /Upload your electricity bill/);
   assert.match(html, /Enter Consumption Manually/);
-  assert.match(html, /used only to read electricity-consumption information/);
+  assert.match(html, /Gemini reads bill data only/);
+  assert.match(html, /The bill is processed in memory and is not stored/);
 });
 
 test("analyzer stylesheet contains narrow mobile breakpoints", async () => {

@@ -1,316 +1,194 @@
-import type { VerifiedSolarInput } from "../../validation/solar-analyzer.js";
-import { assessDataConfidence } from "../../validation/solar-analyzer.js";
-import {
-  BACKUP_LEVEL_FACTORS,
-  PRACTICAL_INVERTER_CAPACITIES_KW,
-  PRACTICAL_PV_CAPACITIES_KWP,
-  SOLAR_ASSUMPTIONS,
-} from "./assumptions.js";
+import type { SolarArchitecture, VerifiedSolarInput } from "../../validation/solar-analyzer.js";
+import { assessDataConfidence, hasCompleteRecommendationContext } from "../../validation/solar-analyzer.js";
+import { ARCHITECTURES, buildOptimizationContext, optimizeArchitecture, type OptimizedSystem } from "../optimizer/optimizer.js";
+import { POLICY_LAST_VERIFIED } from "../policies/electricity-2026.js";
+import { LOAD_PROFILE_ASSUMPTIONS, PRACTICAL_INVERTER_CAPACITIES_KW, SOLAR_ASSUMPTIONS } from "./assumptions.js";
 import { getSolarProfile, SOLAR_PROFILE_SOURCE } from "./profiles.js";
 
-const DAYS_IN_MONTH = Object.freeze([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]);
-const MONTH_NAMES = Object.freeze([
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-]);
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] as const;
+const ALL_ARCHITECTURES = Object.keys(ARCHITECTURES) as SolarArchitecture[];
 
-function round(value: number, precision = 1): number {
-  const factor = 10 ** precision;
-  return Math.round(value * factor) / factor;
-}
-
-function roundBatteryCapacity(requiredKwh: number): number {
-  const modules = Math.max(1, Math.ceil(requiredKwh / SOLAR_ASSUMPTIONS.batteryModuleKwh));
-  return round(modules * SOLAR_ASSUMPTIONS.batteryModuleKwh, 2);
-}
-
-export type MonthSimulation = {
-  month: number;
-  monthName: string;
-  consumptionKwh: number | null;
-  generationKwh: number;
-  matchedEnergyKwh: number | null;
-  surplusKwh: number | null;
-  shortfallKwh: number | null;
-};
-
-export type BatteryRange = {
-  minimumKwh: number;
-  maximumKwh: number;
-  refined: boolean;
-};
-
-export type SystemRecommendation = {
-  architecture: "On-Grid" | "Hybrid" | "Off-Grid";
-  nominalPvKwp: number;
-  actualInstalledKwp: number;
-  inverterKw: number;
-  panelCount: number;
-  annualGenerationKwh: number;
-  annualGenerationConsumptionRatio: number;
-  matchedConsumptionCoveragePercent: number;
-  annualSurplusKwh: number | null;
-  annualShortfallKwh: number | null;
-  highestSurplusMonth: string | null;
-  highestShortfallMonth: string | null;
-  monthlySimulation: MonthSimulation[];
-  batteryRange: BatteryRange | null;
-  qualification: string;
-};
+function round(value: number, precision = 1) { const factor = 10 ** precision; return Math.round(value * factor) / factor; }
 
 export type SolarRecommendationResult = {
   modelVersion: string;
-  location: {
-    requestedCity: string;
-    profileCity: string;
-    regionalFallbackUsed: boolean;
-  };
+  analysisMode: VerifiedSolarInput["analysisMode"];
+  location: { requestedCity: string; profileCity: string; regionalFallbackUsed: boolean; assumption: string | null };
   dataQuality: {
-    billAnalysisConfidence: "High" | "Medium" | "Low";
+    billExtractionConfidence: "High" | "Medium" | "Low";
+    tariffPolicyConfidence: "High" | "Medium" | "Preliminary";
+    recommendationConfidence: "High" | "Medium" | "Preliminary";
+    recommendationConfidenceExplanation: string;
     recommendationData: "Complete" | "Incomplete";
     readableMonths: number;
   };
-  consumption: {
-    annualConsumptionKwh: number;
-    annualConsumptionEstimated: boolean;
-    averageMonthlyKwh: number;
-    averageDailyKwh: number;
-    highestMonth: { label: string; kwh: number };
-    lowestMonth: { label: string; kwh: number };
+  consumption: { annualConsumptionKwh: number; annualConsumptionEstimated: boolean; averageMonthlyKwh: number; averageDailyKwh: number; highestMonth: { label: string; kwh: number }; lowestMonth: { label: string; kwh: number } };
+  assumptions: { panelWattage: number; performanceRatio: number; solarProfileSource: typeof SOLAR_PROFILE_SOURCE; policyLastVerified: string; dynamicChargesConfigured: false; loadProfile: string; daytimeLoadShare: number; loadProfileMethodology: string; touMethodology: string; batteryRoundTripEfficiency: number };
+  verifiedContext: { utility: string | null; tariff: string | null; greenMeterStatus: VerifiedSolarInput["greenMeterStatus"]; backupRequirement: string; selectedArchitecture: SolarArchitecture | null };
+  tariffDetails: {
+    usage: "Current Reference Tariff";
+    tariffCode: string;
+    tariffName: string;
+    version: string;
+    effectiveFrom: string;
+    effectiveTo: string | null;
+    utility: string | null;
+    utilityGroup: "XWDISCO" | "K-Electric";
+    source: string;
+    sourceReference: string;
+    modeledComponents: readonly string[];
+    notModeledComponents: readonly string[];
   };
-  assumptions: {
-    panelWattage: number;
-    performanceRatio: number;
-    solarProfileSource: typeof SOLAR_PROFILE_SOURCE;
-  };
-  bestMatch: {
-    architecture: "On-Grid" | "Hybrid";
-    reason: string;
-  };
-  systems: {
-    onGrid: SystemRecommendation;
-    hybrid: SystemRecommendation;
-    offGrid: SystemRecommendation;
-  };
+  bestRecommended: OptimizedSystem | null;
+  meaningfulAlternative: OptimizedSystem | null;
+  userSelected: OptimizedSystem | null;
+  comparisonExplanation: string | null;
+  evaluatedArchitectures: SolarArchitecture[];
 };
 
-type CandidateEvaluation = Omit<SystemRecommendation, "architecture" | "batteryRange" | "qualification">;
-
-export function panelConfiguration(nominalPvKwp: number) {
-  const panelCount = Math.ceil((nominalPvKwp * 1000) / SOLAR_ASSUMPTIONS.panelWattage);
-  return {
-    panelCount,
-    actualInstalledKwp: round((panelCount * SOLAR_ASSUMPTIONS.panelWattage) / 1000, 3),
-  };
+export function panelConfiguration(nominalPvKwp: number, panelWattage: number = SOLAR_ASSUMPTIONS.panelWattage) {
+  const panelCount = Math.max(2, Math.ceil(nominalPvKwp * 1000 / panelWattage));
+  return { panelCount, actualInstalledKwp: round(panelCount * panelWattage / 1000, 3) };
 }
 
 export function selectInverterSize(actualInstalledKwp: number): number {
-  const compatible = PRACTICAL_INVERTER_CAPACITIES_KW
-    .map((inverterKw) => ({ inverterKw, ratio: actualInstalledKwp / inverterKw }))
-    .filter(({ ratio }) => ratio >= SOLAR_ASSUMPTIONS.dcAcRatioMin && ratio <= SOLAR_ASSUMPTIONS.dcAcRatioMax)
-    .sort((a, b) =>
-      Math.abs(a.ratio - SOLAR_ASSUMPTIONS.dcAcRatioTarget) -
-      Math.abs(b.ratio - SOLAR_ASSUMPTIONS.dcAcRatioTarget),
-    );
-  if (compatible[0]) return compatible[0].inverterKw;
-
-  return [...PRACTICAL_INVERTER_CAPACITIES_KW].sort(
-    (a, b) => Math.abs(actualInstalledKwp / a - SOLAR_ASSUMPTIONS.dcAcRatioTarget) -
-      Math.abs(actualInstalledKwp / b - SOLAR_ASSUMPTIONS.dcAcRatioTarget),
-  )[0]!;
-}
-
-function consumptionByCalendarMonth(input: VerifiedSolarInput): Map<number, number> {
-  const sorted = [...input.monthlyConsumption].sort((a, b) => a.year - b.year || a.month - b.month);
-  const map = new Map<number, number>();
-  for (const reading of sorted) {
-    if (reading.kwh !== null) map.set(reading.month, reading.kwh);
-  }
-  return map;
-}
-
-function evaluateCandidate(
-  nominalPvKwp: number,
-  profilePsh: readonly number[],
-  consumptionMap: Map<number, number>,
-  annualConsumptionKwh: number,
-  performanceRatio: number,
-): CandidateEvaluation {
-  const { panelCount, actualInstalledKwp } = panelConfiguration(nominalPvKwp);
-  const monthlySimulation: MonthSimulation[] = profilePsh.map((psh, index) => {
-    const month = index + 1;
-    const generationKwh = round(actualInstalledKwp * psh * DAYS_IN_MONTH[index]! * performanceRatio);
-    const consumptionKwh = consumptionMap.get(month) ?? null;
-    return {
-      month,
-      monthName: MONTH_NAMES[index]!,
-      consumptionKwh,
-      generationKwh,
-      matchedEnergyKwh: consumptionKwh === null ? null : round(Math.min(generationKwh, consumptionKwh)),
-      surplusKwh: consumptionKwh === null ? null : round(Math.max(0, generationKwh - consumptionKwh)),
-      shortfallKwh: consumptionKwh === null ? null : round(Math.max(0, consumptionKwh - generationKwh)),
-    };
+  const compatible = PRACTICAL_INVERTER_CAPACITIES_KW.filter((inverter) => {
+    const ratio = actualInstalledKwp / inverter;
+    return ratio >= SOLAR_ASSUMPTIONS.dcAcRatioMin && ratio <= SOLAR_ASSUMPTIONS.dcAcRatioMax;
   });
-
-  const annualGenerationKwh = round(monthlySimulation.reduce((sum, month) => sum + month.generationKwh, 0));
-  const observedConsumption = monthlySimulation.reduce((sum, month) => sum + (month.consumptionKwh ?? 0), 0);
-  const matched = monthlySimulation.reduce((sum, month) => sum + (month.matchedEnergyKwh ?? 0), 0);
-  const isComplete = monthlySimulation.every((month) => month.consumptionKwh !== null);
-  const withConsumption = monthlySimulation.filter((month) => month.consumptionKwh !== null);
-  const surplusPeak = [...withConsumption].sort((a, b) => (b.surplusKwh ?? 0) - (a.surplusKwh ?? 0))[0];
-  const shortfallPeak = [...withConsumption].sort((a, b) => (b.shortfallKwh ?? 0) - (a.shortfallKwh ?? 0))[0];
-
-  return {
-    nominalPvKwp,
-    actualInstalledKwp,
-    inverterKw: selectInverterSize(actualInstalledKwp),
-    panelCount,
-    annualGenerationKwh,
-    annualGenerationConsumptionRatio: round(annualGenerationKwh / annualConsumptionKwh, 3),
-    matchedConsumptionCoveragePercent: round(observedConsumption > 0 ? (matched / observedConsumption) * 100 : 0),
-    annualSurplusKwh: isComplete ? round(monthlySimulation.reduce((sum, month) => sum + (month.surplusKwh ?? 0), 0)) : null,
-    annualShortfallKwh: isComplete ? round(monthlySimulation.reduce((sum, month) => sum + (month.shortfallKwh ?? 0), 0)) : null,
-    highestSurplusMonth: surplusPeak && (surplusPeak.surplusKwh ?? 0) > 0 ? surplusPeak.monthName : null,
-    highestShortfallMonth: shortfallPeak && (shortfallPeak.shortfallKwh ?? 0) > 0 ? shortfallPeak.monthName : null,
-    monthlySimulation,
-  };
+  const pool = compatible.length ? compatible : PRACTICAL_INVERTER_CAPACITIES_KW;
+  return [...pool].sort((a, b) => Math.abs(actualInstalledKwp / a - 1.2) - Math.abs(actualInstalledKwp / b - 1.2) || a - b)[0]!;
 }
 
-function chooseOnGridCandidate(candidates: CandidateEvaluation[]): CandidateEvaluation {
-  const inTargetBand = candidates.filter((candidate) =>
-    candidate.annualGenerationConsumptionRatio >= SOLAR_ASSUMPTIONS.annualGenerationTargetMin &&
-    candidate.annualGenerationConsumptionRatio <= SOLAR_ASSUMPTIONS.annualGenerationTargetMax,
-  );
-  const pool = inTargetBand.length > 0 ? inTargetBand : candidates;
-
-  return [...pool].sort((a, b) => {
-    const aDistance = Math.abs(a.annualGenerationConsumptionRatio - 1) + Math.max(0, a.annualGenerationConsumptionRatio - 1) * 0.35;
-    const bDistance = Math.abs(b.annualGenerationConsumptionRatio - 1) + Math.max(0, b.annualGenerationConsumptionRatio - 1) * 0.35;
-    if (Math.abs(aDistance - bDistance) > 0.03) return aDistance - bDistance;
-    const coverageDifference = b.matchedConsumptionCoveragePercent - a.matchedConsumptionCoveragePercent;
-    if (Math.abs(coverageDifference) > SOLAR_ASSUMPTIONS.smallerCandidateCoverageTolerance * 100) return coverageDifference;
-    return a.nominalPvKwp - b.nominalPvKwp;
-  })[0]!;
-}
-
-function preliminaryHybridBatteryRange(averageDailyKwh: number): BatteryRange {
-  const usableCorrection = SOLAR_ASSUMPTIONS.batterySafetyMargin /
-    (SOLAR_ASSUMPTIONS.batteryDepthOfDischarge * SOLAR_ASSUMPTIONS.batteryEfficiency);
-  return {
-    minimumKwh: roundBatteryCapacity(averageDailyKwh * 0.2 * usableCorrection),
-    maximumKwh: roundBatteryCapacity(averageDailyKwh * 0.4 * usableCorrection),
-    refined: false,
-  };
-}
-
-export function refinedBatteryRange(input: VerifiedSolarInput, averageDailyKwh: number): BatteryRange | null {
-  const preference = input.backupPreference;
-  if (!preference) return null;
-  const estimatedBackupLoadKw = preference.backupLoadKw ??
-    (averageDailyKwh / 24) * BACKUP_LEVEL_FACTORS[preference.level];
-  const required = estimatedBackupLoadKw * preference.durationHours /
-    (SOLAR_ASSUMPTIONS.batteryDepthOfDischarge * SOLAR_ASSUMPTIONS.batteryEfficiency) *
-    SOLAR_ASSUMPTIONS.batterySafetyMargin;
-  const nominal = roundBatteryCapacity(required);
+export function refinedBatteryRange(input: VerifiedSolarInput, averageDailyKwh: number) {
+  if (!input.backupPreference || input.backupPreference.level === "none") return null;
+  const factor = { essential: 0.3, most: 0.6, entire: 0.95 }[input.backupPreference.level];
+  const load = input.backupPreference.backupLoadKw ?? averageDailyKwh / 24 * factor;
+  const raw = load * input.backupPreference.durationHours / (SOLAR_ASSUMPTIONS.batteryDepthOfDischarge * SOLAR_ASSUMPTIONS.batteryRoundTripEfficiency) * SOLAR_ASSUMPTIONS.batterySafetyMargin;
+  const nominal = round(Math.ceil(raw / SOLAR_ASSUMPTIONS.batteryModuleKwh) * SOLAR_ASSUMPTIONS.batteryModuleKwh, 2);
   return { minimumKwh: nominal, maximumKwh: nominal, refined: true };
 }
 
-function offGridBatteryRange(averageDailyKwh: number): BatteryRange {
-  const requiredOneDay = averageDailyKwh /
-    (SOLAR_ASSUMPTIONS.batteryDepthOfDischarge * SOLAR_ASSUMPTIONS.batteryEfficiency) *
-    SOLAR_ASSUMPTIONS.batterySafetyMargin;
+export function isArchitectureApplicable(
+  architecture: SolarArchitecture,
+  input: VerifiedSolarInput,
+  purpose: "recommendation" | "customer_selected" = "recommendation",
+): boolean {
+  if (purpose === "customer_selected") return true;
+  if (input.gridReliability === "no_grid") return architecture === "off_grid";
+  if (architecture === "off_grid") return false;
+  return !(ARCHITECTURES[architecture].green && input.greenMeterStatus === "no");
+}
+
+function recommendationArchitectures(input: VerifiedSolarInput): SolarArchitecture[] {
+  return ALL_ARCHITECTURES.filter((architecture) => isArchitectureApplicable(architecture, input));
+}
+
+function confidence(
+  input: VerifiedSolarInput,
+  fallback: boolean,
+  tariffConfidence: "High" | "Medium" | "Preliminary",
+  billConfidence: "High" | "Medium" | "Low",
+  recommendationData: "Complete" | "Incomplete",
+  offGrid: boolean,
+) {
+  const critical: string[] = [];
+  const assumptions: string[] = [];
+  if (recommendationData !== "Complete") critical.push("the recommendation context is incomplete");
+  if (input.sanctionedLoadKw == null) critical.push("sanctioned load is unverified");
+  if (input.touStatus === "not_sure") critical.push("billing type is unverified");
+  if (input.greenMeterStatus === "not_sure") critical.push("Green Meter status is unverified");
+  if (input.greenMeterStatus === "yes" && input.prosumerStatus === "unknown") critical.push("the prosumer agreement requires verification");
+  if (tariffConfidence === "Preliminary") critical.push("the tariff or policy match is preliminary");
+  if (billConfidence === "Low") critical.push("monthly consumption contains material uncertainty");
+  if (offGrid) critical.push("Off-Grid sizing still requires measured loads, surge demand, autonomy and site assessment");
+
+  if (fallback) assumptions.push(`${input.city} uses the ${getSolarProfile(input.city).profile.city} regional solar profile`);
+  if (input.usagePattern === "not_sure") assumptions.push("daytime and nighttime consumption are estimated");
+  if (input.touStatus === "yes" && (input.peakUnitsKwh ?? 0) + (input.offPeakUnitsKwh ?? 0) <= 0) assumptions.push("the peak/off-peak split is estimated");
+  if (tariffConfidence === "Medium") assumptions.push("the tariff or policy match needs confirmation");
+  if (billConfidence === "Medium") assumptions.push("some monthly readings are less certain");
+  if (input.existingSolar.status !== "no") assumptions.push("the existing solar system needs site verification");
+  if (input.backupPreference?.level !== undefined && input.backupPreference.level !== "none" && input.backupPreference.backupLoadKw == null) assumptions.push("backup load is estimated");
+
+  if (critical.length) return {
+    level: "Preliminary" as const,
+    explanation: `Preliminary confidence — ${critical[0]}.`,
+  };
+  if (assumptions.length) return {
+    level: "Medium" as const,
+    explanation: `Medium confidence — annual consumption and tariff inputs are usable, but ${assumptions.slice(0, 2).join(" and ")}.`,
+  };
   return {
-    minimumKwh: roundBatteryCapacity(requiredOneDay),
-    maximumKwh: roundBatteryCapacity(requiredOneDay * 2),
-    refined: false,
+    level: "High" as const,
+    explanation: "High confidence — based on 12 verified months, confirmed tariff, location, sanctioned load and consumption pattern.",
   };
 }
 
-function toSystem(
-  architecture: SystemRecommendation["architecture"],
-  evaluation: CandidateEvaluation,
-  batteryRange: BatteryRange | null,
-  qualification: string,
-): SystemRecommendation {
-  return { architecture, ...evaluation, batteryRange, qualification };
-}
-
 export function calculateSolarRecommendation(input: VerifiedSolarInput): SolarRecommendationResult {
-  const usableReadings = input.monthlyConsumption.filter((reading) => reading.kwh !== null);
-  if (usableReadings.length === 0) throw new Error("At least one readable monthly consumption value is required.");
-
-  const totalObserved = usableReadings.reduce((sum, reading) => sum + (reading.kwh ?? 0), 0);
-  const averageMonthlyKwh = totalObserved / usableReadings.length;
-  const annualConsumptionKwh = usableReadings.length === 12 ? totalObserved : averageMonthlyKwh * 12;
-  const averageDailyKwh = annualConsumptionKwh / 365;
-  const highest = [...usableReadings].sort((a, b) => (b.kwh ?? 0) - (a.kwh ?? 0))[0]!;
-  const lowest = [...usableReadings].sort((a, b) => (a.kwh ?? 0) - (b.kwh ?? 0))[0]!;
+  const context = buildOptimizationContext(input);
+  const loadProfile = LOAD_PROFILE_ASSUMPTIONS[input.usagePattern];
+  const suppliedTouUnits = (input.peakUnitsKwh ?? 0) + (input.offPeakUnitsKwh ?? 0);
+  const touMethodology = input.touStatus !== "yes"
+    ? "Not applicable to non-TOU billing."
+    : suppliedTouUnits > 0
+      ? "The verified monthly peak/off-peak unit ratio is applied to each representative month; stored solar serves remaining peak demand first."
+      : `No monthly peak/off-peak unit split was supplied; the configured ${Math.round(loadProfile.defaultTouPeakShare * 100)}% peak-load approximation is used and stored solar serves peak demand first.`;
+  const usable = input.monthlyConsumption.filter((reading) => reading.kwh !== null);
+  const highest = [...usable].sort((a, b) => b.kwh! - a.kwh!)[0]!;
+  const lowest = [...usable].sort((a, b) => a.kwh! - b.kwh!)[0]!;
   const { profile, fallbackUsed } = getSolarProfile(input.city);
-  const consumptionMap = consumptionByCalendarMonth(input);
-
-  const candidates = PRACTICAL_PV_CAPACITIES_KWP.map((nominal) =>
-    evaluateCandidate(nominal, profile.monthlyPeakSunHours, consumptionMap, annualConsumptionKwh, SOLAR_ASSUMPTIONS.performanceRatio),
+  const applicable = recommendationArchitectures(input);
+  const optimized = new Map<SolarArchitecture, OptimizedSystem>();
+  const get = (architecture: SolarArchitecture) => {
+    const cached = optimized.get(architecture);
+    if (cached) return cached;
+    const result = optimizeArchitecture(input, profile, context, architecture);
+    optimized.set(architecture, result);
+    return result;
+  };
+  const ranked = input.analysisMode === "chosen"
+    ? []
+    : applicable.map(get).sort((a, b) => b.score - a.score || a.actualInstalledKwp - b.actualInstalledKwp);
+  const best = input.analysisMode === "chosen" ? null : ranked[0] ?? null;
+  const next = ranked[1] ?? null;
+  const meaningfulDifference = best && next && (
+    Math.abs((best.estimatedBillReductionPercent ?? 0) - (next.estimatedBillReductionPercent ?? 0)) >= 1 ||
+    Math.abs((best.estimatedRemainingBillPkr ?? 0) - (next.estimatedRemainingBillPkr ?? 0)) >= Math.max(1_000, context.currentBill.estimatedAnnualBillPkr * 0.02) ||
+    Math.abs(best.actualInstalledKwp - next.actualInstalledKwp) >= input.panelWattage / 1_000 ||
+    (best.batteryKwh ?? 0) !== (next.batteryKwh ?? 0) ||
+    (best.gridExportKwh ?? 0) !== (next.gridExportKwh ?? 0) ||
+    best.regulatoryValid !== next.regulatoryValid
   );
-  const onGridEvaluation = chooseOnGridCandidate(candidates);
-
-  const weakestPsh = Math.min(...profile.monthlyPeakSunHours);
-  const conservativeOffGridKwp = averageDailyKwh / (weakestPsh * SOLAR_ASSUMPTIONS.offGridPerformanceRatio) * SOLAR_ASSUMPTIONS.offGridReserveFactor;
-  const offGridNominal = PRACTICAL_PV_CAPACITIES_KWP.find((capacity) => capacity >= conservativeOffGridKwp) ?? 1000;
-  const offGridEvaluation = evaluateCandidate(
-    offGridNominal,
-    profile.monthlyPeakSunHours,
-    consumptionMap,
-    annualConsumptionKwh,
-    SOLAR_ASSUMPTIONS.offGridPerformanceRatio,
+  const alternative = input.analysisMode === "recommend" && meaningfulDifference ? next : null;
+  const selected = input.analysisMode === "recommend" || !input.selectedArchitecture ? null : get(input.selectedArchitecture);
+  const extraction = assessDataConfidence(input.monthlyConsumption, [], hasCompleteRecommendationContext(input));
+  const confidenceAssessment = confidence(
+    input,
+    fallbackUsed,
+    context.tariff.confidence,
+    extraction.billAnalysisConfidence,
+    extraction.recommendationData,
+    best?.architectureKey === "off_grid" || selected?.architectureKey === "off_grid",
   );
-
-  const confidence = assessDataConfidence(input.monthlyConsumption, []);
-  const refined = refinedBatteryRange(input, averageDailyKwh);
-  const hybridBattery = refined ?? preliminaryHybridBatteryRange(averageDailyKwh);
-  const onGrid = toSystem(
-    "On-Grid",
-    onGridEvaluation,
-    null,
-    "Strong preliminary bill-reduction configuration; export or net-metering benefits are not assumed.",
-  );
-  const hybrid = toSystem(
-    "Hybrid",
-    onGridEvaluation,
-    hybridBattery,
-    "Backup-capable alternative. Battery sizing remains preliminary until backup loads and duration are verified.",
-  );
-  const offGrid = toSystem(
-    "Off-Grid",
-    offGridEvaluation,
-    offGridBatteryRange(averageDailyKwh),
-    "Preliminary Off-Grid Estimate — detailed load assessment required for final engineering.",
-  );
-
-  const phaseNote = input.phase ? ` The bill indicates a ${input.phase}-phase connection.` : "";
+  const comparison = best && selected
+    ? best.architectureKey === selected.architectureKey
+      ? "Your selected architecture is also the strongest deterministic bill-reduction option for the verified inputs."
+      : `${best.architecture} estimates ${best.estimatedBillReductionPercent ?? 0}% bill reduction and PKR ${Math.round(best.estimatedRemainingBillPkr ?? 0).toLocaleString("en-PK")} remaining annual bill, versus ${selected.estimatedBillReductionPercent ?? "not applicable"}% and ${selected.estimatedRemainingBillPkr == null ? "a utility bill that is not applicable if disconnected" : `PKR ${Math.round(selected.estimatedRemainingBillPkr).toLocaleString("en-PK")}`} for ${selected.architecture}. Modeled grid imports are ${best.gridImportKwh ?? "not applicable"} versus ${selected.gridImportKwh ?? "not applicable"} kWh; exports are ${best.gridExportKwh ?? "not applicable"} versus ${selected.gridExportKwh ?? "not applicable"} kWh; battery capacity is ${best.batteryKwh ?? 0} versus ${selected.batteryKwh ?? 0} kWh. ${selected.regulatoryValid ? "Both are evaluated under their applicable prosumer treatment." : "The selected architecture requires regulatory or site qualification before it can be treated as applicable."}`
+    : null;
   return {
     modelVersion: SOLAR_PROFILE_SOURCE.modelVersion,
-    location: { requestedCity: input.city, profileCity: profile.city, regionalFallbackUsed: fallbackUsed },
-    dataQuality: { ...confidence, readableMonths: usableReadings.length },
-    consumption: {
-      annualConsumptionKwh: round(annualConsumptionKwh),
-      annualConsumptionEstimated: usableReadings.length !== 12,
-      averageMonthlyKwh: round(averageMonthlyKwh),
-      averageDailyKwh: round(averageDailyKwh),
-      highestMonth: { label: `${MONTH_NAMES[highest.month - 1]} ${highest.year}`, kwh: highest.kwh! },
-      lowestMonth: { label: `${MONTH_NAMES[lowest.month - 1]} ${lowest.year}`, kwh: lowest.kwh! },
-    },
-    assumptions: {
-      panelWattage: SOLAR_ASSUMPTIONS.panelWattage,
-      performanceRatio: SOLAR_ASSUMPTIONS.performanceRatio,
-      solarProfileSource: SOLAR_PROFILE_SOURCE,
-    },
-    bestMatch: input.backupPreference ? {
-      architecture: "Hybrid",
-      reason: `Hybrid is the best preliminary match after applying the stated ${input.backupPreference.durationHours}-hour backup requirement. The PV size still follows verified consumption, while battery capacity follows the stated backup level${input.backupPreference.backupLoadKw ? " and known backup load" : " using the disclosed estimation assumption"}.${phaseNote}`,
-    } : {
-      architecture: "On-Grid",
-      reason: `On-Grid is the best preliminary bill-reduction match because the verified bill data establishes energy use but does not establish a backup-power requirement. The ${onGrid.nominalPvKwp} kWp commercial size balances estimated annual generation with consumption while limiting unnecessary oversizing.${phaseNote}`,
-    },
-    systems: { onGrid, hybrid, offGrid },
+    analysisMode: input.analysisMode,
+    location: { requestedCity: input.city, profileCity: profile.city, regionalFallbackUsed: fallbackUsed, assumption: fallbackUsed ? `${input.city} uses the conservative ${profile.city} regional solar profile.` : null },
+    dataQuality: { billExtractionConfidence: extraction.billAnalysisConfidence, tariffPolicyConfidence: context.tariff.confidence, recommendationConfidence: confidenceAssessment.level, recommendationConfidenceExplanation: confidenceAssessment.explanation, recommendationData: extraction.recommendationData, readableMonths: usable.length },
+    consumption: { annualConsumptionKwh: round(context.annualConsumptionKwh), annualConsumptionEstimated: usable.length !== 12, averageMonthlyKwh: round(context.averageMonthlyKwh), averageDailyKwh: round(context.averageDailyKwh), highestMonth: { label: `${MONTH_NAMES[highest.month - 1]} ${highest.year}`, kwh: highest.kwh! }, lowestMonth: { label: `${MONTH_NAMES[lowest.month - 1]} ${lowest.year}`, kwh: lowest.kwh! } },
+    assumptions: { panelWattage: input.panelWattage, performanceRatio: SOLAR_ASSUMPTIONS.performanceRatio, solarProfileSource: SOLAR_PROFILE_SOURCE, policyLastVerified: POLICY_LAST_VERIFIED, dynamicChargesConfigured: false, loadProfile: input.usagePattern, daytimeLoadShare: loadProfile.daytimeLoadShare, loadProfileMethodology: `Monthly representative-day simulation using ${loadProfile.description}.`, touMethodology, batteryRoundTripEfficiency: SOLAR_ASSUMPTIONS.batteryRoundTripEfficiency },
+    verifiedContext: { utility: input.provider ?? null, tariff: input.tariffCategory ?? null, greenMeterStatus: input.greenMeterStatus, backupRequirement: !input.backupPreference || input.backupPreference.level === "none" ? "none" : `${input.backupPreference.level} · ${input.backupPreference.durationHours} hours`, selectedArchitecture: input.selectedArchitecture ?? null },
+    tariffDetails: { usage: context.tariff.referenceMode, tariffCode: context.tariff.tariffCode, tariffName: context.tariff.tariffName, version: context.tariff.scheduleVersion, effectiveFrom: context.tariff.effectiveFrom, effectiveTo: context.tariff.effectiveTo, utility: input.provider ?? null, utilityGroup: context.tariff.applicableUtilityGroup, source: context.tariff.source, sourceReference: context.tariff.sourceReference, modeledComponents: context.tariff.modeledComponents, notModeledComponents: context.tariff.notModeledComponents },
+    bestRecommended: best,
+    meaningfulAlternative: alternative,
+    userSelected: selected,
+    comparisonExplanation: comparison,
+    evaluatedArchitectures: input.analysisMode === "chosen" && input.selectedArchitecture ? [input.selectedArchitecture] : applicable,
   };
 }

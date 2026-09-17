@@ -6,436 +6,184 @@ import { AlertCircle, ArrowLeft, ArrowRight, Check, FileText, MessageCircle, Shi
 import { useMemo, useRef, useState } from "react";
 import { siteConfig } from "@/lib/site-config";
 import {
-  analyzerApiUrl,
-  analyzerLeadMessage,
-  batteryRangeLabel,
-  createAnalyzerLeadContext,
-  createTwelveMonthGrid,
-  PAKISTAN_CITIES,
-  saveAnalyzerLeadContext,
-  summarizeConsumption,
-  validateBillFile,
-  type BillExtraction,
-  type EditableMonth,
-  type SolarRecommendationResult,
-  type VerifiedSolarInput,
+  ANALYZER_EXTRACTION_REQUEST_TIMEOUT_MS, analyzerApiUrl, analyzerLeadMessage, ARCHITECTURE_OPTIONS, CONSUMER_TARIFF_OPTIONS, consumerTariffPayload, createAnalyzerLeadContext, createTwelveMonthGrid,
+  getMissingVerificationFields, isVerificationContextComplete, normalizeConsumerTariff, normalizeUtility, PAKISTAN_CITIES, PAKISTAN_UTILITIES, prosumerPayload, saveAnalyzerLeadContext, SOLAR_ANALYZER_MAX_FILE_MB, summarizeConsumption, validateBillFile,
+  type AnalysisMode, type BillExtraction, type EditableMonth, type OptimizedSystem, type SolarArchitecture,
+  type ConsumerTariff, type ProsumerRegime, type SolarRecommendationResult, type TriState, type VerifiedSolarInput,
 } from "@/lib/solar-analyzer";
 import styles from "./solar-bill-analyzer.module.css";
 
-type Stage = "upload" | "review" | "results";
-type ApiError = { code?: string; message?: string };
-
+type Stage = "upload" | "review" | "mode" | "results";
+type ApiError = { message?: string; missingFields?: string[] };
+class AnalyzerRequestError extends Error {
+  constructor(message: string, readonly missingFields: string[] = []) { super(message); }
+}
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const number = (value: number, digits = 0) => new Intl.NumberFormat("en-PK", { maximumFractionDigits: digits }).format(value);
+const money = (value: number | null) => value == null ? "Not applicable" : `Rs ${number(value)}/year`;
+async function readJson<T>(response: Response): Promise<T> { const body = await response.json().catch(() => ({})) as T & ApiError; if (!response.ok) throw new AnalyzerRequestError(body.message || "The request could not be completed.", body.missingFields); return body; }
 
-function formatNumber(value: number, maximumFractionDigits = 0) {
-  return new Intl.NumberFormat("en-PK", { maximumFractionDigits }).format(value);
-}
+function ResultCard({ system, heading, result }: { system: OptimizedSystem; heading: string; result: SolarRecommendationResult }) {
+  const offGrid = system.architectureKey === "off_grid";
+  const hasBattery = system.batteryKwh !== null;
+  const settlement = system.prosumerRegime === "current" ? "Current prosumer billing (NAEPP)" : system.prosumerRegime === "legacy" ? "Legacy net-metering treatment" : system.prosumerRegime === "uncertain" ? "Agreement verification required" : "No export settlement modeled";
+  return <article className={`${styles.systemCard} ${styles.systemCardSelected}`}>
+    <header className={styles.systemCardHead}><div><span>{offGrid ? "PRELIMINARY OFF-GRID SIZING" : heading}</span><h3>{system.architecture}</h3></div></header>
+    <div className={styles.outcomeMetric}><strong>{offGrid ? `${number(system.consumptionCoveragePercent, 1)}%` : `${number(system.estimatedBillReductionPercent ?? 0, 1)}%`}</strong><span>{offGrid ? "modeled annual energy coverage" : "Estimated Maximum Practical Bill Reduction"}</span></div>
 
-async function readJson<T>(response: Response): Promise<T> {
-  const body = await response.json().catch(() => ({})) as T & ApiError;
-  if (!response.ok) throw new Error(body.message || "The request could not be completed.");
-  return body;
-}
-
-function SystemCard({ system, selected, onSelect }: {
-  system: SolarRecommendationResult["systems"][keyof SolarRecommendationResult["systems"]];
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <article className={`${styles.systemCard} ${selected ? styles.systemCardSelected : ""}`}>
-      <div className={styles.systemCardHead}>
-        <div>
-          <span>{system.architecture}</span>
-          <h3>{formatNumber(system.actualInstalledKwp, 2)} kWp</h3>
-        </div>
-        {selected ? <span className={styles.selectedMark}><Check size={14} aria-hidden="true" /> Selected</span> : null}
-      </div>
+    <section className={styles.resultLayer} aria-label="Engineering recommendation">
+      <span className={styles.layerLabel}>ENGINEERING RECOMMENDATION</span>
       <dl className={styles.compactSpecs}>
-        <div><dt>Inverter</dt><dd>{formatNumber(system.inverterKw, 1)} kW</dd></div>
-        <div><dt>Panels</dt><dd>{system.panelCount}</dd></div>
-        <div><dt>Coverage</dt><dd>{formatNumber(system.matchedConsumptionCoveragePercent)}%</dd></div>
-        <div><dt>Battery</dt><dd>{batteryRangeLabel(system.batteryRange) ?? "Not included"}</dd></div>
+        <div><dt>Architecture</dt><dd>{system.architecture}</dd></div>
+        <div><dt>PV capacity</dt><dd>{number(system.actualInstalledKwp, 2)} kWp</dd></div>
+        <div><dt>Panel quantity</dt><dd>{system.panelCount}</dd></div>
+        <div><dt>Panel wattage</dt><dd>{system.panelWattage} W</dd></div>
+        <div><dt>Inverter capacity</dt><dd>{number(system.inverterKw, 1)} kW</dd></div>
+        {hasBattery && <><div><dt>Battery capacity</dt><dd>{number(system.batteryKwh!, 2)} kWh</dd></div><div><dt>Usable battery capacity</dt><dd>{number(system.usableBatteryCapacityKwh, 2)} kWh</dd></div><div><dt>Backup objective</dt><dd>{result.verifiedContext.backupRequirement === "none" ? "No duration requested" : `${result.verifiedContext.backupRequirement} · runtime subject to verified load`}</dd></div></>}
+        <div><dt>Annual generation</dt><dd>{number(system.annualGenerationKwh)} kWh/year</dd></div>
+        <div><dt>Annual consumption</dt><dd>{number(result.consumption.annualConsumptionKwh)} kWh/year</dd></div>
+        <div><dt>Energy coverage</dt><dd>{number(system.consumptionCoveragePercent, 1)}%</dd></div>
+        <div><dt>Self-consumption</dt><dd>{number(system.selfConsumptionPercent, 1)}%</dd></div>
+        {offGrid && <div className={styles.criticalMetric}><dt>Modeled unserved energy</dt><dd>{number(system.unservedLoadKwh)} kWh/year</dd></div>}
       </dl>
-      <p>{system.qualification}</p>
-      <button type="button" className={styles.cardSelect} onClick={onSelect} aria-pressed={selected}>
-        {selected ? "Selected for proposal" : `Choose ${system.architecture}`}
-      </button>
-    </article>
-  );
+    </section>
+
+    <section className={styles.regulatoryPanel} aria-label="Grid and regulatory status">
+      <span>GRID / REGULATORY STATUS</span><strong>{system.regulatoryStatusLabel}</strong>
+      <p><b>Architecture export capability:</b> {system.architectureExportCapable ? "Export-capable" : "Zero-export"}</p>
+      <p><b>Current export arrangement:</b> {system.currentExportArrangement === "confirmed" ? "Existing Prosumer / Export Arrangement Confirmed (customer-reported)" : system.currentExportArrangement === "not-established" ? "Not established" : "Unverified — DISCO Verification Required"}</p>
+      <p><b>Sanctioned-load status:</b> {system.loadExtensionRequired ? `Load extension required; modeled PV exceeds the current grid-eligible capacity by ${number(system.excessCapacityKwp, 2)} kWp.` : !system.architectureExportCapable ? "Export capacity check not applicable to this architecture." : system.currentGridEligibleCapacityKwp === null ? "Sanctioned load requires verification." : "No modeled load-extension flag."}</p>
+      <p><b>Phase status:</b> {system.phaseStatus === "verification-required" ? "Phase verification / upgrade required" : system.phaseStatus === "not-applicable" ? "Not applicable to this architecture" : "No modeled phase-upgrade flag"}</p>
+      <p><b>Material modification:</b> {system.materialModification ? "DISCO / regulatory review required" : "No modeled material-modification flag"}</p>
+      <p><b>Prosumer regime:</b> {system.prosumerRegime === "none" ? "None currently confirmed" : system.prosumerRegime}</p>
+      <p><b>Green Meter:</b> {result.verifiedContext.greenMeterStatus === "yes" ? "Yes" : result.verifiedContext.greenMeterStatus === "no" ? "No" : "Not sure"}</p>
+      <p><b>Modeled Grid Export:</b> {number(system.gridExportKwh ?? 0)} kWh/year</p>
+      {!system.architectureExportCapable && <p>Prosumer Export Check Not Applicable</p>}
+      {(system.gridExportKwh ?? 0) === 0 && <p>Unused surplus solar is curtailed; no export credit is modeled.</p>}
+      {system.regulatoryQualifications.length > 0 && <ul>{system.regulatoryQualifications.map((item) => <li key={item}>{item}</li>)}</ul>}
+    </section>
+
+    <section className={styles.resultLayer} aria-label="Financial recommendation">
+      <span className={styles.layerLabel}>FINANCIAL RECOMMENDATION</span>
+      {offGrid ? <dl className={styles.compactSpecs}><div><dt>Utility bill</dt><dd>Not Applicable if fully disconnected</dd></div><div className={styles.criticalMetric}><dt>Modeled unserved energy</dt><dd>{number(system.unservedLoadKwh)} kWh/year</dd></div></dl> : <dl className={styles.compactSpecs}>
+        <div><dt>Current estimated annual bill</dt><dd>{money(system.currentBill?.estimatedAnnualBillPkr ?? null)}</dd></div>
+        <div><dt>Estimated Remaining Electricity Bill</dt><dd>{money(system.estimatedRemainingBillPkr)}</dd></div>
+        <div><dt>Estimated annual bill reduction</dt><dd>{money(system.estimatedBillReductionPkr)}</dd></div>
+        <div><dt>Estimated bill reduction</dt><dd>{number(system.estimatedBillReductionPercent ?? 0, 1)}%</dd></div>
+        <div><dt>Direct solar consumption</dt><dd>{number(system.directSolarConsumptionKwh)} kWh/year</dd></div>
+        <div><dt>Grid import</dt><dd>{number(system.gridImportKwh ?? 0)} kWh/year</dd></div>
+        <div><dt>Grid export</dt><dd>{number(system.gridExportKwh ?? 0)} kWh/year</dd></div>
+        {(system.gridExportKwh ?? 0) === 0 ? <div><dt>Excess solar</dt><dd>{number(system.curtailedGenerationKwh)} kWh/year curtailed</dd></div> : <><div><dt>Export compensation</dt><dd>{settlement}</dd></div><div><dt>Modeled export value</dt><dd>{money(system.postSolarBill?.exportValuePkr ?? 0)}</dd></div></>}
+      </dl>}
+    </section>
+
+    <section className={styles.whySection} aria-label="Why this system"><h4>Why This System?</h4><ul>{system.whyThisSystem.slice(0, 3).map((reason) => <li key={reason}>{reason}</li>)}</ul></section>
+    {system.qualification.length > 0 && <details className={styles.qualificationDisclosure}><summary>Engineering and policy qualifications</summary><ul>{system.qualification.slice(0, 6).map((item) => <li key={item}>{item}</li>)}</ul></details>}
+  </article>;
 }
 
 export function SolarBillAnalyzer() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [stage, setStage] = useState<Stage>("upload");
   const [file, setFile] = useState<File | null>(null);
-  const [dragActive, setDragActive] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [provider, setProvider] = useState("");
-  const [city, setCity] = useState("");
-  const [connectionType, setConnectionType] = useState("");
-  const [phase, setPhase] = useState<"" | "single" | "three">("");
-  const [sanctionedLoad, setSanctionedLoad] = useState("");
-  const [months, setMonths] = useState<EditableMonth[]>(() => createTwelveMonthGrid());
-  const [uncertainFields, setUncertainFields] = useState<string[]>([]);
-  const [currentReading, setCurrentReading] = useState<number | null>(null);
+  const [dragActive, setDragActive] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const [provider, setProvider] = useState(""); const [city, setCity] = useState(""); const [consumerTariff, setConsumerTariff] = useState<ConsumerTariff>("unknown");
+  const [protectedStatus, setProtectedStatus] = useState<VerifiedSolarInput["protectedStatus"]>("unknown");
+  const [phase, setPhase] = useState<"" | "single" | "three">(""); const [sanctionedLoad, setSanctionedLoad] = useState(""); const [mdi, setMdi] = useState("");
+  const [touStatus, setTouStatus] = useState<TriState>("not_sure"); const [peakUnits, setPeakUnits] = useState(""); const [offPeakUnits, setOffPeakUnits] = useState("");
+  const [greenMeter, setGreenMeter] = useState<TriState>("not_sure"); const [agreementStatus, setAgreementStatus] = useState<TriState>("not_sure"); const [prosumerRegime, setProsumerRegime] = useState<ProsumerRegime>("unknown"); const [agreementDate, setAgreementDate] = useState("");
+  const [usagePattern, setUsagePattern] = useState<VerifiedSolarInput["usagePattern"]>("not_sure"); const [gridReliability, setGridReliability] = useState<VerifiedSolarInput["gridReliability"]>("reliable");
+  const [existingSolar, setExistingSolar] = useState<TriState>("no"); const [existingPv, setExistingPv] = useState(""); const [existingInverter, setExistingInverter] = useState(""); const [plannedOutputIncrease, setPlannedOutputIncrease] = useState(false); const [plannedInverterReplacement, setPlannedInverterReplacement] = useState(false); const [plannedInterconnectionChange, setPlannedInterconnectionChange] = useState(false); const [currentBill, setCurrentBill] = useState("");
+  const [months, setMonths] = useState<EditableMonth[]>(() => createTwelveMonthGrid()); const [uncertainFields, setUncertainFields] = useState<string[]>([]);
   const [billConfidence, setBillConfidence] = useState<"High" | "Medium" | "Low">("Low");
-  const [recommendationData, setRecommendationData] = useState<"Complete" | "Incomplete">("Incomplete");
-  const [locationWasMissing, setLocationWasMissing] = useState(false);
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode | null>(null); const [selectedArchitecture, setSelectedArchitecture] = useState<SolarArchitecture | null>(null); const [panelWattage, setPanelWattage] = useState<550 | 580 | 585 | 600>(585);
+  const [backupLevel, setBackupLevel] = useState<"none" | "essential" | "most" | "entire">("none"); const [backupHours, setBackupHours] = useState<2 | 4 | 6 | 8>(4); const [knownBackupLoad, setKnownBackupLoad] = useState("");
   const [result, setResult] = useState<SolarRecommendationResult | null>(null);
-  const [selectedSystem, setSelectedSystem] = useState<"onGrid" | "hybrid" | "offGrid">("onGrid");
-  const [backupLevel, setBackupLevel] = useState<"essential" | "most" | "entire">("essential");
-  const [backupHours, setBackupHours] = useState<2 | 4 | 6 | 8>(4);
-  const [knownBackupLoad, setKnownBackupLoad] = useState("");
-
+  const [showRequiredFields, setShowRequiredFields] = useState(false);
   const summary = useMemo(() => summarizeConsumption(months), [months]);
+  const monthlyHistoryComplete = summary?.complete === true;
+  const matchedCity = PAKISTAN_CITIES.find((item) => item.toLowerCase() === city.trim().toLowerCase()) ?? null;
+  const toNumber = (value: string) => value.trim() === "" ? null : Number(value);
+  const verificationContext = { cityKnown: Boolean(matchedCity), utility: provider, consumerTariff, residentialStatus: protectedStatus, sanctionedLoadKw: toNumber(sanctionedLoad), billingType: touStatus, mdiKw: toNumber(mdi), peakUnitsKwh: toNumber(peakUnits), offPeakUnitsKwh: toNumber(offPeakUnits), greenMeterStatus: greenMeter, agreementStatus, prosumerRegime, agreementDate };
+  const missingVerificationFields = getMissingVerificationFields(verificationContext);
+  const missingVerificationFieldSet = new Set(missingVerificationFields);
+  const verificationContextComplete = isVerificationContextComplete(verificationContext);
+  const displayedRecommendationData = monthlyHistoryComplete && verificationContextComplete ? "Complete" : "Incomplete";
 
-  function chooseFile(nextFile: File | null) {
-    setError("");
-    if (!nextFile) return;
-    const validationError = validateBillFile(nextFile);
-    if (validationError) {
-      setFile(null);
-      setError(validationError);
-      return;
-    }
-    setFile(nextFile);
+  function chooseFile(next: File | null) { setError(""); if (!next) return; const issue = validateBillFile(next); if (issue) { setFile(null); setError(issue); } else setFile(next); }
+  function applyExtraction(extraction: BillExtraction, confidence: "High" | "Medium" | "Low") {
+    setProvider(normalizeUtility(extraction.provider)); setCity(extraction.city ?? ""); setConsumerTariff(normalizeConsumerTariff(extraction.tariffCategory, extraction.consumerCategory, extraction.connectionType));
+    const status = `${extraction.consumerCategory ?? ""} ${extraction.connectionType ?? ""}`.toLowerCase(); setProtectedStatus(status.includes("non-protected") || status.includes("non protected") ? "non_protected" : status.includes("lifeline") ? "lifeline" : status.includes("protected") ? "protected" : "unknown");
+    setPhase(extraction.phase ?? ""); setSanctionedLoad(extraction.sanctionedLoadKw == null ? "" : String(extraction.sanctionedLoadKw)); setMdi(extraction.mdiKw == null ? "" : String(extraction.mdiKw));
+    setTouStatus(extraction.touStatus); setPeakUnits(extraction.peakUnitsKwh == null ? "" : String(extraction.peakUnitsKwh)); setOffPeakUnits(extraction.offPeakUnitsKwh == null ? "" : String(extraction.offPeakUnitsKwh));
+    setGreenMeter(extraction.greenMeterStatus); setAgreementStatus(extraction.existingProsumerStatus); setProsumerRegime("unknown"); setAgreementDate(extraction.prosumerAgreementDate ?? "");
+    setCurrentBill(extraction.currentBillAmountPkr == null ? "" : String(extraction.currentBillAmountPkr)); setMonths(createTwelveMonthGrid(extraction.monthlyConsumption)); setUncertainFields(extraction.uncertainFields); setBillConfidence(confidence); setShowRequiredFields(false); setStage("review");
   }
-
-  function applyExtraction(extraction: BillExtraction, confidence: "High" | "Medium" | "Low", completeness: "Complete" | "Incomplete") {
-    setProvider(extraction.provider ?? "");
-    setCity(extraction.city ?? "");
-    setConnectionType(extraction.connectionType ?? "");
-    setPhase(extraction.phase ?? "");
-    setSanctionedLoad(extraction.sanctionedLoadKw === null ? "" : String(extraction.sanctionedLoadKw));
-    setMonths(createTwelveMonthGrid(extraction.monthlyConsumption));
-    setUncertainFields(extraction.uncertainFields);
-    setCurrentReading(extraction.currentMonthConsumptionKwh);
-    setBillConfidence(confidence);
-    setRecommendationData(completeness);
-    setLocationWasMissing(!extraction.city);
-    setStage("review");
+  async function extractBill() { if (!file) return setError("Choose a bill before continuing."); setBusy(true); setError(""); const controller = new AbortController(); const timeout = window.setTimeout(() => controller.abort(), ANALYZER_EXTRACTION_REQUEST_TIMEOUT_MS); try { const form = new FormData(); form.set("bill", file); const response = await fetch(analyzerApiUrl("/api/solar-analyzer/extract"), { method: "POST", body: form, signal: controller.signal }); const body = await readJson<{ extraction: BillExtraction; billAnalysisConfidence: "High" | "Medium" | "Low"; recommendationData: "Complete" | "Incomplete" }>(response); applyExtraction(body.extraction, body.billAnalysisConfidence); } catch (caught) { setError(caught instanceof DOMException && caught.name === "AbortError" ? "Bill extraction timed out. Please retry or enter consumption manually." : caught instanceof Error ? caught.message : "The bill could not be analyzed."); } finally { clearTimeout(timeout); setBusy(false); } }
+  function startManualEntry() { setFile(null); setProvider(""); setCity(""); setConsumerTariff("unknown"); setProtectedStatus("unknown"); setPhase(""); setSanctionedLoad(""); setMdi(""); setTouStatus("not_sure"); setPeakUnits(""); setOffPeakUnits(""); setGreenMeter("not_sure"); setAgreementStatus("not_sure"); setProsumerRegime("unknown"); setAgreementDate(""); setExistingSolar("no"); setExistingPv(""); setExistingInverter(""); setPlannedOutputIncrease(false); setPlannedInverterReplacement(false); setPlannedInterconnectionChange(false); setMonths(createTwelveMonthGrid()); setUncertainFields([]); setBillConfidence("Low"); setShowRequiredFields(false); setError(""); setStage("review"); }
+  function updateMonth(index: number, value: string) { if (value && (!/^\d*(\.\d{0,2})?$/.test(value) || Number(value) > 10_000_000)) return; setMonths((current) => current.map((month, i) => i === index ? { ...month, kwh: value, confidence: value ? "high" : "low" } : month)); }
+  function verifiedPayload(): VerifiedSolarInput | null {
+    if (!matchedCity) { setError("Choose the installation city in Pakistan from the list."); return null; }
+    if (!summary?.complete) { setError("Enter exactly 12 unique monthly consumption readings before calculating a full recommendation."); return null; }
+    if (!analysisMode) { setError("Choose an analysis mode before calculating."); return null; }
+    if ((analysisMode === "chosen" || analysisMode === "both") && !selectedArchitecture) { setError("Choose the architecture you want analyzed."); return null; }
+    const industrialDemand = consumerTariff.startsWith("industrial_b") && consumerTariff !== "industrial_b1";
+    const activeNumeric = [sanctionedLoad, existingPv, existingInverter, ...(touStatus === "yes" ? [mdi, peakUnits, offPeakUnits] : industrialDemand ? [mdi] : []), ...(backupLevel !== "none" ? [knownBackupLoad] : [])]; const numeric = activeNumeric.filter((value) => value.trim()).map(Number); if (numeric.some((value) => !Number.isFinite(value) || value < 0)) { setError("Review the numeric values before calculating."); return null; }
+    const batteryRelevant = analysisMode !== "chosen" || selectedArchitecture === "hybrid_green_battery" || selectedArchitecture === "hybrid_battery_no_green" || selectedArchitecture === "off_grid";
+    const tariff = consumerTariffPayload(consumerTariff); const prosumer = prosumerPayload(greenMeter, agreementStatus, prosumerRegime, agreementDate);
+    const backupPreference = backupLevel === "none" ? { level: "none" as const } : { level: backupLevel, durationHours: backupHours, backupLoadKw: toNumber(knownBackupLoad) };
+    return { provider: provider || null, city: matchedCity, ...tariff, protectedStatus: tariff.consumerCategory === "residential" ? protectedStatus : "unknown", phase: phase || null, sanctionedLoadKw: toNumber(sanctionedLoad), mdiKw: toNumber(mdi), touStatus, peakUnitsKwh: touStatus === "yes" ? toNumber(peakUnits) : null, offPeakUnitsKwh: touStatus === "yes" ? toNumber(offPeakUnits) : null, greenMeterStatus: greenMeter, ...prosumer, usagePattern, gridReliability, existingSolar: { status: existingSolar, pvKwp: toNumber(existingPv), inverterKw: toNumber(existingInverter), plannedOutputIncrease, plannedInverterReplacement, plannedInterconnectionEquipmentChange: plannedInterconnectionChange }, analysisMode, selectedArchitecture, panelWattage, currentBillAmountPkr: toNumber(currentBill), monthlyConsumption: months.map((month) => ({ year: month.year, month: month.month, kwh: toNumber(month.kwh), confidence: month.kwh ? month.confidence : "low" })), ...(batteryRelevant ? { backupPreference } : {}) };
   }
+  async function calculate() { const payload = verifiedPayload(); if (!payload) return; setBusy(true); setError(""); const controller = new AbortController(); const timeout = window.setTimeout(() => controller.abort(), 25_000); try { const response = await fetch(analyzerApiUrl("/api/solar-analyzer/calculate"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload), signal: controller.signal }); setResult(await readJson<SolarRecommendationResult>(response)); setStage("results"); window.scrollTo({ top: 0, behavior: "smooth" }); } catch (caught) { if (caught instanceof AnalyzerRequestError && caught.missingFields.length) { setShowRequiredFields(true); setStage("review"); } setError(caught instanceof Error ? caught.message : "The recommendation could not be calculated."); } finally { clearTimeout(timeout); setBusy(false); } }
+  const proposalSystem = result?.userSelected ?? result?.bestRecommended ?? result?.meaningfulAlternative ?? null;
+  function requestProposal() { if (!result || !proposalSystem) return; saveAnalyzerLeadContext(createAnalyzerLeadContext(result, proposalSystem)); window.location.href = "/?source=solar_bill_analyzer#contact"; }
+  const lead = result && proposalSystem ? createAnalyzerLeadContext(result, proposalSystem) : null;
+  const whatsappHref = lead ? `https://wa.me/${siteConfig.whatsappNumber}?text=${encodeURIComponent(analyzerLeadMessage(lead))}` : siteConfig.whatsappHref;
+  const displayResults = result ? result.analysisMode === "recommend" ? [[result.bestRecommended, "RECOMMENDED SYSTEM"], [result.meaningfulAlternative, "ALTERNATIVE CONFIGURATION"]] as const : result.analysisMode === "chosen" ? [[result.userSelected, "YOUR SELECTED SYSTEM ANALYSIS"]] as const : [[result.bestRecommended, "BEST RECOMMENDED"], [result.userSelected, "YOUR SELECTED SYSTEM"]] as const : [];
+  const resultTitle = result?.analysisMode === "chosen" ? "Your selected system analysis" : result?.analysisMode === "both" ? "Recommended and selected system comparison" : "Recommended solar system";
 
-  async function extractBill() {
-    if (!file) {
-      setError("Choose a bill before continuing.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 30_000);
-    try {
-      const form = new FormData();
-      form.set("bill", file);
-      const response = await fetch(analyzerApiUrl("/api/solar-analyzer/extract"), { method: "POST", body: form, signal: controller.signal });
-      const body = await readJson<{ extraction: BillExtraction; billAnalysisConfidence: "High" | "Medium" | "Low"; recommendationData: "Complete" | "Incomplete" }>(response);
-      applyExtraction(body.extraction, body.billAnalysisConfidence, body.recommendationData);
-    } catch (caught) {
-      setError(caught instanceof DOMException && caught.name === "AbortError"
-        ? "Bill analysis timed out. Retry, upload the original PDF, or enter consumption manually."
-        : caught instanceof Error ? caught.message : "The bill could not be analyzed.");
-    } finally {
-      window.clearTimeout(timeout);
-      setBusy(false);
-    }
-  }
+  return <div className={styles.page}><a className={styles.skipLink} href="#analyzer-main">Skip to analyzer</a>
+    <header className={styles.header}><Link href="/" className={styles.brand} aria-label="Electro Tech home"><Image src="/logos/electrotech-horizontal.png" width={407} height={112} alt="Electro Tech — Electrical & Solar Solutions" priority /></Link><Link href="/" className={styles.backLink}><ArrowLeft size={16} /> Back to website</Link></header>
+    <main id="analyzer-main" className={styles.main}><div className={styles.intro}><p className={styles.eyebrow}>PRELIMINARY AI-ASSISTED SOLAR SYSTEM RECOMMENDATION</p><h1>Reduce the electricity bill with a practical, policy-aware solar configuration.</h1><p>Gemini reads bill data only. Electrotech’s deterministic engine evaluates tariffs, solar production, imports, exports, battery dispatch and regulatory constraints.</p></div>
+      <ol className={styles.steps} aria-label="Analyzer progress">{[["upload", "1", "Bill"], ["review", "2", "Verify"], ["mode", "3", "Analyze"], ["results", "4", "Result"]].map(([key, n, label]) => { const order = { upload: 0, review: 1, mode: 2, results: 3 } as const; const active = order[stage] >= order[key as Stage]; return <li key={key} className={active ? styles.stepActive : ""}><span>{active && order[stage] > order[key as Stage] ? <Check size={13} /> : n}</span>{label}</li>; })}</ol>
 
-  function startManualEntry() {
-    setFile(null);
-    setProvider("");
-    setCity("");
-    setConnectionType("");
-    setPhase("");
-    setSanctionedLoad("");
-    setMonths(createTwelveMonthGrid());
-    setUncertainFields([]);
-    setCurrentReading(null);
-    setBillConfidence("Low");
-    setRecommendationData("Incomplete");
-    setLocationWasMissing(true);
-    setError("");
-    setStage("review");
-  }
+      {stage === "upload" && <section className={styles.workspace} aria-labelledby="upload-title"><div className={styles.workspaceIntro}><span>01 / BILL INPUT</span><h2 id="upload-title">Upload your electricity bill</h2><p>A clear original PDF usually provides the most reliable history.</p></div><div className={styles.uploadPanel}><div className={`${styles.dropzone} ${dragActive ? styles.dropzoneActive : ""} ${file ? styles.dropzoneReady : ""}`} onDragOver={(e) => { e.preventDefault(); setDragActive(true); }} onDragLeave={() => setDragActive(false)} onDrop={(e) => { e.preventDefault(); setDragActive(false); chooseFile(e.dataTransfer.files[0] ?? null); }}><input ref={fileInput} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(e) => chooseFile(e.target.files?.[0] ?? null)} /><span className={styles.uploadIcon}>{file ? <FileText size={22} /> : <Upload size={22} />}</span>{file ? <><strong>{file.name}</strong><small>{number(file.size / 1024 / 1024, 2)} MB · ready</small></> : <><strong>Drop your bill here</strong><small>PDF, JPG, JPEG or PNG · maximum {SOLAR_ANALYZER_MAX_FILE_MB} MB</small></>}<button type="button" onClick={() => fileInput.current?.click()}>{file ? "Choose another file" : "Choose a file"}</button></div><p className={styles.privacy}><ShieldCheck size={16} /> The bill is processed in memory and is not stored.</p>{error && <div className={styles.error} role="alert"><AlertCircle size={17} />{error}</div>}<div className={styles.actions}><button className={styles.primaryButton} disabled={!file || busy} onClick={extractBill}>{busy ? "Reading bill…" : "Analyze Bill"}<ArrowRight size={16} /></button><button className={styles.secondaryButton} disabled={busy} onClick={startManualEntry}>Enter Consumption Manually</button></div></div></section>}
 
-  function updateMonth(index: number, kwh: string) {
-    if (kwh !== "" && (!/^\d*(\.\d{0,2})?$/.test(kwh) || Number(kwh) > 10_000_000)) return;
-    setMonths((current) => current.map((month, monthIndex) => monthIndex === index
-      ? { ...month, kwh, confidence: kwh.trim() ? "high" : "low" }
-      : month));
-  }
-
-  function verifiedPayload(withBattery = false): VerifiedSolarInput | null {
-    const matchedCity = PAKISTAN_CITIES.find((item) => item.toLowerCase() === city.trim().toLowerCase());
-    if (!matchedCity) {
-      setError("Choose a listed Pakistan city before calculating.");
-      return null;
-    }
-    if (!summary) {
-      setError("Enter at least one readable monthly consumption value.");
-      return null;
-    }
-    const load = sanctionedLoad.trim() === "" ? null : Number(sanctionedLoad);
-    const backupLoad = knownBackupLoad.trim() === "" ? null : Number(knownBackupLoad);
-    if ((load !== null && (!Number.isFinite(load) || load < 0)) || (backupLoad !== null && (!Number.isFinite(backupLoad) || backupLoad <= 0))) {
-      setError("Review the load values before calculating.");
-      return null;
-    }
-    return {
-      provider: provider.trim() || null,
-      city: matchedCity,
-      connectionType: connectionType.trim() || null,
-      phase: phase || null,
-      sanctionedLoadKw: load,
-      monthlyConsumption: months.map((month) => ({
-        year: month.year,
-        month: month.month,
-        kwh: month.kwh.trim() === "" ? null : Number(month.kwh),
-        confidence: month.kwh.trim() === "" ? "low" : month.confidence,
-      })),
-      ...(withBattery ? { backupPreference: { level: backupLevel, durationHours: backupHours, backupLoadKw: backupLoad } } : {}),
-    };
-  }
-
-  async function calculate(withBattery = false) {
-    const payload = verifiedPayload(withBattery);
-    if (!payload) return;
-    setBusy(true);
-    setError("");
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 20_000);
-    try {
-      const response = await fetch(analyzerApiUrl("/api/solar-analyzer/calculate"), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-      const recommendation = await readJson<SolarRecommendationResult>(response);
-      setResult(recommendation);
-      setBillConfidence(recommendation.dataQuality.billAnalysisConfidence);
-      setRecommendationData(recommendation.dataQuality.recommendationData);
-      setSelectedSystem(withBattery ? "hybrid" : "onGrid");
-      setStage("results");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch (caught) {
-      setError(caught instanceof DOMException && caught.name === "AbortError"
-        ? "The calculation timed out. Please retry."
-        : caught instanceof Error ? caught.message : "The recommendation could not be calculated.");
-    } finally {
-      window.clearTimeout(timeout);
-      setBusy(false);
-    }
-  }
-
-  function requestProposal() {
-    if (!result) return;
-    saveAnalyzerLeadContext(createAnalyzerLeadContext(result, selectedSystem));
-    window.location.href = "/?source=solar_bill_analyzer#contact";
-  }
-
-  const selectedResult = result?.systems[selectedSystem];
-  const whatsappContext = result && selectedResult ? createAnalyzerLeadContext(result, selectedSystem) : null;
-  const whatsappHref = whatsappContext
-    ? `https://wa.me/${siteConfig.whatsappNumber}?text=${encodeURIComponent(`Hello, I used the Electrotech Solar Bill Analyzer.\n\n${analyzerLeadMessage(whatsappContext)}`)}`
-    : siteConfig.whatsappHref;
-
-  return (
-    <div className={styles.page}>
-      <a className={styles.skipLink} href="#analyzer-main">Skip to analyzer</a>
-      <header className={styles.header}>
-        <Link href="/" className={styles.brand} aria-label="Electro Tech home">
-          <Image src="/logos/electrotech-horizontal.png" width={407} height={112} alt="Electro Tech — Electrical & Solar Solutions" priority />
-        </Link>
-        <Link href="/" className={styles.backLink}><ArrowLeft size={16} aria-hidden="true" /> Back to website</Link>
-      </header>
-
-      <main id="analyzer-main" className={styles.main}>
-        <div className={styles.intro}>
-          <p className={styles.eyebrow}>SOLAR ENGINEERING TOOL</p>
-          <h1>Turn your electricity usage into a practical solar starting point.</h1>
-          <p>Upload a bill or enter monthly consumption manually. You verify every reading before Electrotech’s deterministic sizing model compares On-Grid, Hybrid, and Off-Grid options.</p>
+      {stage === "review" && <section className={styles.workspace} aria-labelledby="review-title"><div className={styles.workspaceIntro}><span>02 / VERIFY DATA</span><h2 id="review-title">Confirm the inputs that affect the result</h2><p>Provider and installation city are separate. Nothing missing is inferred.</p><div className={styles.qualityLine}><b>Bill Extraction Confidence: {billConfidence}</b><b>Recommendation Data: {displayedRecommendationData}</b></div></div><div className={styles.reviewPanel}>
+        <div className={styles.monthHeading}><div><h3>Latest rolling 12 months</h3><p>Correct any reading before continuing.</p></div><span>{summary?.readableMonths ?? 0} / 12 months</span></div><div className={styles.monthGrid}>{months.map((month, index) => <label key={`${month.year}-${month.month}`} className={!month.kwh || month.confidence !== "high" ? styles.monthNeedsReview : ""}><span>{MONTH_NAMES[month.month - 1]} {month.year}</span><input aria-label={`${MONTH_NAMES[month.month - 1]} ${month.year} consumption in kWh`} value={month.kwh} onChange={(e) => updateMonth(index, e.target.value)} placeholder="Missing" /><small>kWh</small></label>)}</div>
+        {summary?.complete ? <dl className={styles.summaryStrip}><div><dt>Annual consumption</dt><dd>{number(summary.annualConsumption!)} kWh</dd></div><div><dt>Monthly average</dt><dd>{number(summary.averageMonthly!)} kWh</dd></div><div><dt>Daily average</dt><dd>{number(summary.averageDaily!, 1)} kWh</dd></div><div><dt>Highest</dt><dd>{MONTH_NAMES[summary.highest.month - 1]} · {number(summary.highest.value)}</dd></div><div><dt>Lowest</dt><dd>{MONTH_NAMES[summary.lowest.month - 1]} · {number(summary.lowest.value)}</dd></div></dl> : <p className={styles.extractedHint}>Enter all 12 monthly readings to calculate annual consumption and unlock the full recommendation.</p>}
+        <div className={styles.policyHeading}><h3>Tariff and policy inputs</h3><p>Confirm the details printed on your bill. Choose “Not sure” when the information is unavailable.</p></div>
+        <div className={styles.formGrid}>
+          <label className={showRequiredFields && missingVerificationFieldSet.has("Installation city in Pakistan") ? styles.fieldNeedsReview : ""}>Installation city in Pakistan *<input list="pakistan-cities" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Search city" /></label>
+          <datalist id="pakistan-cities">{PAKISTAN_CITIES.map((item) => <option key={item} value={item} />)}</datalist>
+          <label className={showRequiredFields && missingVerificationFieldSet.has("Utility") ? styles.fieldNeedsReview : ""}>Utility<select value={provider} onChange={(e) => setProvider(e.target.value)}><option value="">Choose your utility</option>{PAKISTAN_UTILITIES.map((utility) => <option key={utility} value={utility}>{utility}</option>)}</select></label>
+          <label className={showRequiredFields && missingVerificationFieldSet.has("Consumer tariff") ? styles.fieldNeedsReview : ""}>Consumer tariff<select value={consumerTariff} onChange={(e) => setConsumerTariff(e.target.value as ConsumerTariff)}>{CONSUMER_TARIFF_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          {consumerTariff === "residential_a1" && <label className={showRequiredFields && missingVerificationFieldSet.has("Residential status") ? styles.fieldNeedsReview : ""}>Residential status<select value={protectedStatus} onChange={(e) => setProtectedStatus(e.target.value as typeof protectedStatus)}><option value="unknown">Not sure</option><option value="lifeline">Lifeline</option><option value="protected">Protected</option><option value="non_protected">Non-protected</option></select></label>}
+          <label className={showRequiredFields && missingVerificationFieldSet.has("Sanctioned load (kW)") ? styles.fieldNeedsReview : ""}>Sanctioned load (kW)<input inputMode="decimal" value={sanctionedLoad} onChange={(e) => setSanctionedLoad(e.target.value)} placeholder="As printed on the bill" /></label>
+          <label>Connection phase<select value={phase} onChange={(e) => setPhase(e.target.value as typeof phase)}><option value="">Not sure</option><option value="single">Single phase</option><option value="three">Three phase</option></select></label>
+          <label className={showRequiredFields && missingVerificationFieldSet.has("Billing type") ? styles.fieldNeedsReview : ""}>Billing type<select value={touStatus} onChange={(e) => setTouStatus(e.target.value as TriState)}><option value="not_sure">Not sure</option><option value="no">Non-TOU</option><option value="yes">TOU</option></select></label>
+          <label className={showRequiredFields && missingVerificationFieldSet.has("Existing green meter") ? styles.fieldNeedsReview : ""}>Existing green meter<select value={greenMeter} onChange={(e) => setGreenMeter(e.target.value as TriState)}><option value="not_sure">Not sure</option><option value="no">No</option><option value="yes">Yes</option></select></label>
         </div>
+        {touStatus === "yes" && <div className={styles.conditionalGroup}><p>TOU bill details</p><div className={styles.formGrid}><label className={showRequiredFields && missingVerificationFieldSet.has("Maximum demand / MDI (kW)") ? styles.fieldNeedsReview : ""}>Maximum demand / MDI (kW)<input inputMode="decimal" value={mdi} onChange={(e) => setMdi(e.target.value)} placeholder="As printed on the bill" /></label><label className={showRequiredFields && missingVerificationFieldSet.has("Industrial TOU peak units (kWh)") ? styles.fieldNeedsReview : ""}>Peak units (kWh)<input inputMode="decimal" value={peakUnits} onChange={(e) => setPeakUnits(e.target.value)} /></label><label className={showRequiredFields && missingVerificationFieldSet.has("Industrial TOU off-peak units (kWh)") ? styles.fieldNeedsReview : ""}>Off-peak units (kWh)<input inputMode="decimal" value={offPeakUnits} onChange={(e) => setOffPeakUnits(e.target.value)} /></label></div></div>}
+        {touStatus !== "yes" && consumerTariff.startsWith("industrial_b") && consumerTariff !== "industrial_b1" && <div className={styles.conditionalGroup}><p>Industrial demand details</p><div className={styles.formGrid}><label className={showRequiredFields && missingVerificationFieldSet.has("Maximum demand / MDI (kW)") ? styles.fieldNeedsReview : ""}>Maximum demand / MDI (kW)<input inputMode="decimal" value={mdi} onChange={(e) => setMdi(e.target.value)} placeholder="Required for demand charges" /></label></div></div>}
+        {greenMeter !== "no" && <div className={styles.conditionalGroup}><p>Green-meter agreement</p><div className={styles.formGrid}><label className={showRequiredFields && missingVerificationFieldSet.has("Green-meter agreement status") ? styles.fieldNeedsReview : ""}>Do you have an approved net-metering or prosumer agreement?<select value={agreementStatus} onChange={(e) => setAgreementStatus(e.target.value as TriState)}><option value="not_sure">Not sure</option><option value="no">No</option><option value="yes">Yes</option></select></label>{agreementStatus === "yes" && <label className={showRequiredFields && missingVerificationFieldSet.has("Agreement type") ? styles.fieldNeedsReview : ""}>Agreement type<select value={prosumerRegime} onChange={(e) => setProsumerRegime(e.target.value as ProsumerRegime)}><option value="unknown">Not sure</option><option value="current">Current prosumer arrangement</option><option value="legacy">Legacy net-metering agreement</option></select></label>}{agreementStatus === "yes" && prosumerRegime === "legacy" && <label className={showRequiredFields && missingVerificationFieldSet.has("Agreement / approval date") ? styles.fieldNeedsReview : ""}>Agreement / approval date<input type="date" value={agreementDate} onChange={(e) => setAgreementDate(e.target.value)} /></label>}</div></div>}
+        {uncertainFields.length > 0 && <p className={styles.extractedHint}>Review uncertain extracted fields: {uncertainFields.join(", ")}.</p>}
+        {error && <div className={styles.error} role="alert"><AlertCircle size={17} />{error}</div>}<div className={styles.actions}><button className={styles.primaryButton} onClick={() => { if (!monthlyHistoryComplete) setError("Enter exactly 12 unique monthly consumption readings before continuing."); else if (missingVerificationFields.length) { setShowRequiredFields(true); setError(`Complete the highlighted fields: ${missingVerificationFields.join(", ")}.`); } else { setShowRequiredFields(false); setError(""); setStage("mode"); } }}>Continue to Analysis Mode <ArrowRight size={16} /></button><button className={styles.secondaryButton} onClick={() => setStage("upload")}><ArrowLeft size={15} /> Back</button></div></div></section>}
 
-        <ol className={styles.steps} aria-label="Analyzer progress">
-          {[["upload", "1", "Bill"], ["review", "2", "Verify"], ["results", "3", "Recommendation"]].map(([key, number, label]) => {
-            const order = { upload: 0, review: 1, results: 2 } as const;
-            const active = order[stage] >= order[key as Stage];
-            return <li key={key} className={active ? styles.stepActive : ""}><span>{active && order[stage] > order[key as Stage] ? <Check size={13} /> : number}</span>{label}</li>;
-          })}
-        </ol>
+      {stage === "mode" && <section className={styles.workspace} aria-labelledby="mode-title"><div className={styles.workspaceIntro}><span>03 / ANALYSIS MODE</span><h2 id="mode-title">How should Electrotech analyze your options?</h2><p>No option is preselected.</p></div><div className={styles.reviewPanel}><div className={styles.systemGrid}>{[["recommend", "Recommend the best system for me", "Evaluate all applicable architectures and show one best result plus one meaningful alternative."], ["chosen", "Analyze a system I choose", "Optimize candidates only inside your selected architecture."], ["both", "Both", "Compare the best recommendation against your selected system."]].map(([value, title, copy]) => <article key={value} className={`${styles.systemCard} ${analysisMode === value ? styles.systemCardSelected : ""}`}><h3>{title}</h3><p>{copy}</p><button type="button" className={styles.cardSelect} aria-pressed={analysisMode === value} onClick={() => setAnalysisMode(value as AnalysisMode)}>{analysisMode === value ? "Selected" : "Choose"}</button></article>)}</div>
+        {(analysisMode === "chosen" || analysisMode === "both") && <label>Architecture to analyze<select aria-label="Architecture to analyze" value={selectedArchitecture ?? ""} onChange={(e) => setSelectedArchitecture((e.target.value || null) as SolarArchitecture | null)}><option value="">Choose an architecture</option>{ARCHITECTURE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>}
+        <div className={styles.formGrid}><label>Usage pattern<select value={usagePattern} onChange={(e) => setUsagePattern(e.target.value as typeof usagePattern)}><option value="not_sure">Not sure</option><option value="mostly_daytime">Mostly daytime</option><option value="mostly_evening">Mostly evening/night</option><option value="roughly_equal">Roughly equal</option></select></label><label>Grid reliability<select value={gridReliability} onChange={(e) => setGridReliability(e.target.value as typeof gridReliability)}><option value="reliable">Reliable</option><option value="frequent_outages">Frequent outages</option><option value="no_grid">No grid</option></select></label><label>Existing solar<select value={existingSolar} onChange={(e) => setExistingSolar(e.target.value as TriState)}><option value="no">No</option><option value="yes">Yes</option><option value="not_sure">Not sure</option></select></label>{existingSolar === "yes" && <><label>Existing PV (kWp, optional)<input value={existingPv} onChange={(e) => setExistingPv(e.target.value)} /></label><label>Existing inverter (kW, optional)<input value={existingInverter} onChange={(e) => setExistingInverter(e.target.value)} /></label><label><input type="checkbox" checked={plannedOutputIncrease} onChange={(e) => setPlannedOutputIncrease(e.target.checked)} /> Increase maximum PV/DG output</label><label><input type="checkbox" checked={plannedInverterReplacement} onChange={(e) => setPlannedInverterReplacement(e.target.checked)} /> Replace or change inverter</label><label><input type="checkbox" checked={plannedInterconnectionChange} onChange={(e) => setPlannedInterconnectionChange(e.target.checked)} /> Change interconnection equipment</label></>}<label>Panel module<select value={panelWattage} onChange={(e) => setPanelWattage(Number(e.target.value) as typeof panelWattage)}>{[550, 580, 585, 600].map((watts) => <option key={watts} value={watts}>{watts} W</option>)}</select></label></div>
+        {(analysisMode !== "chosen" || selectedArchitecture === "hybrid_green_battery" || selectedArchitecture === "hybrid_battery_no_green" || selectedArchitecture === "off_grid") && <div className={styles.refineForm}><h3>{selectedArchitecture === "off_grid" ? "Battery & Autonomy Preferences" : "Backup preference"}</h3><label>Backup level<select value={backupLevel} onChange={(e) => setBackupLevel(e.target.value as typeof backupLevel)}><option value="none">None</option><option value="essential">Essential loads</option><option value="most">Most loads</option><option value="entire">Entire property</option></select></label>{backupLevel !== "none" && <><label>Backup duration<select value={backupHours} onChange={(e) => setBackupHours(Number(e.target.value) as typeof backupHours)}>{[2, 4, 6, 8].map((hours) => <option key={hours} value={hours}>{hours === 8 ? "8+ hours" : `${hours} hours`}</option>)}</select></label><label>Known backup load (optional kW)<input value={knownBackupLoad} onChange={(e) => setKnownBackupLoad(e.target.value)} /></label></>}</div>}
+        {error && <div className={styles.error} role="alert"><AlertCircle size={17} />{error}</div>}<div className={styles.actions}><button className={styles.primaryButton} disabled={busy} onClick={calculate}>{busy ? "Optimizing…" : "Calculate Practical Bill Reduction"}<ArrowRight size={16} /></button><button className={styles.secondaryButton} onClick={() => setStage("review")}><ArrowLeft size={15} /> Edit verified data</button></div></div></section>}
 
-        {stage === "upload" ? (
-          <section className={styles.workspace} aria-labelledby="upload-title">
-            <div className={styles.workspaceIntro}>
-              <span>01 / BILL INPUT</span>
-              <h2 id="upload-title">Upload your electricity bill</h2>
-              <p>A clear original PDF usually provides the most reliable month-by-month reading.</p>
-            </div>
-            <div className={styles.uploadPanel}>
-              <div
-                className={`${styles.dropzone} ${dragActive ? styles.dropzoneActive : ""} ${file ? styles.dropzoneReady : ""}`}
-                onDragOver={(event) => { event.preventDefault(); setDragActive(true); }}
-                onDragLeave={() => setDragActive(false)}
-                onDrop={(event) => { event.preventDefault(); setDragActive(false); chooseFile(event.dataTransfer.files[0] ?? null); }}
-              >
-                <input ref={fileInput} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(event) => chooseFile(event.target.files?.[0] ?? null)} />
-                <span className={styles.uploadIcon}>{file ? <FileText size={22} /> : <Upload size={22} />}</span>
-                {file ? <><strong>{file.name}</strong><small>{formatNumber(file.size / 1024 / 1024, 2)} MB · ready to analyze</small></> : <><strong>Drop your bill here</strong><small>PDF, JPG, JPEG or PNG · maximum 10 MB</small></>}
-                <button type="button" onClick={() => fileInput.current?.click()}>{file ? "Choose another file" : "Choose a file"}</button>
-              </div>
-              <p className={styles.privacy}><ShieldCheck size={16} aria-hidden="true" /> Your bill is used only to read electricity-consumption information and is not stored by Electrotech after analysis.</p>
-              {error ? <div className={styles.error} role="alert"><AlertCircle size={17} /> <span>{error}</span></div> : null}
-              <div className={styles.actions}>
-                <button className={styles.primaryButton} type="button" disabled={!file || busy} onClick={extractBill}>
-                  {busy ? "Reading bill…" : "Analyze Bill"} {!busy ? <ArrowRight size={16} /> : null}
-                </button>
-                <button className={styles.secondaryButton} type="button" disabled={busy} onClick={startManualEntry}>Enter Consumption Manually</button>
-              </div>
-              {error ? <p className={styles.errorHelp}>You can retry with a clearer image, upload the original PDF, or continue manually.</p> : null}
-            </div>
-          </section>
-        ) : null}
-
-        {stage === "review" ? (
-          <section className={styles.workspace} aria-labelledby="review-title">
-            <div className={styles.workspaceIntro}>
-              <span>02 / VERIFY DATA</span>
-              <h2 id="review-title">Check the readings before sizing</h2>
-              <p>Nothing is silently filled in. Missing months stay blank until you add a value.</p>
-              <div className={styles.qualityLine}><b>Bill Analysis Confidence: {billConfidence}</b><b>Recommendation Data: {recommendationData}</b></div>
-            </div>
-            <div className={styles.reviewPanel}>
-              {locationWasMissing ? <div className={styles.locationQuestion}>Where will the solar system be installed?</div> : null}
-              <div className={styles.formGrid}>
-                <label>Provider<input value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="e.g. IESCO" /></label>
-                <label className={locationWasMissing && !city ? styles.fieldNeedsReview : ""}>Pakistan city *<input list="pakistan-cities" value={city} onChange={(event) => setCity(event.target.value)} placeholder="Search city" autoComplete="address-level2" /></label>
-                <datalist id="pakistan-cities">{PAKISTAN_CITIES.map((item) => <option key={item} value={item} />)}</datalist>
-                <label>Connection type<input value={connectionType} onChange={(event) => setConnectionType(event.target.value)} placeholder="If printed" /></label>
-                <label>Phase<select value={phase} onChange={(event) => setPhase(event.target.value as typeof phase)}><option value="">Not printed</option><option value="single">Single phase</option><option value="three">Three phase</option></select></label>
-                <label>Sanctioned load (kW)<input inputMode="decimal" value={sanctionedLoad} onChange={(event) => setSanctionedLoad(event.target.value)} placeholder="If printed" /></label>
-              </div>
-
-              {currentReading !== null ? <p className={styles.extractedHint}>The bill also shows a current consumption reading of <b>{formatNumber(currentReading)} kWh</b>. Confirm it against the correct month below before calculating.</p> : null}
-              {uncertainFields.length ? <p className={styles.extractedHint}>Please review uncertain bill fields: {uncertainFields.join(", ")}.</p> : null}
-
-              <div className={styles.monthHeading}><div><h3>Monthly consumption</h3><p>Enter bill units only when they represent kWh.</p></div><span>{summary?.readableMonths ?? 0} / 12 months</span></div>
-              <div className={styles.monthGrid}>
-                {months.map((month, index) => (
-                  <label key={`${month.year}-${month.month}`} className={!month.kwh || month.confidence !== "high" ? styles.monthNeedsReview : ""}>
-                    <span>{MONTH_NAMES[month.month - 1]} {month.year}</span>
-                    <input aria-label={`${MONTH_NAMES[month.month - 1]} ${month.year} consumption in kWh`} inputMode="decimal" value={month.kwh} onChange={(event) => updateMonth(index, event.target.value)} placeholder="Missing" />
-                    <small>kWh</small>
-                  </label>
-                ))}
-              </div>
-
-              {summary ? (
-                <dl className={styles.summaryStrip}>
-                  <div><dt>{summary.estimated ? "Estimated annual*" : "Annual consumption"}</dt><dd>{formatNumber(summary.annualConsumption)} kWh</dd></div>
-                  <div><dt>Monthly average</dt><dd>{formatNumber(summary.averageMonthly)} kWh</dd></div>
-                  <div><dt>Daily average</dt><dd>{formatNumber(summary.averageDaily, 1)} kWh</dd></div>
-                  <div><dt>Highest reading</dt><dd>{MONTH_NAMES[summary.highest.month - 1]} · {formatNumber(summary.highest.value)}</dd></div>
-                  <div><dt>Lowest reading</dt><dd>{MONTH_NAMES[summary.lowest.month - 1]} · {formatNumber(summary.lowest.value)}</dd></div>
-                </dl>
-              ) : null}
-              {summary?.estimated ? <p className={styles.estimateNote}>*For preliminary sizing only, the observed monthly average is annualized. Missing monthly values remain visibly missing and annual surplus/shortfall is not claimed.</p> : null}
-              {error ? <div className={styles.error} role="alert"><AlertCircle size={17} /> <span>{error}</span></div> : null}
-              <div className={styles.actions}>
-                <button className={styles.primaryButton} type="button" disabled={busy} onClick={() => calculate(false)}>{busy ? "Calculating…" : "Compare Solar Systems"} {!busy ? <ArrowRight size={16} /> : null}</button>
-                <button className={styles.secondaryButton} type="button" disabled={busy} onClick={() => setStage("upload")}><ArrowLeft size={15} /> Back to upload</button>
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {stage === "results" && result && selectedResult ? (
-          <section className={styles.results} aria-labelledby="result-title">
-            <div className={styles.bestMatch}>
-              <div>
-                <span>{result.bestMatch.architecture === "On-Grid" ? "BEST PRELIMINARY BILL-REDUCTION MATCH" : "BEST PRELIMINARY BACKUP-CAPABLE MATCH"}</span>
-                <h2 id="result-title">{formatNumber(result.systems.onGrid.actualInstalledKwp, 2)} kWp {result.bestMatch.architecture}</h2>
-                <p>{result.bestMatch.reason}</p>
-              </div>
-              <div className={styles.bestMatchMetric}><strong>{formatNumber(result.systems.onGrid.matchedConsumptionCoveragePercent)}%</strong><span>matched-consumption coverage across verified months</span></div>
-            </div>
-
-            <div className={styles.resultColumns}>
-              <section className={styles.resultSection}>
-                <span className={styles.resultLabel}>EQUIPMENT</span>
-                <dl className={styles.equipmentGrid}>
-                  <div><dt>Installed PV</dt><dd>{formatNumber(selectedResult.actualInstalledKwp, 2)} kWp</dd></div>
-                  <div><dt>Inverter</dt><dd>{formatNumber(selectedResult.inverterKw, 1)} kW</dd></div>
-                  <div><dt>Panels</dt><dd>{selectedResult.panelCount} × {result.assumptions.panelWattage} W</dd></div>
-                  <div><dt>Battery</dt><dd>{batteryRangeLabel(selectedResult.batteryRange) ?? "Not included"}</dd></div>
-                </dl>
-              </section>
-              <section className={styles.resultSection}>
-                <span className={styles.resultLabel}>BILL ANALYSIS</span>
-                <dl className={styles.equipmentGrid}>
-                  <div><dt>{result.consumption.annualConsumptionEstimated ? "Estimated annual" : "Annual consumption"}</dt><dd>{formatNumber(result.consumption.annualConsumptionKwh)} kWh</dd></div>
-                  <div><dt>Monthly average</dt><dd>{formatNumber(result.consumption.averageMonthlyKwh)} kWh</dd></div>
-                  <div><dt>Daily average</dt><dd>{formatNumber(result.consumption.averageDailyKwh, 1)} kWh</dd></div>
-                  <div><dt>Highest month</dt><dd>{result.consumption.highestMonth.label} · {formatNumber(result.consumption.highestMonth.kwh)} kWh</dd></div>
-                  <div><dt>Lowest month</dt><dd>{result.consumption.lowestMonth.label} · {formatNumber(result.consumption.lowestMonth.kwh)} kWh</dd></div>
-                </dl>
-              </section>
-            </div>
-
-            <section className={styles.energySection}>
-              <div className={styles.sectionTitle}><div><span className={styles.resultLabel}>ENERGY ANALYSIS</span><h2>Seasonal generation, without assumed export credits.</h2></div><dl><div><dt>Annual generation</dt><dd>{formatNumber(selectedResult.annualGenerationKwh)} kWh</dd></div><div><dt>Verified-month coverage</dt><dd>{formatNumber(selectedResult.matchedConsumptionCoveragePercent)}%</dd></div><div><dt>Annual surplus</dt><dd>{selectedResult.annualSurplusKwh === null ? "Not claimed" : `${formatNumber(selectedResult.annualSurplusKwh)} kWh`}</dd></div><div><dt>Annual shortfall</dt><dd>{selectedResult.annualShortfallKwh === null ? "Not claimed" : `${formatNumber(selectedResult.annualShortfallKwh)} kWh`}</dd></div></dl></div>
-              <div className={styles.monthlyTable} role="table" aria-label="Monthly generation and consumption">
-                <div className={styles.tableHead} role="row"><span>Month</span><span>Consumption</span><span>Generation</span><span>Difference</span></div>
-                {selectedResult.monthlySimulation.map((month) => {
-                  const difference = month.consumptionKwh === null ? null : month.generationKwh - month.consumptionKwh;
-                  return <div key={month.month} className={styles.tableRow} role="row"><b>{month.monthName}</b><span>{month.consumptionKwh === null ? "Missing" : `${formatNumber(month.consumptionKwh)} kWh`}</span><span>{formatNumber(month.generationKwh)} kWh</span><span className={difference === null ? styles.muted : difference >= 0 ? styles.surplus : styles.shortfall}>{difference === null ? "Not compared" : `${difference >= 0 ? "+" : ""}${formatNumber(difference)} kWh`}</span></div>;
-                })}
-              </div>
-              <p className={styles.seasonNote}>Highest modeled surplus: {selectedResult.highestSurplusMonth ?? "none in verified months"}. Highest modeled shortfall: {selectedResult.highestShortfallMonth ?? "none in verified months"}.</p>
-            </section>
-
-            <section className={styles.comparison}>
-              <div className={styles.sectionTitle}><div><span className={styles.resultLabel}>THREE PRACTICAL PATHS</span><h2>Compare system architectures</h2></div><p>A bill establishes energy use, not backup preference. Choose the architecture you want Electrotech to assess in detail.</p></div>
-              <div className={styles.systemGrid}>
-                <SystemCard system={result.systems.onGrid} selected={selectedSystem === "onGrid"} onSelect={() => setSelectedSystem("onGrid")} />
-                <SystemCard system={result.systems.hybrid} selected={selectedSystem === "hybrid"} onSelect={() => setSelectedSystem("hybrid")} />
-                <SystemCard system={result.systems.offGrid} selected={selectedSystem === "offGrid"} onSelect={() => setSelectedSystem("offGrid")} />
-              </div>
-            </section>
-
-            <section className={styles.batteryRefinement}>
-              <div><span className={styles.resultLabel}>OPTIONAL</span><h2>Refine Battery Estimate</h2><p>Use only your stated backup requirement. Monthly bill totals do not identify backup loads or duration.</p></div>
-              <div className={styles.refineForm}>
-                <fieldset><legend>Backup level</legend><div className={styles.choiceRow}>{[["essential", "Essential loads"], ["most", "Most property loads"], ["entire", "Entire property"]].map(([value, label]) => <button type="button" key={value} className={backupLevel === value ? styles.choiceActive : ""} aria-pressed={backupLevel === value} onClick={() => setBackupLevel(value as typeof backupLevel)}>{label}</button>)}</div></fieldset>
-                <fieldset><legend>Backup duration</legend><div className={styles.choiceRow}>{[2, 4, 6, 8].map((hours) => <button type="button" key={hours} className={backupHours === hours ? styles.choiceActive : ""} aria-pressed={backupHours === hours} onClick={() => setBackupHours(hours as typeof backupHours)}>{hours === 8 ? "8+ hours" : `${hours} hours`}</button>)}</div></fieldset>
-                <label>I know my backup load (optional, kW)<input inputMode="decimal" value={knownBackupLoad} onChange={(event) => setKnownBackupLoad(event.target.value)} placeholder="e.g. 5" /></label>
-                {error ? <div className={styles.error} role="alert"><AlertCircle size={17} /> <span>{error}</span></div> : null}
-                <button className={styles.secondaryButton} type="button" disabled={busy} onClick={() => calculate(true)}>{busy ? "Refining…" : "Update Hybrid Battery"}</button>
-              </div>
-            </section>
-
-            <section className={styles.assumptions}>
-              <div><span>Profile</span><b>{result.location.profileCity}{result.location.regionalFallbackUsed ? " · conservative regional mapping" : ""}</b></div>
-              <div><span>Panel basis</span><b>{result.assumptions.panelWattage} W</b></div>
-              <div><span>Performance factor</span><b>{formatNumber(result.assumptions.performanceRatio * 100)}%</b></div>
-              <div><span>Data</span><b>{result.dataQuality.recommendationData} · {result.dataQuality.billAnalysisConfidence} confidence</b></div>
-            </section>
-
-            <section className={styles.proposal}>
-              <div><span>FROM PRELIMINARY TO PROJECT-READY</span><h2>Get an Exact Solar Proposal</h2><p>This result gives Electrotech a stronger starting point. A site assessment confirms roof, shading, load profile, equipment, protection, and utility requirements.</p></div>
-              <div className={styles.proposalActions}>
-                <button type="button" className={styles.accentButton} onClick={requestProposal}>Continue to quotation <ArrowRight size={16} /></button>
-                <a className={styles.whatsappButton} href={whatsappHref} target="_blank" rel="noopener noreferrer"><MessageCircle size={16} /> Discuss on WhatsApp</a>
-                <button type="button" className={styles.textButton} onClick={() => setStage("review")}><ArrowLeft size={15} /> Edit verified data</button>
-              </div>
-            </section>
-
-            <p className={styles.disclaimer}>This is a preliminary solar recommendation based on your verified electricity consumption and location. Final system design may vary after site assessment, roof/shading review, electrical load analysis, equipment selection and applicable utility requirements. Battery and Off-Grid designs require a detailed backup-load assessment.</p>
-          </section>
-        ) : null}
-      </main>
-    </div>
-  );
+      {stage === "results" && result && <section className={styles.results} aria-labelledby="result-title"><div className={styles.bestMatch}><div><span>PRELIMINARY AI-ASSISTED SOLAR SYSTEM RECOMMENDATION</span><h2 id="result-title">{resultTitle}</h2><p>Energy coverage, self-consumption and estimated bill reduction are separate results. Fixed charges and current policy constraints remain in the estimate.</p></div></div>
+        <div className={styles.systemGrid}>{displayResults.map(([system, heading]) => system ? <ResultCard key={`${heading}-${system.architectureKey}`} system={system} heading={heading} result={result} /> : null)}</div>
+        {result.analysisMode === "both" && result.comparisonExplanation && <section className={styles.resultSection} aria-label="Deterministic system comparison"><span className={styles.resultLabel}>DETERMINISTIC COMPARISON</span><h3>How the two configurations compare</h3><p>{result.comparisonExplanation}</p></section>}
+        <section className={styles.confidencePanel} aria-label="Recommendation confidence"><div><span>Recommendation Confidence</span><strong>{result.dataQuality.recommendationConfidence}</strong><p>{result.dataQuality.recommendationConfidenceExplanation}</p></div><dl><div><dt>Bill data</dt><dd>{result.dataQuality.billExtractionConfidence}</dd></div><div><dt>Tariff / policy</dt><dd>{result.dataQuality.tariffPolicyConfidence}</dd></div><div><dt>Verified months</dt><dd>{result.dataQuality.readableMonths} / 12</dd></div><div><dt>Solar profile</dt><dd>{result.location.profileCity}{result.location.regionalFallbackUsed ? " regional fallback" : " exact match"}</dd></div></dl></section>
+        <details className={styles.resultDisclosure}><summary>Calculation assumptions and solar resource</summary><div><p><b>Solar resource profile:</b> {result.location.assumption ?? `${result.location.profileCity} city profile used for ${result.location.requestedCity}.`}</p><p><b>Load profile:</b> {result.assumptions.loadProfileMethodology}</p><p><b>TOU treatment:</b> {result.assumptions.touMethodology}</p><p><b>Battery round-trip efficiency:</b> {number(result.assumptions.batteryRoundTripEfficiency * 100)}%</p><p><b>Solar model:</b> {result.assumptions.solarProfileSource.provider}, {result.assumptions.solarProfileSource.climatologyPeriod} · model {result.assumptions.solarProfileSource.modelVersion}</p></div></details>
+        <details className={styles.resultDisclosure} open><summary>Tariff and calculation details</summary><div><h3>{result.tariffDetails.usage}</h3><p><b>Tariff Used:</b> {result.tariffDetails.tariffName} ({result.tariffDetails.tariffCode})</p><p><b>Tariff Version:</b> {result.tariffDetails.version} · <b>Effective Date:</b> {result.tariffDetails.effectiveFrom}</p><p><b>Utility:</b> {result.tariffDetails.utility} · {result.tariffDetails.utilityGroup}</p><p><b>Source:</b> {result.tariffDetails.source} · {result.tariffDetails.sourceReference}</p><p><b>Modeled Bill Components:</b> {result.tariffDetails.modeledComponents.join(", ")}</p><p><b>Excluded / Non-Modeled Components:</b> {result.tariffDetails.notModeledComponents.join(", ")}</p></div></details>
+        <p className={styles.estimateNote}>Estimated bill values are calculated using the modeled tariff components shown above. Actual future bills may differ due to FCA, quarterly adjustments, taxes, duties, utility changes, consumption changes and future tariff revisions.</p>
+        <section className={styles.proposal}><div><span>FROM PRELIMINARY TO PROJECT-READY</span><h2>Get an Exact Solar Proposal</h2><p>Final design depends on roof area, shading, orientation, structure, equipment, cabling, network conditions, utility approval, site assessment and detailed load analysis.</p></div><div className={styles.proposalActions}><button className={styles.accentButton} onClick={requestProposal}>GET AN EXACT SOLAR PROPOSAL <ArrowRight size={16} /></button><a className={styles.whatsappButton} href={whatsappHref} target="_blank" rel="noopener noreferrer"><MessageCircle size={16} /> Discuss on WhatsApp</a><button className={styles.textButton} onClick={() => setStage("review")}><ArrowLeft size={15} /> Edit verified data</button></div></section>
+        <p className={styles.disclaimer}>This preliminary result is not a final EPC or structural design, DISCO approval, final quotation, load-flow study, guaranteed electricity bill, or guaranteed savings. Variable and non-modeled bill components may remain even when the modeled post-solar bill is zero.</p></section>}
+    </main></div>;
 }
