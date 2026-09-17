@@ -7,7 +7,7 @@ export const siteConfig = {
   whatsappNumber: "923105056394",
   whatsappHref:
     "https://wa.me/923105056394?text=Hello%20Electro%20Tech%2C%20I%20would%20like%20to%20discuss%20a%20solar%20or%20electrical%20project.",
-  email: "info@electrotech.example",
+  email: "uswakomal7@gmail.com",
   services: [
     "Solar Energy",
     "Solar Structures",
