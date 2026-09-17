@@ -1,7 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-html-link-for-pages */
 import Image from "next/image";
-import Link from "next/link";
 import { AlertCircle, ArrowLeft, ArrowRight, Check, FileText, MessageCircle, ShieldCheck, Upload } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { siteConfig } from "@/lib/site-config";
@@ -143,7 +143,7 @@ export function SolarBillAnalyzer() {
   const resultTitle = result?.analysisMode === "chosen" ? "Your selected system analysis" : result?.analysisMode === "both" ? "Recommended and selected system comparison" : "Recommended solar system";
 
   return <div className={styles.page}><a className={styles.skipLink} href="#analyzer-main">Skip to analyzer</a>
-    <header className={styles.header}><Link href="/" className={styles.brand} aria-label="Electro Tech home"><Image src="/logos/electrotech-horizontal.png" width={407} height={112} alt="Electro Tech — Electrical & Solar Solutions" priority /></Link><Link href="/" className={styles.backLink}><ArrowLeft size={16} /> Back to website</Link></header>
+    <header className={styles.header}><a href="/" className={styles.brand} aria-label="Electro Tech home"><Image src="/logos/electrotech-horizontal.png" width={407} height={112} alt="Electro Tech — Electrical & Solar Solutions" priority /></a><a href="/" className={styles.backLink}><ArrowLeft size={16} /> Back to website</a></header>
     <main id="analyzer-main" className={styles.main}><div className={styles.intro}><p className={styles.eyebrow}>PRELIMINARY AI-ASSISTED SOLAR SYSTEM RECOMMENDATION</p><h1>Reduce the electricity bill with a practical, policy-aware solar configuration.</h1><p>Gemini reads bill data only. Electrotech’s deterministic engine evaluates tariffs, solar production, imports, exports, battery dispatch and regulatory constraints.</p></div>
       <ol className={styles.steps} aria-label="Analyzer progress">{[["upload", "1", "Bill"], ["review", "2", "Verify"], ["mode", "3", "Analyze"], ["results", "4", "Result"]].map(([key, n, label]) => { const order = { upload: 0, review: 1, mode: 2, results: 3 } as const; const active = order[stage] >= order[key as Stage]; return <li key={key} className={active ? styles.stepActive : ""}><span>{active && order[stage] > order[key as Stage] ? <Check size={13} /> : n}</span>{label}</li>; })}</ol>
 

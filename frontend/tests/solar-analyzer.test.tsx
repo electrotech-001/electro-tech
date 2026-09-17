@@ -483,4 +483,18 @@ describe("solar analyzer customer flow", () => {
     await user.click(screen.getByRole("button", { name: /Calculate Practical Bill Reduction/i }));
     expect(await screen.findByText(/Attock uses the conservative Islamabad regional solar profile/i)).toBeTruthy();
   });
+
+  test("renders accessible 'Back to website' link targeting '/' without history dependency", () => {
+    const historyBackSpy = vi.spyOn(window.history, "back");
+    render(<SolarBillAnalyzer />);
+
+    const backLink = screen.getByRole("link", { name: /Back to website/i });
+    expect(backLink).toBeTruthy();
+    expect(backLink.getAttribute("href")).toBe("/");
+    expect(backLink.getAttribute("href")).not.toContain("/solar-bill-analyzer");
+    expect(backLink.tagName.toLowerCase()).toBe("a");
+
+    fireEvent.click(backLink);
+    expect(historyBackSpy).not.toHaveBeenCalled();
+  });
 });
