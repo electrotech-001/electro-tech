@@ -118,3 +118,29 @@ test("server-renders the dedicated Projects Directory route", async () => {
   assert.match(html, /Home/);
   assert.match(html, /Request a Solar Quote/);
 });
+
+test("server-renders the private /admin/login route with noindex robots", async () => {
+  const response = await render("/admin/login");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Sign In/);
+  assert.match(html, /Authorized personnel only/);
+  assert.match(html, /name="robots"[^>]*content="noindex,\s*nofollow"/i);
+});
+
+test("server-renders the private /admin root route with noindex robots", async () => {
+  const response = await render("/admin");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /name="robots"[^>]*content="noindex,\s*nofollow"/i);
+});
+
+test("public pages do not expose /admin in navigation, links, or sitemap references", async () => {
+  const homeRes = await render("/");
+  const homeHtml = await homeRes.text();
+  assert.doesNotMatch(homeHtml, /href="\/admin/);
+
+  const projectsRes = await render("/projects");
+  const projectsHtml = await projectsRes.text();
+  assert.doesNotMatch(projectsHtml, /href="\/admin/);
+});

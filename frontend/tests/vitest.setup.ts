@@ -1,4 +1,9 @@
-import { vi } from "vitest";
+import { vi, afterEach } from "vitest";
+import { cleanup } from "@testing-library/react";
+
+afterEach(() => {
+  cleanup();
+});
 
 Object.defineProperty(window, "scrollTo", { value: vi.fn(), writable: true });
 Object.defineProperty(window, "matchMedia", {

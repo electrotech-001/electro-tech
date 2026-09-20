@@ -33,23 +33,36 @@ test("backend production files isolate Supabase to approved server integration a
   assert.equal(/SUPABASE_SECRET_KEY=\s*\S+/.test(envExample), false);
 });
 
-test("frontend workspace remains completely storage-free and unaware of Supabase", async () => {
+test("frontend workspace enforces Supabase isolation: public site is Supabase-free, admin uses Auth only, no direct DB/Storage, no secrets", async () => {
   const frontendDir = join(process.cwd(), "..", "frontend");
-  const frontendContent = [
+  const publicContent = [
+    await readFile(join(frontendDir, "app", "page.tsx"), "utf8"),
+    await readFile(join(frontendDir, "app", "projects", "page.tsx"), "utf8"),
+    await readFile(join(frontendDir, "components", "electro-tech-site.tsx"), "utf8"),
+    await readFile(join(frontendDir, "components", "projects-directory.tsx"), "utf8"),
+    await readFile(join(frontendDir, "lib", "projects.ts"), "utf8"),
+  ].join("\n").toLowerCase();
+
+  const allFrontendSrc = [
     await readTree(join(frontendDir, "app")),
     await readTree(join(frontendDir, "components")),
     await readTree(join(frontendDir, "lib")),
     await readFile(join(frontendDir, "package.json"), "utf8"),
     await readFile(join(frontendDir, ".env.example"), "utf8"),
-  ].join("\n").toLowerCase();
+  ].join("\n");
 
-  const frontendLock = JSON.parse(
-    await readFile(join(frontendDir, "package-lock.json"), "utf8"),
-  ) as { packages: Record<string, unknown> };
+  // 1. Public site remains completely unaware of Supabase
+  assert.equal(publicContent.includes("sup" + "abase"), false);
 
-  assert.equal(frontendContent.includes("sup" + "abase"), false);
-  assert.equal(frontendContent.includes("supabase_secret_key"), false);
-  assert.equal(frontendLock.packages["node_modules/@supabase/supabase-js"], undefined);
+  // 2. Frontend never contains server secrets or service_role
+  assert.equal(allFrontendSrc.toLowerCase().includes("supabase_secret_key"), false);
+  assert.equal(allFrontendSrc.toLowerCase().includes("service_role"), false);
+  assert.equal(allFrontendSrc.toLowerCase().includes("sb_secret_"), false);
+
+  // 3. Frontend never performs direct DB, Storage, or RPC calls
+  assert.equal(allFrontendSrc.includes("supabase.from"), false);
+  assert.equal(allFrontendSrc.includes("supabase.storage"), false);
+  assert.equal(allFrontendSrc.includes("supabase.rpc"), false);
 });
 
 test("backend security invariants: no custom login/signup endpoints, no password handling, and no token logging", async () => {

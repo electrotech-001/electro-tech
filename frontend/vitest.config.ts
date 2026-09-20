@@ -6,6 +6,7 @@ export default defineConfig({
     alias: [
       { find: "next/image", replacement: fileURLToPath(new URL("./tests/next-image-mock.tsx", import.meta.url)) },
       { find: "next/link", replacement: fileURLToPath(new URL("./tests/next-link-mock.tsx", import.meta.url)) },
+      { find: "next/navigation", replacement: fileURLToPath(new URL("./tests/next-navigation-mock.ts", import.meta.url)) },
       { find: "@", replacement: fileURLToPath(new URL("./", import.meta.url)) },
     ],
   },
