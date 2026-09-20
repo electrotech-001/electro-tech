@@ -73,3 +73,46 @@ export async function checkSupabaseConnection(
     };
   }
 }
+
+export type ActiveAdminUser = {
+  userId: string;
+  displayName: string;
+  isActive: boolean;
+};
+
+/**
+ * Queries 'admin_users' for an active administrator with the given user UUID.
+ * Returns null if the user record does not exist or is_active is false.
+ */
+export async function getActiveAdminUser(
+  userId: string,
+  client?: SupabaseClient,
+): Promise<ActiveAdminUser | null> {
+  try {
+    const supabase = client ?? getSupabaseClient();
+    const { data, error } = await supabase
+      .from("admin_users")
+      .select("user_id, display_name, is_active")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error("Database query failed.");
+    }
+
+    if (!data || !data.is_active) {
+      return null;
+    }
+
+    return {
+      userId: data.user_id,
+      displayName: data.display_name,
+      isActive: data.is_active,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message === "Database query failed.") {
+      throw error;
+    }
+    throw new Error("Database query failed.");
+  }
+}

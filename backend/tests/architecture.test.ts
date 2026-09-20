@@ -51,3 +51,29 @@ test("frontend workspace remains completely storage-free and unaware of Supabase
   assert.equal(frontendContent.includes("supabase_secret_key"), false);
   assert.equal(frontendLock.packages["node_modules/@supabase/supabase-js"], undefined);
 });
+
+test("backend security invariants: no custom login/signup endpoints, no password handling, and no token logging", async () => {
+  const backendSrc = await readTree(join(process.cwd(), "src"));
+  const packageJson = await readFile(join(process.cwd(), "package.json"), "utf8");
+
+  // No password hashing libraries or password management dependencies
+  const forbiddenDeps = ["bcrypt", "argon2", "scrypt", "passport"];
+  for (const dep of forbiddenDeps) {
+    assert.equal(packageJson.includes(`"${dep}"`), false, `Must not depend on ${dep}`);
+  }
+
+  // No custom login or signup API endpoints implemented in Express backend
+  assert.equal(backendSrc.includes("/api/admin/login"), false);
+  assert.equal(backendSrc.includes("/api/admin/signup"), false);
+  assert.equal(backendSrc.includes("/api/login"), false);
+  assert.equal(backendSrc.includes("/api/signup"), false);
+
+  // Authenticate middleware must never log tokens or authorization headers
+  const authMiddleware = await readFile(
+    join(process.cwd(), "src", "middleware", "authenticate-admin.ts"),
+    "utf8",
+  );
+  assert.equal(/console\.(log|info|warn|error)\(.*token/i.test(authMiddleware), false);
+  assert.equal(/console\.(log|info|warn|error)\(.*authHeader/i.test(authMiddleware), false);
+  assert.equal(/console\.(log|info|warn|error)\(.*authorization/i.test(authMiddleware), false);
+});
