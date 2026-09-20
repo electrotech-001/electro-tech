@@ -12,6 +12,7 @@ export const DEFAULT_OPERATIONAL_CONFIG = Object.freeze({
 export type RuntimeConfig = {
   nodeEnv: string;
   frontendOrigin?: string;
+  adminOrigin?: string;
   port: number;
   geminiTimeoutMs: number;
   solarAnalyzerMaxFileMb: number;
@@ -47,12 +48,12 @@ function parsePort(value: string | undefined): number {
   return port;
 }
 
-function parseOrigin(value: string | undefined): string | undefined {
+function parseOrigin(value: string | undefined, name: string = "FRONTEND_ORIGIN"): string | undefined {
   if (!value) return undefined;
 
   const url = new URL(value);
   if (url.origin !== value || !["http:", "https:"].includes(url.protocol)) {
-    throw new Error("FRONTEND_ORIGIN must be a complete origin without a path.");
+    throw new Error(`${name} must be a complete origin without a path.`);
   }
 
   return url.origin;
@@ -60,7 +61,8 @@ function parseOrigin(value: string | undefined): string | undefined {
 
 export function loadRuntimeConfig(environment: NodeJS.ProcessEnv = process.env): RuntimeConfig {
   const nodeEnv = environment.NODE_ENV || "development";
-  const frontendOrigin = parseOrigin(environment.FRONTEND_ORIGIN);
+  const frontendOrigin = parseOrigin(environment.FRONTEND_ORIGIN, "FRONTEND_ORIGIN");
+  const adminOrigin = parseOrigin(environment.ADMIN_ORIGIN, "ADMIN_ORIGIN");
 
   if (nodeEnv === "production" && !frontendOrigin) {
     throw new Error("FRONTEND_ORIGIN is required when NODE_ENV=production.");
@@ -87,6 +89,7 @@ export function loadRuntimeConfig(environment: NodeJS.ProcessEnv = process.env):
     quoteRateLimitMax: parsePositiveNumber(environment.QUOTE_RATE_LIMIT_MAX, "QUOTE_RATE_LIMIT_MAX", DEFAULT_OPERATIONAL_CONFIG.quoteRateLimitMax, { integer: true }),
     adminImageUploadRateLimitMax: parsePositiveNumber(environment.ADMIN_IMAGE_UPLOAD_RATE_LIMIT_MAX, "ADMIN_IMAGE_UPLOAD_RATE_LIMIT_MAX", DEFAULT_OPERATIONAL_CONFIG.adminImageUploadRateLimitMax, { integer: true }),
     ...(frontendOrigin ? { frontendOrigin } : {}),
+    ...(adminOrigin ? { adminOrigin } : {}),
   };
 }
 

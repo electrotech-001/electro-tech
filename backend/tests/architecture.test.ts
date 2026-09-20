@@ -120,3 +120,28 @@ test("Phase 3E architecture: project upload routes under admin only, memory stor
   assert.equal(adminRoutes.includes("req.body.path"), false);
   assert.equal(adminRoutes.includes("request.body.path"), false);
 });
+
+test("Phase 4A architecture: /api/admin/me requires authenticateAdmin, returns minimal user, no RBAC", async () => {
+  const adminMeRoute = await readFile(
+    join(process.cwd(), "src", "routes", "admin-me.ts"),
+    "utf8",
+  );
+
+  // Requires authenticateAdmin
+  assert.equal(adminMeRoute.includes("authenticateAdmin"), true);
+
+  // No RBAC or manage_projects
+  assert.equal(adminMeRoute.toLowerCase().includes("manage_projects"), false);
+  assert.equal(adminMeRoute.toLowerCase().includes("permission"), false);
+  assert.equal(adminMeRoute.toLowerCase().includes("role"), false);
+
+  // Returns only userId, email, displayName
+  assert.equal(adminMeRoute.includes("userId: request.adminUser.userId"), true);
+  assert.equal(adminMeRoute.includes("email: request.adminUser.email"), true);
+  assert.equal(adminMeRoute.includes("displayName: request.adminUser.displayName"), true);
+
+  // Does not leak secrets, tokens, or raw admin rows
+  assert.equal(adminMeRoute.includes("token"), false);
+  assert.equal(adminMeRoute.includes("secret"), false);
+  assert.equal(adminMeRoute.includes("supabase.from"), false);
+});

@@ -2,6 +2,7 @@ import cors, { type CorsOptions } from "cors";
 import express, { type ErrorRequestHandler, type RequestHandler } from "express";
 import multer from "multer";
 import { DEFAULT_OPERATIONAL_CONFIG, type RuntimeConfig } from "./config.js";
+import { createAdminMeRouter } from "./routes/admin-me.js";
 import { createAdminProjectsRouter } from "./routes/admin-projects.js";
 import { createProjectsRouter } from "./routes/projects.js";
 import { createQuoteRouter, MAX_QUOTE_BODY_BYTES } from "./routes/quote.js";
@@ -9,11 +10,24 @@ import { createSolarAnalyzerRouter, MAX_CALCULATE_BODY_BYTES, type SolarAnalyzer
 import type { QuoteEmailSender } from "./services/email.js";
 
 type AppDependencies = {
-  config: Pick<RuntimeConfig, "nodeEnv" | "frontendOrigin"> & Partial<Pick<RuntimeConfig, "geminiTimeoutMs" | "solarAnalyzerMaxFileMb" | "solarAnalyzerMaxFileBytes" | "solarAnalyzerExtractRateLimitMax" | "solarAnalyzerCalculateRateLimitMax" | "quoteRateLimitMax">>;
+  config: Pick<RuntimeConfig, "nodeEnv" | "frontendOrigin"> &
+    Partial<
+      Pick<
+        RuntimeConfig,
+        | "adminOrigin"
+        | "geminiTimeoutMs"
+        | "solarAnalyzerMaxFileMb"
+        | "solarAnalyzerMaxFileBytes"
+        | "solarAnalyzerExtractRateLimitMax"
+        | "solarAnalyzerCalculateRateLimitMax"
+        | "quoteRateLimitMax"
+      >
+    >;
   extractBill?: SolarAnalyzerRouterDependencies["extractBill"];
   sendQuoteEmail?: QuoteEmailSender;
   projectsRouter?: express.Router;
   adminProjectsRouter?: express.Router;
+  adminMeRouter?: express.Router;
 };
 
 function isLocalDevelopmentOrigin(origin: string): boolean {
@@ -35,6 +49,7 @@ function createCorsOptions(config: AppDependencies["config"]): CorsOptions {
     origin(origin, callback) {
       if (!origin) return callback(null, true);
       if (config.frontendOrigin && origin === config.frontendOrigin) return callback(null, true);
+      if (config.adminOrigin && origin === config.adminOrigin) return callback(null, true);
       if (config.nodeEnv !== "production" && isLocalDevelopmentOrigin(origin)) {
         return callback(null, true);
       }
@@ -92,6 +107,10 @@ export function createApp(dependencies: AppDependencies) {
     "/api/admin/projects",
     express.json(),
     dependencies.adminProjectsRouter ?? createAdminProjectsRouter(),
+  );
+  app.use(
+    "/api/admin/me",
+    dependencies.adminMeRouter ?? createAdminMeRouter(),
   );
 
   const errorHandler: ErrorRequestHandler = (error, _request, response, _next) => {
