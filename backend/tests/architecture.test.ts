@@ -78,7 +78,7 @@ test("backend security invariants: no custom login/signup endpoints, no password
   assert.equal(/console\.(log|info|warn|error)\(.*authorization/i.test(authMiddleware), false);
 });
 
-test("Phase 3D architecture: public project isolation, admin route protection, no upload routes yet", async () => {
+test("Phase 3E architecture: project upload routes under admin only, memory storage only, no SVG support, no disk writes", async () => {
   const publicRoutes = await readFile(
     join(process.cwd(), "src", "routes", "projects.ts"),
     "utf8",
@@ -87,12 +87,18 @@ test("Phase 3D architecture: public project isolation, admin route protection, n
     join(process.cwd(), "src", "routes", "admin-projects.ts"),
     "utf8",
   );
+  const imageService = await readFile(
+    join(process.cwd(), "src", "services", "project-images.ts"),
+    "utf8",
+  );
 
-  // 1. Public project endpoints do not permit mutations
+  // 1. Public project endpoints do not permit mutations or uploads
   assert.equal(publicRoutes.includes("router.post"), false);
   assert.equal(publicRoutes.includes("router.put"), false);
   assert.equal(publicRoutes.includes("router.patch"), false);
   assert.equal(publicRoutes.includes("router.delete"), false);
+  assert.equal(publicRoutes.includes("multer"), false);
+  assert.equal(publicRoutes.includes("/images"), false);
 
   // 2. Public project endpoints do not accept status filters
   assert.equal(publicRoutes.toLowerCase().includes("statusfilter"), false);
@@ -102,8 +108,15 @@ test("Phase 3D architecture: public project isolation, admin route protection, n
   assert.equal(adminRoutes.includes("authenticateAdmin"), true);
   assert.equal(adminRoutes.includes("router.use(auth)"), true);
 
-  // 4. No image upload routes implemented yet (deferred to Phase 3E)
-  assert.equal(adminRoutes.includes("/images"), false);
-  assert.equal(adminRoutes.includes("multer"), false);
-  assert.equal(adminRoutes.includes("upload"), false);
+  // 4. Memory storage only; no disk writes
+  assert.equal(adminRoutes.includes("multer.memoryStorage()"), true);
+  assert.equal(adminRoutes.includes("diskStorage"), false);
+
+  // 5. No SVG or executable formats allowed in project image service
+  assert.equal(imageService.toLowerCase().includes("image/svg"), false);
+  assert.equal(imageService.includes(".svg"), false);
+
+  // 6. No client-controlled Storage paths
+  assert.equal(adminRoutes.includes("req.body.path"), false);
+  assert.equal(adminRoutes.includes("request.body.path"), false);
 });

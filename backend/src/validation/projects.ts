@@ -120,7 +120,12 @@ export const publicProjectsQuerySchema = z
   })
   .strict();
 
+export const projectImageSlotSchema = z.enum(["primary", "secondary"], {
+  message: "Invalid image slot. Allowed values: 'primary', 'secondary'.",
+});
+
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export type HomepageSelectionInput = z.infer<typeof homepageSelectionSchema>;
 export type AdminProjectStatusFilter = z.infer<typeof adminProjectStatusFilterSchema>;
+export type ProjectImageSlot = z.infer<typeof projectImageSlotSchema>;

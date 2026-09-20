@@ -6,6 +6,7 @@ export const DEFAULT_OPERATIONAL_CONFIG = Object.freeze({
   solarAnalyzerExtractRateLimitMax: 3,
   solarAnalyzerCalculateRateLimitMax: 20,
   quoteRateLimitMax: 5,
+  adminImageUploadRateLimitMax: 20,
 });
 
 export type RuntimeConfig = {
@@ -18,6 +19,7 @@ export type RuntimeConfig = {
   solarAnalyzerExtractRateLimitMax: number;
   solarAnalyzerCalculateRateLimitMax: number;
   quoteRateLimitMax: number;
+  adminImageUploadRateLimitMax: number;
 };
 
 function parsePositiveNumber(
@@ -83,6 +85,7 @@ export function loadRuntimeConfig(environment: NodeJS.ProcessEnv = process.env):
     solarAnalyzerExtractRateLimitMax: parsePositiveNumber(environment.SOLAR_ANALYZER_EXTRACT_RATE_LIMIT_MAX, "SOLAR_ANALYZER_EXTRACT_RATE_LIMIT_MAX", DEFAULT_OPERATIONAL_CONFIG.solarAnalyzerExtractRateLimitMax, { integer: true }),
     solarAnalyzerCalculateRateLimitMax: parsePositiveNumber(environment.SOLAR_ANALYZER_CALCULATE_RATE_LIMIT_MAX, "SOLAR_ANALYZER_CALCULATE_RATE_LIMIT_MAX", DEFAULT_OPERATIONAL_CONFIG.solarAnalyzerCalculateRateLimitMax, { integer: true }),
     quoteRateLimitMax: parsePositiveNumber(environment.QUOTE_RATE_LIMIT_MAX, "QUOTE_RATE_LIMIT_MAX", DEFAULT_OPERATIONAL_CONFIG.quoteRateLimitMax, { integer: true }),
+    adminImageUploadRateLimitMax: parsePositiveNumber(environment.ADMIN_IMAGE_UPLOAD_RATE_LIMIT_MAX, "ADMIN_IMAGE_UPLOAD_RATE_LIMIT_MAX", DEFAULT_OPERATIONAL_CONFIG.adminImageUploadRateLimitMax, { integer: true }),
     ...(frontendOrigin ? { frontendOrigin } : {}),
   };
 }

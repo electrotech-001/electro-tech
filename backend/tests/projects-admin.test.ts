@@ -38,7 +38,7 @@ function createMockClient(initialProjects: ProjectDatabaseRow[] = []): {
   projects: ProjectDatabaseRow[];
   rpcCalls: { name: string; args: any }[];
 } {
-  const projects = [...initialProjects];
+  const projects = initialProjects.map((p) => ({ ...p }));
   const rpcCalls: { name: string; args: any }[] = [];
 
   const client = {
@@ -49,6 +49,7 @@ function createMockClient(initialProjects: ProjectDatabaseRow[] = []): {
             publicUrl: `https://mock.supabase.co/storage/v1/object/public/${bucket}/${path}`,
           },
         }),
+        remove: async (_paths: string[]) => ({ data: _paths, error: null }),
       }),
     },
     rpc: async (name: string, args: any) => {
@@ -620,7 +621,7 @@ test("19, 20, 21. Homepage selection requires 3 UUIDs and invokes replace_homepa
 });
 
 // 22, 23, 24, 25. Delete safety checks
-test("22, 23, 24, 25. Delete project enforces Phase 3D safety: published and asset-bearing deletes rejected", async () => {
+test("22, 23, 24, 25. Delete project enforces safety: published delete rejected, draft and archived deleted with cleanup", async () => {
   const publishedProject: ProjectDatabaseRow = {
     ...sampleCompleteProject,
     id: "11111111-1111-1111-1111-111111111111",
@@ -668,13 +669,15 @@ test("22, 23, 24, 25. Delete project enforces Phase 3D safety: published and ass
   const res1 = await fetch(`${baseUrl}/api/admin/projects/${publishedProject.id}`, { method: "DELETE" });
   assert.equal(res1.status, 409);
 
-  // Draft with images denied (409)
+  // Draft with images allowed with storage cleanup (Phase 3E) (200)
   const res2 = await fetch(`${baseUrl}/api/admin/projects/${draftWithImages.id}`, { method: "DELETE" });
-  assert.equal(res2.status, 409);
+  assert.equal(res2.status, 200);
+  assert.equal(projects.some((p) => p.id === draftWithImages.id), false);
 
-  // Archived with images denied (409)
+  // Archived with images allowed with storage cleanup (Phase 3E) (200)
   const res3 = await fetch(`${baseUrl}/api/admin/projects/${archivedWithImages.id}`, { method: "DELETE" });
-  assert.equal(res3.status, 409);
+  assert.equal(res3.status, 200);
+  assert.equal(projects.some((p) => p.id === archivedWithImages.id), false);
 
   // Safe draft delete allowed (200)
   const res4 = await fetch(`${baseUrl}/api/admin/projects/${safeDraft.id}`, { method: "DELETE" });

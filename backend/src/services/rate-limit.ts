@@ -38,3 +38,12 @@ export function createQuoteRateLimiter(limit: number = API_RATE_LIMITS.quote) {
     "Too many recent requests. Please use WhatsApp or try again later.",
   );
 }
+
+export function createAdminImageUploadRateLimiter(
+  limit: number = DEFAULT_OPERATIONAL_CONFIG.adminImageUploadRateLimitMax,
+) {
+  return createApiRateLimiter(
+    limit,
+    "Too many image upload attempts. Please try again later.",
+  );
+}

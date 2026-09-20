@@ -686,10 +686,11 @@ export async function replaceHomepageProjects(
 }
 
 /**
- * Permanently deletes a project only if it is in 'draft' or 'archived' status
- * AND contains no stored image paths (Phase 3D safety requirement).
+ * Permanently deletes a project only if it is in 'draft' or 'archived' status.
+ * Synchronously cleans up any associated Storage assets before deleting the database record.
+ * If Storage cleanup fails, the database record is retained to prevent orphaned files.
  */
-export async function deleteProjectWithoutAssets(
+export async function deleteProjectWithStorageCleanup(
   id: string,
   dependencies: ProjectServiceDependencies = {},
 ): Promise<void> {
@@ -713,14 +714,29 @@ export async function deleteProjectWithoutAssets(
     throw new ProjectConflictError("Cannot delete a published project. Unpublish or archive it first.");
   }
 
-  if (current.primary_image_path || current.secondary_image_path) {
-    throw new ProjectConflictError(
-      "Cannot delete project with existing assets. Project image assets must be removed before permanent deletion.",
-    );
+  // 1. Clean up Storage assets if any exist
+  const paths = [current.primary_image_path, current.secondary_image_path].filter(
+    (p): p is string => Boolean(p && p.trim()),
+  );
+
+  if (paths.length > 0) {
+    const { error: storageError } = await supabase.storage
+      .from("project-images")
+      .remove(paths);
+
+    if (storageError) {
+      throw new Error("Failed to delete project assets from storage.");
+    }
   }
 
+  // 2. Delete database row only after Storage cleanup succeeds
   const { error } = await supabase.from("projects").delete().eq("id", id);
   if (error) {
     throw new Error("Database query failed.");
   }
 }
+
+/**
+ * Backward-compatible alias for deleteProjectWithStorageCleanup.
+ */
+export const deleteProjectWithoutAssets = deleteProjectWithStorageCleanup;
