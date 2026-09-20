@@ -86,3 +86,54 @@ export function loadRuntimeConfig(environment: NodeJS.ProcessEnv = process.env):
     ...(frontendOrigin ? { frontendOrigin } : {}),
   };
 }
+
+export type SupabaseConfig = {
+  supabaseUrl: string;
+  supabaseSecretKey: string;
+};
+
+export class SupabaseConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SupabaseConfigError";
+  }
+}
+
+function parseSupabaseUrl(value: string | undefined, nodeEnv: string): string {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    throw new SupabaseConfigError("SUPABASE_URL is required.");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new SupabaseConfigError("SUPABASE_URL must be a valid URL.");
+  }
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new SupabaseConfigError("SUPABASE_URL must use http or https.");
+  }
+  if (nodeEnv === "production" && parsed.protocol !== "https:") {
+    throw new SupabaseConfigError("SUPABASE_URL must use HTTPS in production.");
+  }
+  return parsed.origin + (parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/+$/, ""));
+}
+
+function parseSupabaseSecretKey(value: string | undefined): string {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    throw new SupabaseConfigError("SUPABASE_SECRET_KEY is required.");
+  }
+  if (/[\r\n]/.test(trimmed)) {
+    throw new SupabaseConfigError("SUPABASE_SECRET_KEY must not contain newline characters.");
+  }
+  return trimmed;
+}
+
+export function loadSupabaseConfig(environment: NodeJS.ProcessEnv = process.env): SupabaseConfig {
+  const nodeEnv = environment.NODE_ENV || "development";
+  return {
+    supabaseUrl: parseSupabaseUrl(environment.SUPABASE_URL, nodeEnv),
+    supabaseSecretKey: parseSupabaseSecretKey(environment.SUPABASE_SECRET_KEY),
+  };
+}

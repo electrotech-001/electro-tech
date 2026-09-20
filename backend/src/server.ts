@@ -3,6 +3,7 @@ import { createApp } from "./app.js";
 import { loadRuntimeConfig } from "./config.js";
 import { loadQuoteEmailConfig } from "./services/email.js";
 import { loadGeminiConfig } from "./services/gemini.js";
+import { loadSupabaseConfig } from "./config.js";
 
 const HOST = "0.0.0.0";
 const config = loadRuntimeConfig();
@@ -19,6 +20,7 @@ function isConfigured(loader: () => unknown): boolean {
 
 console.log(`Gemini configured: ${isConfigured(() => loadGeminiConfig())}`);
 console.log(`Resend configured: ${isConfigured(() => loadQuoteEmailConfig())}`);
+console.log(`Supabase configured: ${isConfigured(() => loadSupabaseConfig())}`);
 
 const server = app.listen(config.port, HOST, () => {
   console.log(`Electrotech API listening on ${HOST}:${config.port}`);
