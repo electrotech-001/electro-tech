@@ -439,4 +439,154 @@ describe("Admin Portal Authentication & Protected Routing", () => {
     const calledHeaders = mockFetch.mock.calls[0]?.[1]?.headers as Headers;
     expect(calledHeaders.get("Authorization")).toBe("Bearer mock-jwt-token-12345");
   });
+
+  // 13. TOKEN_REFRESHED updates session without entering full-page loading
+  it("13. TOKEN_REFRESHED updates session silently without entering full-page loading", async () => {
+    vi.mocked(fetchAdminMe).mockResolvedValue({ user: mockAdminMeUser });
+
+    render(
+      <AuthProvider>
+        <MemoryRouter initialEntries={["/"]}>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <div data-testid="protected-content">Protected Content</div>
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>,
+    );
+
+    // Bootstrap initial session
+    await act(async () => {
+      await getAuthStateCallback()?.("INITIAL_SESSION", mockSession);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("protected-content")).toBeDefined();
+    });
+
+    // Reset fetchAdminMe mock count
+    vi.mocked(fetchAdminMe).mockClear();
+
+    // Now simulate background token refresh
+    const refreshedSession = {
+      ...mockSession,
+      access_token: "refreshed-jwt-token-67890",
+    };
+
+    act(() => {
+      getAuthStateCallback()?.("TOKEN_REFRESHED", refreshedSession);
+    });
+
+    // Protected content MUST remain mounted continuously
+    expect(screen.getByTestId("protected-content")).toBeDefined();
+    // Must NOT show full-page loading spinner
+    expect(screen.queryByText(/verifying admin session/i)).toBeNull();
+    // Must NOT re-fetch /api/admin/me for the same authenticated user
+    expect(fetchAdminMe).not.toHaveBeenCalled();
+  });
+
+  // 14. Form input values survive TOKEN_REFRESHED without being reset
+  it("14. form inputs and component state survive TOKEN_REFRESHED without unmounting", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchAdminMe).mockResolvedValue({ user: mockAdminMeUser });
+
+    function TestForm() {
+      return (
+        <form>
+          <label htmlFor="test-title">Project Title</label>
+          <input id="test-title" type="text" defaultValue="" />
+        </form>
+      );
+    }
+
+    render(
+      <AuthProvider>
+        <MemoryRouter initialEntries={["/"]}>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <TestForm />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>,
+    );
+
+    await act(async () => {
+      await getAuthStateCallback()?.("INITIAL_SESSION", mockSession);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Project Title")).toBeDefined();
+    });
+
+    // Type unsaved value
+    const input = screen.getByLabelText("Project Title");
+    await user.type(input, "Unsaved Draft Project Title");
+    expect((input as HTMLInputElement).value).toBe("Unsaved Draft Project Title");
+
+    // Simulate TOKEN_REFRESHED (e.g. from switching tabs)
+    act(() => {
+      getAuthStateCallback()?.("TOKEN_REFRESHED", {
+        ...mockSession,
+        access_token: "new-token-abc",
+      });
+    });
+
+    // Verify form and input are still mounted and value is preserved
+    const inputAfter = screen.getByLabelText("Project Title");
+    expect((inputAfter as HTMLInputElement).value).toBe("Unsaved Draft Project Title");
+    expect(screen.queryByText(/verifying admin session/i)).toBeNull();
+  });
+
+  // 15. Genuine SIGNED_OUT still removes protected access
+  it("15. genuine SIGNED_OUT still unmounts protected content and redirects to /login", async () => {
+    vi.mocked(fetchAdminMe).mockResolvedValue({ user: mockAdminMeUser });
+
+    render(
+      <AuthProvider>
+        <MemoryRouter initialEntries={["/"]}>
+          <Routes>
+            <Route path="/login" element={<div>Login Screen</div>} />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <div data-testid="protected-content">Protected Content</div>
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>,
+    );
+
+    await act(async () => {
+      await getAuthStateCallback()?.("INITIAL_SESSION", mockSession);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("protected-content")).toBeDefined();
+    });
+
+    // Dispatch genuine SIGNED_OUT
+    act(() => {
+      getAuthStateCallback()?.("SIGNED_OUT", null);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Login Screen")).toBeDefined();
+      expect(screen.queryByTestId("protected-content")).toBeNull();
+    });
+  });
 });

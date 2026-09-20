@@ -33,6 +33,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Keep references to latest user and status to avoid stale closures in auth listeners
+  const userRef = useRef<AdminUser | null>(null);
+  userRef.current = user;
+  const statusRef = useRef<AuthStatus>("loading");
+  statusRef.current = status;
+
   // Prevent race conditions during rapid state transitions
   const verificationSeq = useRef(0);
 
@@ -81,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!isMounted) return;
 
+      // Handle sign-out or missing session
       if (event === "SIGNED_OUT" || !newSession) {
         setSession(null);
         setUser(null);
@@ -88,14 +95,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Always update current session with newest JWT
       setSession(newSession);
 
-      // Verify authorization with backend on sign-in or session restoration
-      if (
-        event === "INITIAL_SESSION" ||
-        event === "SIGNED_IN" ||
-        event === "TOKEN_REFRESHED"
-      ) {
+      // 1. TOKEN_REFRESHED: Background token rotation
+      // Must NOT set status to "loading" and must NOT remount the protected application.
+      if (event === "TOKEN_REFRESHED") {
+        // If the user is already authenticated with the same user ID, session update is complete
+        if (userRef.current && userRef.current.userId === newSession.user.id) {
+          return;
+        }
+
+        // If user identity changed or was not yet set, verify in background
+        const verifiedUser = await verifyBackendAuthorization(newSession);
+        if (!isMounted) return;
+
+        if (verifiedUser) {
+          setUser(verifiedUser);
+          setStatus("authenticated");
+          setError(null);
+        } else {
+          setUser(null);
+          setStatus("unauthenticated");
+        }
+        return;
+      }
+
+      // 2. SIGNED_IN: Can fire on fresh login or on window focus / re-connect
+      if (event === "SIGNED_IN") {
+        // If already authenticated as the same user, treat as a background session refresh
+        if (
+          userRef.current &&
+          userRef.current.userId === newSession.user.id &&
+          statusRef.current === "authenticated"
+        ) {
+          return;
+        }
+
+        // Otherwise, perform verification
+        if (statusRef.current !== "loading") {
+          setStatus("loading");
+        }
+        const verifiedUser = await verifyBackendAuthorization(newSession);
+        if (!isMounted) return;
+
+        if (verifiedUser) {
+          setUser(verifiedUser);
+          setStatus("authenticated");
+          setError(null);
+        } else {
+          setUser(null);
+          setStatus("unauthenticated");
+        }
+        return;
+      }
+
+      // 3. INITIAL_SESSION: Application bootstrap
+      if (event === "INITIAL_SESSION") {
         setStatus("loading");
         const verifiedUser = await verifyBackendAuthorization(newSession);
         if (!isMounted) return;

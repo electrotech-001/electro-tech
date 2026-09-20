@@ -40,6 +40,14 @@
     grid-column: span 4;
   }
 
+  .rowTwo .card {
+    grid-column: span 6;
+  }
+
+  .rowOne .card {
+    grid-column: 3 / span 8;
+  }
+
   /* Default collapsed Project 07 centered in cols 5..8 (span 4) */
   .rowThird .card {
     grid-column: 5 / span 4;
@@ -110,6 +118,14 @@
   /* Default collapsed 4/4/4 for rows 1 & 2 */
   .rowStandard .card {
     grid-column: span 4;
+  }
+
+  .rowTwo .card {
+    grid-column: span 6;
+  }
+
+  .rowOne .card {
+    grid-column: 2 / span 10;
   }
 
   /* Default collapsed Project 07 centered */

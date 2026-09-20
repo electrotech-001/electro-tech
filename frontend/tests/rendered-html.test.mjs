@@ -53,8 +53,9 @@ test("server-renders the complete Electro Tech page", async () => {
   assert.match(html, /AI Solar Bill Analyzer/);
   assert.match(html, /Upload your electricity bill and get a preliminary solar system recommendation based on your actual energy consumption/);
   assert.match(html, /href="\/solar-bill-analyzer"[^>]*>Analyze My Bill/);
-  assert.match(html, /Punjab Ice Factory/);
-  assert.match(html, /Darul Islam Colony Solar Project/);
+  assert.match(html, /Selected projects/);
+  assert.match(html, /View All Projects/);
+  assert.match(html, /href="\/projects"/);
   assert.doesNotMatch(html, /Project imagery is representative until|Project details to be updated/);
   assert.match(html, /Request My Quote/);
   assert.match(html, /Electro Tech \| Solar Energy &amp; Electrical Solutions/);
@@ -106,4 +107,14 @@ test("analyzer stylesheet contains narrow mobile breakpoints", async () => {
   assert.match(css, /@media \(max-width: 900px\)/);
   assert.match(css, /@media \(max-width: 680px\)/);
   assert.match(css, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+});
+
+test("server-renders the dedicated Projects Directory route", async () => {
+  const response = await render("/projects");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Projects Directory/);
+  assert.match(html, /OUR WORK/);
+  assert.match(html, /Home/);
+  assert.match(html, /Request a Solar Quote/);
 });

@@ -21,19 +21,29 @@ async function completeRequiredQuoteFields(user: ReturnType<typeof userEvent.set
 test("quote form uses the backend origin and presents email success with optional WhatsApp", async () => {
   vi.stubEnv("NEXT_PUBLIC_API_ORIGIN", "https://api.electrotech.test/");
   const handoffMessage = "Hello Electro Tech, I would like to request a solar quote.";
-  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
-    ok: true,
-    message: "Your request has been sent successfully.",
-    handoff: { channel: "whatsapp", message: handoffMessage },
-  }), { status: 200, headers: { "content-type": "application/json" } }));
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = String(input);
+    if (url.includes("/api/projects")) {
+      return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return new Response(JSON.stringify({
+      ok: true,
+      message: "Your request has been sent successfully.",
+      handoff: { channel: "whatsapp", message: handoffMessage },
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  });
   const user = userEvent.setup();
 
   render(<ElectroTechSite />);
   await completeRequiredQuoteFields(user);
   await user.click(screen.getByRole("button", { name: /Request My Quote/i }));
 
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-  expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.electrotech.test/api/quote");
+  await waitFor(() => {
+    const quoteCall = fetchMock.mock.calls.find((call) => String(call[0]).includes("/api/quote"));
+    expect(quoteCall).toBeDefined();
+  });
+  const quoteCall = fetchMock.mock.calls.find((call) => String(call[0]).includes("/api/quote"))!;
+  expect(quoteCall[0]).toBe("https://api.electrotech.test/api/quote");
   expect(await screen.findByRole("heading", { name: /your request has been sent/i })).toBeTruthy();
   expect(screen.getByText(/No quote details were stored/i)).toBeTruthy();
   const link = screen.getByRole("link", { name: /Also Send via WhatsApp/i });
@@ -45,10 +55,16 @@ test("quote form uses the backend origin and presents email success with optiona
 test("email failure keeps the form and exposes the prepared WhatsApp fallback", async () => {
   vi.stubEnv("NEXT_PUBLIC_API_ORIGIN", "https://api.electrotech.test");
   const handoffMessage = "Hello Electro Tech, please review this fallback quote.";
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
-    message: "We couldn't send your request right now. Please try again or contact us on WhatsApp.",
-    handoff: { channel: "whatsapp", message: handoffMessage },
-  }), { status: 503, headers: { "content-type": "application/json" } }));
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = String(input);
+    if (url.includes("/api/projects")) {
+      return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return new Response(JSON.stringify({
+      message: "We couldn't send your request right now. Please try again or contact us on WhatsApp.",
+      handoff: { channel: "whatsapp", message: handoffMessage },
+    }), { status: 503, headers: { "content-type": "application/json" } });
+  });
   const user = userEvent.setup();
 
   render(<ElectroTechSite />);
@@ -85,17 +101,27 @@ test("one-time analyzer summary is included as structured quote context", async 
   };
   window.sessionStorage.setItem(ANALYZER_LEAD_STORAGE_KEY, JSON.stringify(context));
   window.history.replaceState({}, "", "/?source=solar_bill_analyzer#contact");
-  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
-    ok: true,
-    message: "Your request has been sent successfully.",
-    handoff: { channel: "whatsapp", message: "Analyzer quote" },
-  }), { status: 200, headers: { "content-type": "application/json" } }));
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = String(input);
+    if (url.includes("/api/projects")) {
+      return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return new Response(JSON.stringify({
+      ok: true,
+      message: "Your request has been sent successfully.",
+      handoff: { channel: "whatsapp", message: "Analyzer quote" },
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  });
   const user = userEvent.setup();
 
   render(<ElectroTechSite />);
   await completeRequiredQuoteFields(user);
   await user.click(screen.getByRole("button", { name: /Request My Quote/i }));
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-  const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+  await waitFor(() => {
+    const quoteCall = fetchMock.mock.calls.find((call) => String(call[0]).includes("/api/quote"));
+    expect(quoteCall).toBeDefined();
+  });
+  const quoteCall = fetchMock.mock.calls.find((call) => String(call[0]).includes("/api/quote"))!;
+  const request = quoteCall[1] as RequestInit;
   expect(JSON.parse(String(request.body)).analyzerContext).toEqual(context);
 });

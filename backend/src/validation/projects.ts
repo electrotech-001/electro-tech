@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+export const PROJECT_CATEGORIES = [
+  "Complete Solar System Installation",
+  "Solar Structures",
+  "Security Systems (CCTV)",
+  "Electrical Works",
+] as const;
+
+export type ProjectCategory = (typeof PROJECT_CATEGORIES)[number];
+
 const VALID_POSITION_KEYWORDS = new Set(["left", "center", "right", "top", "bottom"]);
 const PERCENTAGE_REGEX = /^(?:100|[1-9]?\d)%$/;
 
@@ -35,7 +44,7 @@ export const projectIdSchema = z
   .trim()
   .regex(
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-    "Invalid project ID. Must be a valid UUID.",
+    "Invalid UUID.",
   );
 
 export const projectSlugSchema = z
@@ -66,8 +75,44 @@ export const createProjectSchema = z
       .min(1, "Title is required")
       .max(150, "Title cannot exceed 150 characters"),
     slug: projectSlugSchema.optional(),
-    location: z.string().trim().max(150, "Location cannot exceed 150 characters").nullable().optional(),
-    size: z.string().trim().max(100, "Size cannot exceed 100 characters").nullable().optional(),
+    clientOrganization: z
+      .string()
+      .trim()
+      .max(150, "Client / Organization cannot exceed 150 characters")
+      .nullable()
+      .optional(),
+    location: z
+      .string()
+      .trim()
+      .max(150, "Location cannot exceed 150 characters")
+      .nullable()
+      .optional(),
+    size: z
+      .string()
+      .trim()
+      .max(100, "Capacity / Project size cannot exceed 100 characters")
+      .nullable()
+      .optional(),
+    category: z.enum(PROJECT_CATEGORIES, {
+      message:
+        "Invalid category. Allowed values: 'Complete Solar System Installation', 'Solar Structures', 'Security Systems (CCTV)', 'Electrical Works'.",
+    }).nullable().optional(),
+    completionYear: z
+      .number()
+      .int("Completion year must be an integer")
+      .min(1900, "Completion year must be 1900 or later")
+      .max(2100, "Completion year cannot exceed 2100")
+      .nullable()
+      .optional(),
+    shortSummary: z
+      .string()
+      .trim()
+      .min(10, "Short summary must be at least 10 characters")
+      .max(400, "Short summary cannot exceed 400 characters")
+      .nullable()
+      .optional(),
+    fullStory: z.string().trim().nullable().optional(),
+    // Legacy fields supported for backward compatibility
     description: z.string().trim().nullable().optional(),
     equipment: equipmentSchema.optional(),
     primaryAlt: z.string().trim().max(255, "Primary alt text cannot exceed 255 characters").nullable().optional(),
@@ -87,8 +132,44 @@ export const updateProjectSchema = z
       .max(150, "Title cannot exceed 150 characters")
       .optional(),
     slug: projectSlugSchema.optional(),
-    location: z.string().trim().max(150, "Location cannot exceed 150 characters").nullable().optional(),
-    size: z.string().trim().max(100, "Size cannot exceed 100 characters").nullable().optional(),
+    clientOrganization: z
+      .string()
+      .trim()
+      .max(150, "Client / Organization cannot exceed 150 characters")
+      .nullable()
+      .optional(),
+    location: z
+      .string()
+      .trim()
+      .max(150, "Location cannot exceed 150 characters")
+      .nullable()
+      .optional(),
+    size: z
+      .string()
+      .trim()
+      .max(100, "Capacity / Project size cannot exceed 100 characters")
+      .nullable()
+      .optional(),
+    category: z.enum(PROJECT_CATEGORIES, {
+      message:
+        "Invalid category. Allowed values: 'Complete Solar System Installation', 'Solar Structures', 'Security Systems (CCTV)', 'Electrical Works'.",
+    }).nullable().optional(),
+    completionYear: z
+      .number()
+      .int("Completion year must be an integer")
+      .min(1900, "Completion year must be 1900 or later")
+      .max(2100, "Completion year cannot exceed 2100")
+      .nullable()
+      .optional(),
+    shortSummary: z
+      .string()
+      .trim()
+      .min(10, "Short summary must be at least 10 characters")
+      .max(400, "Short summary cannot exceed 400 characters")
+      .nullable()
+      .optional(),
+    fullStory: z.string().trim().nullable().optional(),
+    // Legacy fields supported for backward compatibility
     description: z.string().trim().nullable().optional(),
     equipment: equipmentSchema.optional(),
     primaryAlt: z.string().trim().max(255, "Primary alt text cannot exceed 255 characters").nullable().optional(),
@@ -107,9 +188,9 @@ export const homepageSelectionSchema = z
   .object({
     projectIds: z
       .array(projectIdSchema)
-      .length(3, "Exactly 3 project IDs are required for homepage selection")
-      .refine((ids) => new Set(ids).size === 3, {
-        message: "All 3 project IDs must be unique",
+      .max(3, "At most 3 project IDs can be featured on the homepage")
+      .refine((ids) => new Set(ids).size === ids.length, {
+        message: "All project IDs must be unique",
       }),
   })
   .strict();
@@ -124,8 +205,39 @@ export const projectImageSlotSchema = z.enum(["primary", "secondary"], {
   message: "Invalid image slot. Allowed values: 'primary', 'secondary'.",
 });
 
+export const updateMediaSchema = z
+  .object({
+    altText: z
+      .string()
+      .trim()
+      .max(255, "Alt text cannot exceed 255 characters")
+      .nullable()
+      .optional(),
+    caption: z
+      .string()
+      .trim()
+      .max(255, "Caption cannot exceed 255 characters")
+      .nullable()
+      .optional(),
+  })
+  .strict();
+
+export const reorderMediaSchema = z
+  .object({
+    mediaIds: z
+      .array(projectIdSchema)
+      .min(1, "At least one media ID is required")
+      .max(5, "Cannot reorder more than 5 media items")
+      .refine((ids) => new Set(ids).size === ids.length, {
+        message: "Media IDs must be unique",
+      }),
+  })
+  .strict();
+
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export type HomepageSelectionInput = z.infer<typeof homepageSelectionSchema>;
 export type AdminProjectStatusFilter = z.infer<typeof adminProjectStatusFilterSchema>;
 export type ProjectImageSlot = z.infer<typeof projectImageSlotSchema>;
+export type UpdateMediaInput = z.infer<typeof updateMediaSchema>;
+export type ReorderMediaInput = z.infer<typeof reorderMediaSchema>;

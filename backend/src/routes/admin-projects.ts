@@ -10,6 +10,16 @@ import {
   uploadProjectImage,
 } from "../services/project-images.js";
 import {
+  deleteProjectMedia,
+  listProjectMedia,
+  MAX_PROJECT_IMAGE_FILE_BYTES as MAX_PROJECT_MEDIA_FILE_BYTES,
+  ProjectMediaValidationError,
+  reorderProjectMedia,
+  setPrimaryProjectMedia,
+  updateProjectMedia,
+  uploadProjectMedia,
+} from "../services/project-media.js";
+import {
   archiveProject,
   createProject,
   deleteProjectWithStorageCleanup,
@@ -32,6 +42,8 @@ import {
   homepageSelectionSchema,
   projectIdSchema,
   projectImageSlotSchema,
+  reorderMediaSchema,
+  updateMediaSchema,
   updateProjectSchema,
 } from "../validation/projects.js";
 
@@ -84,6 +96,43 @@ export function createAdminProjectsRouter(
     });
   };
 
+  const projectMediaUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: MAX_PROJECT_MEDIA_FILE_BYTES,
+      files: 1,
+      fields: 5,
+      parts: 6,
+    },
+  });
+
+  const handleMediaUpload: RequestHandler = (request, response, next) => {
+    projectMediaUpload.single("file")(request, response, (err) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          response.status(413).json({
+            code: "file_too_large",
+            message: `The image must be ${MAX_PROJECT_MEDIA_FILE_BYTES / (1024 * 1024)} MB or smaller.`,
+          });
+          return;
+        }
+        response.status(400).json({
+          code: "malformed_upload",
+          message: "Upload one image file using the 'file' field.",
+        });
+        return;
+      }
+      if (err) {
+        response.status(400).json({
+          code: "malformed_upload",
+          message: "Malformed image upload.",
+        });
+        return;
+      }
+      next();
+    });
+  };
+
   // Protect all admin project routes with authenticateAdmin
   router.use(auth);
 
@@ -103,7 +152,7 @@ export function createAdminProjectsRouter(
     }
 
     try {
-      const projectIds = validation.data.projectIds as [string, string, string];
+      const projectIds = validation.data.projectIds;
       const result = await replaceHomepageProjects(projectIds, dependencies);
       response.status(200).json(result);
     } catch (error) {
@@ -254,8 +303,271 @@ export function createAdminProjectsRouter(
   });
 
   /**
-   * POST /api/admin/projects/:id/images
-   * Uploads or replaces a project image in 'primary' or 'secondary' slot.
+   * GET /api/admin/projects/:id/media
+   * Lists all media items (images) for a project.
+   */
+  router.get("/:id/media", async (request, response) => {
+    const idValidation = projectIdSchema.safeParse(request.params.id);
+    if (!idValidation.success) {
+      response.status(400).json({
+        error: "Invalid project ID.",
+        details: idValidation.error.issues.map((i) => i.message),
+      });
+      return;
+    }
+
+    try {
+      const media = await listProjectMedia(idValidation.data, dependencies);
+      response.status(200).json(media);
+    } catch {
+      response.status(503).json({
+        error: "Service Unavailable",
+        message: "Could not retrieve project media at this time.",
+      });
+    }
+  });
+
+  /**
+   * POST /api/admin/projects/:id/media
+   * Uploads an image to a project.
+   */
+  router.post("/:id/media", uploadRateLimiter, handleMediaUpload, async (request, response) => {
+    const idValidation = projectIdSchema.safeParse(request.params.id);
+    if (!idValidation.success) {
+      response.status(400).json({
+        error: "Invalid project ID.",
+        details: idValidation.error.issues.map((i) => i.message),
+      });
+      return;
+    }
+
+    if (!request.file) {
+      response.status(400).json({
+        error: "Missing media file.",
+        message: "Upload one media file using the 'file' field.",
+      });
+      return;
+    }
+
+    const altText = request.body.altText ? String(request.body.altText) : null;
+    const caption = request.body.caption ? String(request.body.caption) : null;
+    const isPrimary =
+      request.body.isPrimary === true ||
+      request.body.isPrimary === "true";
+
+    try {
+      const created = await uploadProjectMedia(
+        idValidation.data,
+        request.file,
+        { altText, caption, isPrimary },
+        dependencies,
+      );
+      response.status(201).json(created);
+    } catch (error) {
+      if (error instanceof ProjectNotFoundError) {
+        response.status(404).json({ error: error.message });
+        return;
+      }
+      if (error instanceof ProjectConflictError) {
+        response.status(409).json({ error: error.message });
+        return;
+      }
+      if (error instanceof ProjectValidationError) {
+        response.status(400).json({ error: error.message });
+        return;
+      }
+      if (error instanceof ProjectMediaValidationError) {
+        if (error.code === "too_large") {
+          response.status(413).json({ error: error.message });
+          return;
+        }
+        if (error.code === "unsupported" || error.code === "mismatch") {
+          response.status(415).json({ error: error.message });
+          return;
+        }
+        response.status(400).json({ error: error.message });
+        return;
+      }
+      response.status(503).json({
+        error: "Service Unavailable",
+        message: "Could not upload media file at this time.",
+      });
+    }
+  });
+
+  /**
+   * PATCH /api/admin/projects/:id/media/:mediaId
+   * Updates metadata (altText, caption) of a media item.
+   */
+  router.patch("/:id/media/:mediaId", async (request, response) => {
+    const idValidation = projectIdSchema.safeParse(request.params.id);
+    const mediaIdValidation = projectIdSchema.safeParse(request.params.mediaId);
+
+    if (!idValidation.success || !mediaIdValidation.success) {
+      response.status(400).json({
+        error: "Invalid project ID or media ID.",
+      });
+      return;
+    }
+
+    const bodyValidation = updateMediaSchema.safeParse(request.body);
+    if (!bodyValidation.success) {
+      response.status(400).json({
+        error: "Invalid media update payload.",
+        details: bodyValidation.error.issues.map((i) => i.message),
+      });
+      return;
+    }
+
+    try {
+      const updated = await updateProjectMedia(
+        idValidation.data,
+        mediaIdValidation.data,
+        bodyValidation.data,
+        dependencies,
+      );
+      response.status(200).json(updated);
+    } catch (error) {
+      if (error instanceof ProjectNotFoundError) {
+        response.status(404).json({ error: error.message });
+        return;
+      }
+      if (error instanceof ProjectConflictError) {
+        response.status(409).json({ error: error.message });
+        return;
+      }
+      response.status(503).json({
+        error: "Service Unavailable",
+        message: "Could not update media item at this time.",
+      });
+    }
+  });
+
+  /**
+   * DELETE /api/admin/projects/:id/media/:mediaId
+   * Deletes a media item from project and storage.
+   */
+  router.delete("/:id/media/:mediaId", async (request, response) => {
+    const idValidation = projectIdSchema.safeParse(request.params.id);
+    const mediaIdValidation = projectIdSchema.safeParse(request.params.mediaId);
+
+    if (!idValidation.success || !mediaIdValidation.success) {
+      response.status(400).json({
+        error: "Invalid project ID or media ID.",
+      });
+      return;
+    }
+
+    try {
+      await deleteProjectMedia(
+        idValidation.data,
+        mediaIdValidation.data,
+        dependencies,
+      );
+      response.status(200).json({
+        ok: true,
+        message: "Media deleted successfully.",
+      });
+    } catch (error) {
+      if (error instanceof ProjectNotFoundError) {
+        response.status(404).json({ error: error.message });
+        return;
+      }
+      if (error instanceof ProjectConflictError) {
+        response.status(409).json({ error: error.message });
+        return;
+      }
+      response.status(503).json({
+        error: "Service Unavailable",
+        message: "Could not delete media at this time.",
+      });
+    }
+  });
+
+  /**
+   * PUT /api/admin/projects/:id/media/order
+   * Reorders project media items.
+   */
+  router.put("/:id/media/order", async (request, response) => {
+    const idValidation = projectIdSchema.safeParse(request.params.id);
+    if (!idValidation.success) {
+      response.status(400).json({
+        error: "Invalid project ID.",
+      });
+      return;
+    }
+
+    const bodyValidation = reorderMediaSchema.safeParse(request.body);
+    if (!bodyValidation.success) {
+      response.status(400).json({
+        error: "Invalid reorder payload.",
+        details: bodyValidation.error.issues.map((i) => i.message),
+      });
+      return;
+    }
+
+    try {
+      await reorderProjectMedia(
+        idValidation.data,
+        bodyValidation.data.mediaIds,
+        dependencies,
+      );
+      response.status(200).json({
+        ok: true,
+        message: "Media order updated successfully.",
+      });
+    } catch {
+      response.status(503).json({
+        error: "Service Unavailable",
+        message: "Could not reorder media at this time.",
+      });
+    }
+  });
+
+  /**
+   * POST /api/admin/projects/:id/media/:mediaId/primary
+   * Sets a specific image as the main project image.
+   */
+  router.post("/:id/media/:mediaId/primary", async (request, response) => {
+    const idValidation = projectIdSchema.safeParse(request.params.id);
+    const mediaIdValidation = projectIdSchema.safeParse(request.params.mediaId);
+
+    if (!idValidation.success || !mediaIdValidation.success) {
+      response.status(400).json({
+        error: "Invalid project ID or media ID.",
+      });
+      return;
+    }
+
+    try {
+      const updated = await setPrimaryProjectMedia(
+        idValidation.data,
+        mediaIdValidation.data,
+        dependencies,
+      );
+      response.status(200).json(updated);
+    } catch (error) {
+      if (error instanceof ProjectNotFoundError) {
+        response.status(404).json({ error: error.message });
+        return;
+      }
+      if (error instanceof ProjectValidationError) {
+        response.status(400).json({ error: error.message });
+        return;
+      }
+      if (error instanceof ProjectConflictError) {
+        response.status(409).json({ error: error.message });
+        return;
+      }
+      response.status(503).json({
+        error: "Service Unavailable",
+        message: "Could not set primary media at this time.",
+      });
+    }
+  });
+
+  /**
+   * POST /api/admin/projects/:id/images (Legacy backward-compatibility)
    */
   router.post("/:id/images", uploadRateLimiter, handleImageUpload, async (request, response) => {
     const idValidation = projectIdSchema.safeParse(request.params.id);
@@ -317,8 +629,7 @@ export function createAdminProjectsRouter(
   });
 
   /**
-   * DELETE /api/admin/projects/:id/images/:slot
-   * Deletes a project image from 'primary' or 'secondary' slot.
+   * DELETE /api/admin/projects/:id/images/:slot (Legacy backward-compatibility)
    */
   router.delete("/:id/images/:slot", async (request, response) => {
     const idValidation = projectIdSchema.safeParse(request.params.id);

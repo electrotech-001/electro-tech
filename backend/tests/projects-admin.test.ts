@@ -55,17 +55,17 @@ function createMockClient(initialProjects: ProjectDatabaseRow[] = []): {
     rpc: async (name: string, args: any) => {
       rpcCalls.push({ name, args });
       if (name === "replace_homepage_projects") {
-        const ids = args.p_project_ids as string[];
-        if (!ids || ids.length !== 3) {
-          return { error: { message: "requires 3 project UUIDs" } };
+        const ids = (args.p_project_ids as string[]) || [];
+        if (ids.length > 3) {
+          return { error: { message: "requires 0 to 3 project UUIDs" } };
         }
-        // Verify all 3 exist and are published
+        // Verify all exist and are published
         const matches = projects.filter((p) => ids.includes(p.id));
-        if (matches.length !== 3) {
+        if (matches.length !== ids.length) {
           return { error: { message: "project does not exist" } };
         }
         if (matches.some((p) => p.status !== "published")) {
-          return { error: { message: "all 3 must be published" } };
+          return { error: { message: "all must be published" } };
         }
         // Clear existing
         projects.forEach((p) => {
@@ -212,8 +212,13 @@ const sampleCompleteProject: ProjectDatabaseRow = {
   id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
   slug: "completed-draft-project",
   title: "Completed Draft Project",
+  client_organization: "Islamabad Commercial",
   location: "Islamabad Sector F-7",
   size: "20 kW",
+  category: "Complete Solar System Installation",
+  completion_year: 2026,
+  short_summary: "Complete draft ready for publishing with high capacity.",
+  full_story: "Full installation narrative.",
   description: "Complete draft ready for publishing.",
   equipment: ["Panels", "Inverter"],
   primary_image_path: "projects/img-1.webp",
@@ -572,23 +577,24 @@ test("16, 17, 18. Archive and restore transitions with state integrity", async (
   assert.equal(restored.status, "draft");
 });
 
-// 19, 20, 21. Homepage selection via RPC
-test("19, 20, 21. Homepage selection requires 3 UUIDs and invokes replace_homepage_projects RPC", async () => {
+// 19, 20, 21. Homepage selection via RPC (0 to 3 UUIDs)
+test("19, 20, 21. Homepage selection requires 0 to 3 UUIDs and invokes replace_homepage_projects RPC", async () => {
   const p1: ProjectDatabaseRow = { ...sampleCompleteProject, id: "11111111-1111-1111-1111-111111111111", status: "published" };
   const p2: ProjectDatabaseRow = { ...sampleCompleteProject, id: "22222222-2222-2222-2222-222222222222", status: "published" };
   const p3: ProjectDatabaseRow = { ...sampleCompleteProject, id: "33333333-3333-3333-3333-333333333333", status: "published" };
-  const p4Draft: ProjectDatabaseRow = { ...sampleCompleteProject, id: "44444444-4444-4444-4444-444444444444", status: "draft" };
+  const p4: ProjectDatabaseRow = { ...sampleCompleteProject, id: "44444444-4444-4444-4444-444444444444", status: "published" };
+  const p5Draft: ProjectDatabaseRow = { ...sampleCompleteProject, id: "55555555-5555-5555-5555-555555555555", status: "draft" };
 
-  const { client, rpcCalls } = createMockClient([p1, p2, p3, p4Draft]);
+  const { client, rpcCalls } = createMockClient([p1, p2, p3, p4, p5Draft]);
   const baseUrl = await startAdminServer(client);
 
-  // Rejects fewer than 3
-  const resFew = await fetch(`${baseUrl}/api/admin/projects/homepage`, {
+  // Rejects more than 3
+  const resTooMany = await fetch(`${baseUrl}/api/admin/projects/homepage`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ projectIds: [p1.id, p2.id] }),
+    body: JSON.stringify({ projectIds: [p1.id, p2.id, p3.id, p4.id] }),
   });
-  assert.equal(resFew.status, 400);
+  assert.equal(resTooMany.status, 400);
 
   // Rejects duplicates
   const resDupes = await fetch(`${baseUrl}/api/admin/projects/homepage`, {
@@ -602,19 +608,47 @@ test("19, 20, 21. Homepage selection requires 3 UUIDs and invokes replace_homepa
   const resUnpub = await fetch(`${baseUrl}/api/admin/projects/homepage`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ projectIds: [p1.id, p2.id, p4Draft.id] }),
+    body: JSON.stringify({ projectIds: [p1.id, p2.id, p5Draft.id] }),
   });
   assert.equal(resUnpub.status, 409);
+  const unpubData = (await resUnpub.json()) as { error: string };
+  assert.equal(unpubData.error, "All homepage projects must be published.");
 
-  // Valid selection invokes RPC
+  // Rejects non-existent project
+  const resNonExistent = await fetch(`${baseUrl}/api/admin/projects/homepage`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectIds: [p1.id, "99999999-9999-9999-9999-999999999999"] }),
+  });
+  assert.equal(resNonExistent.status, 409);
+  const nonExistentData = (await resNonExistent.json()) as { error: string };
+  assert.equal(nonExistentData.error, "One or more selected projects do not exist.");
+
+  // Accepts 0 projects (empty array)
+  const resEmpty = await fetch(`${baseUrl}/api/admin/projects/homepage`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectIds: [] }),
+  });
+  assert.equal(resEmpty.status, 200);
+
+  // Accepts 2 projects
+  const resTwo = await fetch(`${baseUrl}/api/admin/projects/homepage`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectIds: [p1.id, p2.id] }),
+  });
+  assert.equal(resTwo.status, 200);
+
+  // Valid 3 selection invokes RPC
   const resSuccess = await fetch(`${baseUrl}/api/admin/projects/homepage`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ projectIds: [p1.id, p2.id, p3.id] }),
   });
   assert.equal(resSuccess.status, 200);
-  assert.equal(rpcCalls.length, 2); // 1 failed attempt + 1 successful
-  const successCall = rpcCalls[1];
+  assert.equal(rpcCalls.length, 5); // 2 failed (unpub, non-existent) + 3 successful (empty, two, three)
+  const successCall = rpcCalls[4];
   assert.ok(successCall);
   assert.equal(successCall.name, "replace_homepage_projects");
   assert.deepEqual(successCall.args, { p_project_ids: [p1.id, p2.id, p3.id] });

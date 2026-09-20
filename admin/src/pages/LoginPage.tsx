@@ -59,21 +59,11 @@ export function LoginPage() {
       <div className="auth-card">
         <div className="auth-header">
           <div className="auth-brand">
-            <svg
-              className="auth-brand-logo"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#0284c7"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-            </svg>
-            <span className="auth-brand-name">Electro Tech</span>
-          </div>
-          <div>
+            <img
+              src="/logos/electrotech-horizontal.png"
+              alt="Electro Tech"
+              className="auth-logo-img"
+            />
             <span className="auth-badge">Admin Portal</span>
           </div>
           <h1 className="auth-title">Sign In</h1>

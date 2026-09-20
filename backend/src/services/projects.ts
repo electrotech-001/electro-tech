@@ -4,13 +4,23 @@ import type {
   CreateProjectInput,
   UpdateProjectInput,
 } from "../validation/projects.js";
+import {
+  toProjectMediaResponse,
+  type ProjectMediaResponse,
+  type ProjectMediaRow,
+} from "./project-media.js";
 
 export type ProjectDatabaseRow = {
   id: string;
   slug: string;
   title: string;
+  client_organization?: string | null;
   location: string | null;
   size: string | null;
+  category?: string | null;
+  completion_year?: number | null;
+  short_summary?: string | null;
+  full_story?: string | null;
   description: string | null;
   equipment: string[];
   primary_image_path: string | null;
@@ -26,14 +36,29 @@ export type ProjectDatabaseRow = {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+  project_media?: ProjectMediaRow[];
+};
+
+export type PublicProjectImage = {
+  id: string;
+  url: string;
+  altText: string | null;
+  caption: string | null;
+  isPrimary: boolean;
+  sortOrder: number;
 };
 
 export type PublicProjectResponse = {
   id: string;
   slug: string;
   title: string;
+  clientOrganization: string | null;
   location: string | null;
   size: string | null;
+  category: string | null;
+  completionYear: number | null;
+  shortSummary: string | null;
+  fullStory: string | null;
   description: string | null;
   equipment: string[];
   primaryImageUrl: string | null;
@@ -43,14 +68,23 @@ export type PublicProjectResponse = {
   primaryImagePosition: string;
   secondaryImagePosition: string;
   publishedAt: string | null;
+  images: PublicProjectImage[];
+  mainImage: PublicProjectImage | null;
+  media: ProjectMediaResponse[];
+  mainMedia: ProjectMediaResponse | null;
 };
 
 export type AdminProjectResponse = {
   id: string;
   slug: string;
   title: string;
+  clientOrganization: string | null;
   location: string | null;
   size: string | null;
+  category: string | null;
+  completionYear: number | null;
+  shortSummary: string | null;
+  fullStory: string | null;
   description: string | null;
   equipment: string[];
   primaryImagePath: string | null;
@@ -68,6 +102,10 @@ export type AdminProjectResponse = {
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  media: ProjectMediaResponse[];
+  mainMedia: ProjectMediaResponse | null;
+  images: ProjectMediaResponse[];
+  mainImage: ProjectMediaResponse | null;
 };
 
 export class ProjectNotFoundError extends Error {
@@ -117,6 +155,8 @@ export function resolveProjectImageUrl(
   return supabase.storage.from("project-images").getPublicUrl(cleanPath).data.publicUrl;
 }
 
+export const resolvePublicImageUrl = resolveProjectImageUrl;
+
 /**
  * Generates a URL-friendly lowercase kebab-case slug from a title.
  */
@@ -137,21 +177,59 @@ export function toPublicProject(
   row: ProjectDatabaseRow,
   clientOrUrl?: SupabaseClient | string,
 ): PublicProjectResponse {
+  const mediaList = (row.project_media || [])
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((m) => toProjectMediaResponse(m, clientOrUrl));
+
+  const primaryMedia =
+    mediaList.find((m) => m.isPrimary) ||
+    mediaList[0] ||
+    null;
+
+  const publicImages: PublicProjectImage[] = mediaList.map((m) => ({
+    id: m.id,
+    url: m.url,
+    altText: m.altText,
+    caption: m.caption,
+    isPrimary: m.isPrimary,
+    sortOrder: m.sortOrder,
+  }));
+
+  const publicMainImage: PublicProjectImage | null = primaryMedia
+    ? {
+        id: primaryMedia.id,
+        url: primaryMedia.url,
+        altText: primaryMedia.altText,
+        caption: primaryMedia.caption,
+        isPrimary: primaryMedia.isPrimary,
+        sortOrder: primaryMedia.sortOrder,
+      }
+    : null;
+
   return {
     id: row.id,
     slug: row.slug,
     title: row.title,
+    clientOrganization: row.client_organization ?? null,
     location: row.location,
     size: row.size,
+    category: row.category ?? null,
+    completionYear: row.completion_year ?? null,
+    shortSummary: row.short_summary ?? (row.description ? row.description.slice(0, 400) : null),
+    fullStory: row.full_story ?? null,
     description: row.description,
     equipment: row.equipment,
-    primaryImageUrl: resolveProjectImageUrl(row.primary_image_path, clientOrUrl),
+    primaryImageUrl: primaryMedia ? primaryMedia.url : resolveProjectImageUrl(row.primary_image_path, clientOrUrl),
     secondaryImageUrl: resolveProjectImageUrl(row.secondary_image_path, clientOrUrl),
-    primaryAlt: row.primary_alt,
+    primaryAlt: primaryMedia?.altText || row.primary_alt,
     secondaryAlt: row.secondary_alt,
     primaryImagePosition: row.primary_image_position,
     secondaryImagePosition: row.secondary_image_position,
     publishedAt: row.published_at,
+    media: mediaList,
+    mainMedia: primaryMedia,
+    images: publicImages,
+    mainImage: publicMainImage,
   };
 }
 
@@ -162,19 +240,33 @@ export function toAdminProject(
   row: ProjectDatabaseRow,
   clientOrUrl?: SupabaseClient | string,
 ): AdminProjectResponse {
+  const mediaList = (row.project_media || [])
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((m) => toProjectMediaResponse(m, clientOrUrl));
+
+  const primaryMedia =
+    mediaList.find((m) => m.isPrimary) ||
+    mediaList[0] ||
+    null;
+
   return {
     id: row.id,
     slug: row.slug,
     title: row.title,
+    clientOrganization: row.client_organization ?? null,
     location: row.location,
     size: row.size,
+    category: row.category ?? null,
+    completionYear: row.completion_year ?? null,
+    shortSummary: row.short_summary ?? (row.description ? row.description.slice(0, 400) : null),
+    fullStory: row.full_story ?? null,
     description: row.description,
     equipment: row.equipment,
     primaryImagePath: row.primary_image_path,
     secondaryImagePath: row.secondary_image_path,
-    primaryImageUrl: resolveProjectImageUrl(row.primary_image_path, clientOrUrl),
+    primaryImageUrl: primaryMedia ? primaryMedia.url : resolveProjectImageUrl(row.primary_image_path, clientOrUrl),
     secondaryImageUrl: resolveProjectImageUrl(row.secondary_image_path, clientOrUrl),
-    primaryAlt: row.primary_alt,
+    primaryAlt: primaryMedia?.altText || row.primary_alt,
     secondaryAlt: row.secondary_alt,
     primaryImagePosition: row.primary_image_position,
     secondaryImagePosition: row.secondary_image_position,
@@ -185,6 +277,10 @@ export function toAdminProject(
     publishedAt: row.published_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    media: mediaList,
+    mainMedia: primaryMedia,
+    images: mediaList,
+    mainImage: primaryMedia,
   };
 }
 
@@ -204,7 +300,7 @@ export async function listPublishedProjects(
   const supabase = dependencies.client ?? getSupabaseClient();
   let query = supabase
     .from("projects")
-    .select("*")
+    .select("*, project_media(*)")
     .eq("status", "published");
 
   if (options.featured) {
@@ -240,7 +336,7 @@ export async function getPublishedProjectBySlug(
   const supabase = dependencies.client ?? getSupabaseClient();
   const { data, error } = await supabase
     .from("projects")
-    .select("*")
+    .select("*, project_media(*)")
     .eq("slug", slug)
     .eq("status", "published")
     .maybeSingle();
@@ -264,7 +360,7 @@ export async function listAdminProjects(
   dependencies: ProjectServiceDependencies = {},
 ): Promise<AdminProjectResponse[]> {
   const supabase = dependencies.client ?? getSupabaseClient();
-  let query = supabase.from("projects").select("*");
+  let query = supabase.from("projects").select("*, project_media(*)");
 
   if (options.status && options.status !== "all") {
     query = query.eq("status", options.status);
@@ -294,7 +390,7 @@ export async function getAdminProjectById(
   const supabase = dependencies.client ?? getSupabaseClient();
   const { data, error } = await supabase
     .from("projects")
-    .select("*")
+    .select("*, project_media(*)")
     .eq("id", id)
     .maybeSingle();
 
@@ -334,12 +430,20 @@ export async function createProject(
     throw new ProjectConflictError("Project slug already exists");
   }
 
+  const shortSummary = input.shortSummary ? input.shortSummary.trim() : null;
+  const description = input.description ? input.description.trim() : shortSummary;
+
   const insertPayload = {
     title: input.title.trim(),
     slug,
+    client_organization: input.clientOrganization ? input.clientOrganization.trim() : null,
     location: input.location ? input.location.trim() : null,
     size: input.size ? input.size.trim() : null,
-    description: input.description ? input.description.trim() : null,
+    category: input.category || null,
+    completion_year: input.completionYear ?? null,
+    short_summary: shortSummary,
+    full_story: input.fullStory ? input.fullStory.trim() : null,
+    description,
     equipment: input.equipment ?? [],
     primary_alt: input.primaryAlt ? input.primaryAlt.trim() : null,
     secondary_alt: input.secondaryAlt ? input.secondaryAlt.trim() : null,
@@ -352,7 +456,7 @@ export async function createProject(
   const { data, error } = await supabase
     .from("projects")
     .insert(insertPayload)
-    .select()
+    .select("*, project_media(*)")
     .single();
 
   if (error) {
@@ -413,11 +517,29 @@ export async function updateProject(
       updatePayload.slug = newSlug;
     }
   }
+  if (input.clientOrganization !== undefined) {
+    updatePayload.client_organization = input.clientOrganization ? input.clientOrganization.trim() : null;
+  }
   if (input.location !== undefined) {
     updatePayload.location = input.location ? input.location.trim() : null;
   }
   if (input.size !== undefined) {
     updatePayload.size = input.size ? input.size.trim() : null;
+  }
+  if (input.category !== undefined) {
+    updatePayload.category = input.category || null;
+  }
+  if (input.completionYear !== undefined) {
+    updatePayload.completion_year = input.completionYear ?? null;
+  }
+  if (input.shortSummary !== undefined) {
+    updatePayload.short_summary = input.shortSummary ? input.shortSummary.trim() : null;
+    if (input.description === undefined) {
+      updatePayload.description = updatePayload.short_summary;
+    }
+  }
+  if (input.fullStory !== undefined) {
+    updatePayload.full_story = input.fullStory ? input.fullStory.trim() : null;
   }
   if (input.description !== undefined) {
     updatePayload.description = input.description ? input.description.trim() : null;
@@ -445,7 +567,7 @@ export async function updateProject(
     .from("projects")
     .update(updatePayload)
     .eq("id", id)
-    .select()
+    .select("*, project_media(*)")
     .single();
 
   if (error) {
@@ -460,7 +582,7 @@ export async function updateProject(
 
 /**
  * Transitions a project from 'draft' to 'published'.
- * Validates that all required publication fields are present.
+ * Validates that all required publication fields and media requirements are present.
  */
 export async function publishProject(
   id: string,
@@ -470,7 +592,7 @@ export async function publishProject(
 
   const { data: current, error: fetchError } = await supabase
     .from("projects")
-    .select("*")
+    .select("*, project_media(*)")
     .eq("id", id)
     .maybeSingle();
 
@@ -493,13 +615,35 @@ export async function publishProject(
   // Validate required publication fields
   const missingFields: string[] = [];
   if (!current.title || !current.title.trim()) missingFields.push("title");
+  if (!current.slug || !current.slug.trim()) missingFields.push("slug");
   if (!current.location || !current.location.trim()) missingFields.push("location");
   if (!current.size || !current.size.trim()) missingFields.push("size");
-  if (!current.description || !current.description.trim()) missingFields.push("description");
-  if (!current.primary_image_path || !current.primary_image_path.trim()) missingFields.push("primaryImagePath");
-  if (!current.secondary_image_path || !current.secondary_image_path.trim()) missingFields.push("secondaryImagePath");
-  if (!current.primary_alt || !current.primary_alt.trim()) missingFields.push("primaryAlt");
-  if (!current.secondary_alt || !current.secondary_alt.trim()) missingFields.push("secondaryAlt");
+  if (!current.client_organization || !current.client_organization.trim()) missingFields.push("clientOrganization");
+  if (!current.category || !current.category.trim()) missingFields.push("category");
+  if (!current.completion_year) missingFields.push("completionYear");
+
+  const summary = current.short_summary || current.description;
+  if (!summary || summary.trim().length < 10) {
+    missingFields.push("shortSummary");
+  }
+
+  // Validate media requirements: at least 1 image is required, exactly 1 primary, non-empty alt on primary
+  const mediaList = current.project_media || [];
+  const hasLegacyImage = Boolean(current.primary_image_path && current.primary_image_path.trim());
+
+  if (mediaList.length === 0 && !hasLegacyImage) {
+    missingFields.push("primaryImagePath");
+    missingFields.push("image");
+  } else if (mediaList.length > 0) {
+    const primaryImage = mediaList.find((m: ProjectMediaRow) => m.is_primary);
+    if (!primaryImage) {
+      missingFields.push("primaryImage");
+    } else if (!primaryImage.alt_text || !primaryImage.alt_text.trim()) {
+      missingFields.push("primaryAlt");
+    }
+  } else if (hasLegacyImage && (!current.primary_alt || !current.primary_alt.trim())) {
+    missingFields.push("primaryAlt");
+  }
 
   if (missingFields.length > 0) {
     throw new ProjectValidationError("Cannot publish project: missing required publication fields", missingFields);
@@ -507,9 +651,9 @@ export async function publishProject(
 
   const { data, error } = await supabase
     .from("projects")
-    .update({ status: "published" })
+    .update({ status: "published", published_at: new Date().toISOString() })
     .eq("id", id)
-    .select()
+    .select("*, project_media(*)")
     .single();
 
   if (error) {
@@ -531,7 +675,7 @@ export async function unpublishProject(
 
   const { data: current, error: fetchError } = await supabase
     .from("projects")
-    .select("*")
+    .select("*, project_media(*)")
     .eq("id", id)
     .maybeSingle();
 
@@ -555,7 +699,7 @@ export async function unpublishProject(
     .from("projects")
     .update({ status: "draft" })
     .eq("id", id)
-    .select()
+    .select("*, project_media(*)")
     .single();
 
   if (error) {
@@ -577,7 +721,7 @@ export async function archiveProject(
 
   const { data: current, error: fetchError } = await supabase
     .from("projects")
-    .select("*")
+    .select("*, project_media(*)")
     .eq("id", id)
     .maybeSingle();
 
@@ -597,7 +741,7 @@ export async function archiveProject(
     .from("projects")
     .update({ status: "archived" })
     .eq("id", id)
-    .select()
+    .select("*, project_media(*)")
     .single();
 
   if (error) {
@@ -618,7 +762,7 @@ export async function restoreProject(
 
   const { data: current, error: fetchError } = await supabase
     .from("projects")
-    .select("*")
+    .select("*, project_media(*)")
     .eq("id", id)
     .maybeSingle();
 
@@ -642,7 +786,7 @@ export async function restoreProject(
     .from("projects")
     .update({ status: "draft" })
     .eq("id", id)
-    .select()
+    .select("*, project_media(*)")
     .single();
 
   if (error) {
@@ -653,11 +797,11 @@ export async function restoreProject(
 }
 
 /**
- * Atomically assigns exactly 3 published projects to the homepage using the
+ * Atomically assigns 0 to 3 published projects to the homepage using the
  * replace_homepage_projects PostgreSQL function.
  */
 export async function replaceHomepageProjects(
-  projectIds: [string, string, string],
+  projectIds: string[],
   dependencies: ProjectServiceDependencies = {},
 ): Promise<AdminProjectResponse[]> {
   const supabase = dependencies.client ?? getSupabaseClient();
@@ -667,12 +811,25 @@ export async function replaceHomepageProjects(
   });
 
   if (error) {
-    throw new ProjectConflictError("All 3 homepage projects must exist and be published.");
+    const msg = error.message || "";
+    if (msg.includes("not exist")) {
+      throw new ProjectConflictError("One or more selected projects do not exist.");
+    }
+    if (msg.includes("published")) {
+      throw new ProjectConflictError("All homepage projects must be published.");
+    }
+    if (msg.includes("distinct")) {
+      throw new ProjectConflictError("All homepage project IDs must be distinct.");
+    }
+    if (msg.includes("0 to 3") || msg.includes("max 3")) {
+      throw new ProjectConflictError("At most 3 projects can be featured on the homepage.");
+    }
+    throw new ProjectConflictError("All homepage projects must exist and be published (max 3).");
   }
 
   const { data, error: fetchError } = await supabase
     .from("projects")
-    .select("*")
+    .select("*, project_media(*)")
     .eq("is_featured_homepage", true)
     .order("homepage_order", { ascending: true });
 
@@ -687,7 +844,7 @@ export async function replaceHomepageProjects(
 
 /**
  * Permanently deletes a project only if it is in 'draft' or 'archived' status.
- * Synchronously cleans up any associated Storage assets before deleting the database record.
+ * Synchronously cleans up all associated Storage assets (from project_media and legacy columns).
  * If Storage cleanup fails, the database record is retained to prevent orphaned files.
  */
 export async function deleteProjectWithStorageCleanup(
@@ -698,7 +855,7 @@ export async function deleteProjectWithStorageCleanup(
 
   const { data: current, error: fetchError } = await supabase
     .from("projects")
-    .select("*")
+    .select("*, project_media(*)")
     .eq("id", id)
     .maybeSingle();
 
@@ -714,15 +871,17 @@ export async function deleteProjectWithStorageCleanup(
     throw new ProjectConflictError("Cannot delete a published project. Unpublish or archive it first.");
   }
 
-  // 1. Clean up Storage assets if any exist
-  const paths = [current.primary_image_path, current.secondary_image_path].filter(
+  // 1. Gather all Storage object paths from project_media and legacy fields
+  const mediaPaths = (current.project_media || []).map((m: ProjectMediaRow) => m.object_path).filter(Boolean);
+  const legacyPaths = [current.primary_image_path, current.secondary_image_path].filter(
     (p): p is string => Boolean(p && p.trim()),
   );
+  const allPaths = Array.from(new Set([...mediaPaths, ...legacyPaths]));
 
-  if (paths.length > 0) {
+  if (allPaths.length > 0) {
     const { error: storageError } = await supabase.storage
       .from("project-images")
-      .remove(paths);
+      .remove(allPaths);
 
     if (storageError) {
       throw new Error("Failed to delete project assets from storage.");
@@ -736,7 +895,4 @@ export async function deleteProjectWithStorageCleanup(
   }
 }
 
-/**
- * Backward-compatible alias for deleteProjectWithStorageCleanup.
- */
 export const deleteProjectWithoutAssets = deleteProjectWithStorageCleanup;

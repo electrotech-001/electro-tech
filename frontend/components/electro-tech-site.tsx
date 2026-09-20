@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { ProjectCards } from "./project-cards";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -26,7 +27,7 @@ import { QuoteInput, quoteSchema } from "@/lib/validation";
 const navItems = [
   ["About", "#about"],
   ["Services", "#services"],
-  ["Projects", "#projects"],
+  ["Projects", "/projects"],
   ["Process", "#process"],
   ["Contact", "#contact"],
 ] as const;
@@ -82,7 +83,7 @@ const technologies = [
 
 const footerCompany = [
   ["About", "#about"],
-  ["Projects", "#projects"],
+  ["Projects", "/projects"],
   ["Process", "#process"],
   ["Contact", "#contact"],
 ] as const;
@@ -577,7 +578,16 @@ export function ElectroTechSite() {
           </a>
           <nav className="desktop-nav" aria-label="Primary navigation">
             {navItems.map(([label, href]) => (
-              <a key={href} href={href} onClick={(e) => { e.preventDefault(); scrollToSection(href); }}>
+              <a
+                key={href}
+                href={href}
+                onClick={(e) => {
+                  if (href.startsWith("#")) {
+                    e.preventDefault();
+                    scrollToSection(href);
+                  }
+                }}
+              >
                 {label}
               </a>
             ))}
@@ -593,7 +603,17 @@ export function ElectroTechSite() {
           {menuOpen ? (
             <motion.nav id="mobile-menu" className="mobile-nav" aria-label="Mobile navigation" initial={reducedMotion ? false : { opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
               {navItems.map(([label, href]) => (
-                <a key={href} href={href} onClick={() => { setMenuOpen(false); scrollToSection(href); }}>
+                <a
+                  key={href}
+                  href={href}
+                  onClick={(e) => {
+                    setMenuOpen(false);
+                    if (href.startsWith("#")) {
+                      e.preventDefault();
+                      scrollToSection(href);
+                    }
+                  }}
+                >
                   {label}<LinkIcon />
                 </a>
               ))}
@@ -976,6 +996,11 @@ export function ElectroTechSite() {
         <section id="projects" className="projects section-shell section-pad">
           <SectionIntro label="OUR WORK" title="Selected projects" copy="Solar installations for homes, businesses, and institutions across Attock." />
           <ProjectCards />
+          <div style={{ display: "flex", justifyContent: "center", marginTop: "40px" }}>
+            <Link href="/projects" className="button button-dark">
+              View All Projects <ArrowRight size={15} className="link-icon" aria-hidden="true" />
+            </Link>
+          </div>
         </section>
 
         {/* PROCESS */}
@@ -1107,7 +1132,16 @@ export function ElectroTechSite() {
           <div className="footer-column">
             <h2>Company</h2>
             {footerCompany.map(([label, href]) => (
-              <a key={href} href={href} onClick={(e) => { e.preventDefault(); scrollToSection(href); }}>
+              <a
+                key={href}
+                href={href}
+                onClick={(e) => {
+                  if (href.startsWith("#")) {
+                    e.preventDefault();
+                    scrollToSection(href);
+                  }
+                }}
+              >
                 {label}
               </a>
             ))}
