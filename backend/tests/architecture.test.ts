@@ -77,3 +77,33 @@ test("backend security invariants: no custom login/signup endpoints, no password
   assert.equal(/console\.(log|info|warn|error)\(.*authHeader/i.test(authMiddleware), false);
   assert.equal(/console\.(log|info|warn|error)\(.*authorization/i.test(authMiddleware), false);
 });
+
+test("Phase 3D architecture: public project isolation, admin route protection, no upload routes yet", async () => {
+  const publicRoutes = await readFile(
+    join(process.cwd(), "src", "routes", "projects.ts"),
+    "utf8",
+  );
+  const adminRoutes = await readFile(
+    join(process.cwd(), "src", "routes", "admin-projects.ts"),
+    "utf8",
+  );
+
+  // 1. Public project endpoints do not permit mutations
+  assert.equal(publicRoutes.includes("router.post"), false);
+  assert.equal(publicRoutes.includes("router.put"), false);
+  assert.equal(publicRoutes.includes("router.patch"), false);
+  assert.equal(publicRoutes.includes("router.delete"), false);
+
+  // 2. Public project endpoints do not accept status filters
+  assert.equal(publicRoutes.toLowerCase().includes("statusfilter"), false);
+  assert.equal(publicRoutes.includes("query.status"), false);
+
+  // 3. Admin project routes require authenticateAdmin
+  assert.equal(adminRoutes.includes("authenticateAdmin"), true);
+  assert.equal(adminRoutes.includes("router.use(auth)"), true);
+
+  // 4. No image upload routes implemented yet (deferred to Phase 3E)
+  assert.equal(adminRoutes.includes("/images"), false);
+  assert.equal(adminRoutes.includes("multer"), false);
+  assert.equal(adminRoutes.includes("upload"), false);
+});

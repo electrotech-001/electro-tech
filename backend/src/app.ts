@@ -2,6 +2,8 @@ import cors, { type CorsOptions } from "cors";
 import express, { type ErrorRequestHandler, type RequestHandler } from "express";
 import multer from "multer";
 import { DEFAULT_OPERATIONAL_CONFIG, type RuntimeConfig } from "./config.js";
+import { createAdminProjectsRouter } from "./routes/admin-projects.js";
+import { createProjectsRouter } from "./routes/projects.js";
 import { createQuoteRouter, MAX_QUOTE_BODY_BYTES } from "./routes/quote.js";
 import { createSolarAnalyzerRouter, MAX_CALCULATE_BODY_BYTES, type SolarAnalyzerRouterDependencies } from "./routes/solar-analyzer.js";
 import type { QuoteEmailSender } from "./services/email.js";
@@ -10,6 +12,8 @@ type AppDependencies = {
   config: Pick<RuntimeConfig, "nodeEnv" | "frontendOrigin"> & Partial<Pick<RuntimeConfig, "geminiTimeoutMs" | "solarAnalyzerMaxFileMb" | "solarAnalyzerMaxFileBytes" | "solarAnalyzerExtractRateLimitMax" | "solarAnalyzerCalculateRateLimitMax" | "quoteRateLimitMax">>;
   extractBill?: SolarAnalyzerRouterDependencies["extractBill"];
   sendQuoteEmail?: QuoteEmailSender;
+  projectsRouter?: express.Router;
+  adminProjectsRouter?: express.Router;
 };
 
 function isLocalDevelopmentOrigin(origin: string): boolean {
@@ -26,8 +30,8 @@ function isLocalDevelopmentOrigin(origin: string): boolean {
 
 function createCorsOptions(config: AppDependencies["config"]): CorsOptions {
   return {
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     origin(origin, callback) {
       if (!origin) return callback(null, true);
       if (config.frontendOrigin && origin === config.frontendOrigin) return callback(null, true);
@@ -79,6 +83,15 @@ export function createApp(dependencies: AppDependencies) {
       ...(dependencies.extractBill ? { extractBill: dependencies.extractBill } : {}),
       config: operationalConfig,
     }),
+  );
+  app.use(
+    "/api/projects",
+    dependencies.projectsRouter ?? createProjectsRouter(),
+  );
+  app.use(
+    "/api/admin/projects",
+    express.json(),
+    dependencies.adminProjectsRouter ?? createAdminProjectsRouter(),
   );
 
   const errorHandler: ErrorRequestHandler = (error, _request, response, _next) => {
