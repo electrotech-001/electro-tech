@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { fetchAllPublishedProjects } from "@/lib/projects";
 import type { PublicProject } from "@/types/project";
+import { ProjectDetailModal } from "./project-detail-modal";
 
 const navLinks = [
   { label: "Home", href: "/" },
@@ -26,6 +27,7 @@ const navLinks = [
 
 export function ProjectsDirectory() {
   const [projects, setProjects] = useState<PublicProject[]>([]);
+  const [selectedProject, setSelectedProject] = useState<PublicProject | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -355,6 +357,18 @@ export function ProjectsDirectory() {
                 return (
                   <article
                     key={project.id}
+                    tabIndex={0}
+                    role="button"
+                    aria-haspopup="dialog"
+                    aria-label={`View details for ${project.title}`}
+                    onClick={() => setSelectedProject(project)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedProject(project);
+                      }
+                    }}
+                    className="project-directory-card"
                     style={{
                       backgroundColor: "var(--surface, #FFFFFF)",
                       border: "1px solid var(--border, #E6E4DF)",
@@ -363,7 +377,9 @@ export function ProjectsDirectory() {
                       boxShadow: "var(--shadow-subtle, 0 2px 10px rgba(17, 17, 15, 0.03))",
                       display: "flex",
                       flexDirection: "column",
-                      transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                      transition: "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
+                      cursor: "pointer",
+                      textAlign: "left",
                     }}
                   >
                     {/* Card Image Box */}
@@ -454,19 +470,48 @@ export function ProjectsDirectory() {
                         )}
                       </div>
 
-                      {/* Project Title */}
-                      <h3
+                      {/* Project Title & Action Icon */}
+                      <div
                         style={{
-                          fontSize: "1.35rem",
-                          fontWeight: 700,
-                          color: "var(--text, #111111)",
-                          lineHeight: 1.25,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          gap: "8px",
                           marginBottom: "14px",
-                          letterSpacing: "-0.02em",
                         }}
                       >
-                        {project.title}
-                      </h3>
+                        <h3
+                          style={{
+                            fontSize: "1.35rem",
+                            fontWeight: 700,
+                            color: "var(--text, #111111)",
+                            lineHeight: 1.25,
+                            margin: 0,
+                            letterSpacing: "-0.02em",
+                          }}
+                        >
+                          {project.title}
+                        </h3>
+                        <span
+                          aria-hidden="true"
+                          className="project-card-arrow"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: "32px",
+                            height: "32px",
+                            borderRadius: "9999px",
+                            backgroundColor: "var(--surface-subtle, #EFECE6)",
+                            color: "var(--dark, #11110F)",
+                            flexShrink: 0,
+                            marginTop: "2px",
+                            transition: "background-color 0.2s, color 0.2s, transform 0.2s",
+                          }}
+                        >
+                          <ArrowUpRight size={16} />
+                        </span>
+                      </div>
 
                       {/* Metadata Row: Client, Location, Size */}
                       <div
@@ -609,6 +654,12 @@ export function ProjectsDirectory() {
           </div>
         </div>
       </footer>
+
+      {/* Project Detail Modal Overlay */}
+      <ProjectDetailModal
+        project={selectedProject}
+        onClose={() => setSelectedProject(null)}
+      />
     </div>
   );
 }

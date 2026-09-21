@@ -136,6 +136,15 @@ export function ProjectEditPage({ projectId }: { projectId?: string }) {
     }
   };
 
+  const refreshProjectMedia = async (projectId: string) => {
+    try {
+      const data = await fetchAdminProjectById(projectId);
+      setProject(data);
+    } catch (err) {
+      console.error("Failed to refresh project data:", err);
+    }
+  };
+
   useEffect(() => {
     if (id) {
       loadProject(id);
@@ -748,7 +757,7 @@ export function ProjectEditPage({ projectId }: { projectId?: string }) {
           projectId={project.id}
           media={project.images || []}
           projectStatus={project.status}
-          onMediaChange={() => loadProject(project.id)}
+          onMediaChange={() => refreshProjectMedia(project.id)}
           disabled={isSaving || isOperatingLifecycle}
         />
       </div>

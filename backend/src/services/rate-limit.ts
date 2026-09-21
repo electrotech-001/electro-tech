@@ -39,11 +39,24 @@ export function createQuoteRateLimiter(limit: number = API_RATE_LIMITS.quote) {
   );
 }
 
+export const ADMIN_UPLOAD_RATE_LIMIT_WINDOW_MS =
+  DEFAULT_OPERATIONAL_CONFIG.adminImageUploadRateLimitWindowMs;
+
 export function createAdminImageUploadRateLimiter(
   limit: number = DEFAULT_OPERATIONAL_CONFIG.adminImageUploadRateLimitMax,
+  windowMs: number = DEFAULT_OPERATIONAL_CONFIG.adminImageUploadRateLimitWindowMs,
 ) {
-  return createApiRateLimiter(
+  return rateLimit({
+    windowMs,
     limit,
-    "Too many image upload attempts. Please try again later.",
-  );
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    keyGenerator: (request) => request.adminUser?.userId || request.ip || "admin-upload",
+    validate: { keyGeneratorIpFallback: false },
+    handler: (_request, response) =>
+      response.status(429).json({
+        code: "rate_limited",
+        message: "Too many image upload attempts. Please try again later.",
+      }),
+  });
 }

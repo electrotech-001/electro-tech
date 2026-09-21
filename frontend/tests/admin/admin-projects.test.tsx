@@ -1038,4 +1038,232 @@ describe("Phase 4B: Projects Management UI", () => {
       window.history.replaceState({}, "", initialPath || "/");
     });
   });
+
+  describe("ProjectMediaManager and ProjectEditPage Image Upload Flow", () => {
+    it("Add Images, Upload, and Remove controls have type='button' and do not submit form", async () => {
+      const user = userEvent.setup();
+      const mockSubmit = vi.fn((e) => e.preventDefault());
+      const onMediaChange = vi.fn();
+
+      const mockMedia: ProjectImageItem[] = [];
+
+      render(
+        <form onSubmit={mockSubmit}>
+          <ProjectMediaManager
+            projectId="proj-form-test"
+            media={mockMedia}
+            projectStatus="draft"
+            onMediaChange={onMediaChange}
+          />
+        </form>,
+      );
+
+      // Verify Add Images button
+      const addImagesBtn = screen.getByRole("button", { name: /Add Images/i });
+      expect(addImagesBtn.getAttribute("type")).toBe("button");
+
+      // Clicking Add Images must not trigger form submit
+      await user.click(addImagesBtn);
+      expect(mockSubmit).not.toHaveBeenCalled();
+
+      // Add a file to queue
+      const fileInput = screen.getByLabelText(/Add Images/i) as HTMLInputElement;
+      const file = new File(["dummy"], "sample.jpg", { type: "image/jpeg" });
+      await user.upload(fileInput, [file]);
+
+      // Verify Upload button
+      const uploadBtn = screen.getByRole("button", { name: /Upload 1 Image/i });
+      expect(uploadBtn.getAttribute("type")).toBe("button");
+
+      // Verify Remove button
+      const removeBtn = screen.getByRole("button", { name: /Remove/i });
+      expect(removeBtn.getAttribute("type")).toBe("button");
+
+      // Clicking Remove must not trigger form submit
+      await user.click(removeBtn);
+      expect(mockSubmit).not.toHaveBeenCalled();
+    });
+
+    it("batch upload preserves page state and form input without unmounting or reloading", async () => {
+      const user = userEvent.setup();
+      const { uploadAdminProjectMedia } = await import("@/lib/admin/api");
+      vi.mocked(uploadAdminProjectMedia).mockResolvedValue({
+        id: "new-media-uuid",
+        projectId: "proj-edit-test",
+        url: "https://example.com/uploaded.webp",
+        mimeType: "image/webp",
+        altText: "Primary",
+        caption: null,
+        isPrimary: true,
+        sortOrder: 0,
+        createdAt: "2026-09-01T00:00:00Z",
+        updatedAt: "2026-09-01T00:00:00Z",
+      });
+
+      const sampleProject: AdminProject = {
+        ...mockProjects[0],
+        id: "proj-edit-test",
+        title: "Original Project Title",
+        images: [],
+      };
+
+      vi.mocked(fetchAdminProjectById).mockResolvedValue(sampleProject);
+
+      render(<ProjectEditPage projectId="proj-edit-test" />);
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue("Original Project Title")).toBeDefined();
+      });
+
+      // Type uncommitted changes in title
+      const titleInput = screen.getByLabelText(/Project Title/i);
+      await user.clear(titleInput);
+      await user.type(titleInput, "Uncommitted Modified Title");
+      expect((titleInput as HTMLInputElement).value).toBe("Uncommitted Modified Title");
+
+      // Select 2 images for upload
+      const fileInput = screen.getByLabelText(/Add Images/i) as HTMLInputElement;
+      const file1 = new File(["1"], "photo-1.jpg", { type: "image/jpeg" });
+      const file2 = new File(["2"], "photo-2.png", { type: "image/png" });
+      await user.upload(fileInput, [file1, file2]);
+
+      const uploadBtn = screen.getByRole("button", { name: /Upload 2 Images/i });
+      await user.click(uploadBtn);
+
+      await waitFor(() => {
+        expect(uploadAdminProjectMedia).toHaveBeenCalledTimes(2);
+      });
+
+      // Crucial: The uncommitted title value must still be intact because page did NOT unmount or reload!
+      expect((titleInput as HTMLInputElement).value).toBe("Uncommitted Modified Title");
+    });
+
+    it("one failed upload does not reload page, exposes Retry and Remove, and preserves successful uploads", async () => {
+      const user = userEvent.setup();
+      const onMediaChange = vi.fn();
+      const { uploadAdminProjectMedia } = await import("@/lib/admin/api");
+
+      // File 1 succeeds, File 2 fails with network error
+      vi.mocked(uploadAdminProjectMedia)
+        .mockResolvedValueOnce({
+          id: "m-1",
+          projectId: "proj-1",
+          url: "https://example.com/1.webp",
+          mimeType: "image/webp",
+          altText: "Primary",
+          caption: null,
+          isPrimary: true,
+          sortOrder: 0,
+          createdAt: "2026-09-01T00:00:00Z",
+          updatedAt: "2026-09-01T00:00:00Z",
+        })
+        .mockRejectedValueOnce(new Error("Network timeout"));
+
+      render(
+        <ProjectMediaManager
+          projectId="proj-1"
+          media={[]}
+          projectStatus="draft"
+          onMediaChange={onMediaChange}
+        />,
+      );
+
+      const fileInput = screen.getByLabelText(/Add Images/i) as HTMLInputElement;
+      const file1 = new File(["1"], "file1.jpg", { type: "image/jpeg" });
+      const file2 = new File(["2"], "file2.jpg", { type: "image/jpeg" });
+      await user.upload(fileInput, [file1, file2]);
+
+      const uploadBtn = screen.getByRole("button", { name: /Upload 2 Images/i });
+      await user.click(uploadBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Upload failed for "file2.jpg": Network timeout/i)).toBeDefined();
+      });
+
+      // File 1 was successful and removed from queue, File 2 failed and remains in queue
+      expect(screen.queryByText("file1.jpg")).toBeNull();
+      expect(screen.getByText("file2.jpg")).toBeDefined();
+      expect(screen.getByText("Failed")).toBeDefined();
+
+      // Retry button is available for the failed file
+      const retryBtn = screen.getByRole("button", { name: /Retry/i });
+      expect(retryBtn.getAttribute("type")).toBe("button");
+
+      // Mock successful retry
+      vi.mocked(uploadAdminProjectMedia).mockResolvedValueOnce({
+        id: "m-2",
+        projectId: "proj-1",
+        url: "https://example.com/2.webp",
+        mimeType: "image/webp",
+        altText: null,
+        caption: null,
+        isPrimary: false,
+        sortOrder: 1,
+        createdAt: "2026-09-01T00:00:00Z",
+        updatedAt: "2026-09-01T00:00:00Z",
+      });
+
+      await user.click(retryBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText(/"file2.jpg" uploaded successfully\./i)).toBeDefined();
+        expect(screen.queryByText("file2.jpg")).toBeNull();
+      });
+    });
+
+    it("HTTP 429 rate limit stops subsequent queue requests and preserves remaining queue items", async () => {
+      const user = userEvent.setup();
+      const onMediaChange = vi.fn();
+      const { uploadAdminProjectMedia, ApiError } = await import("@/lib/admin/api");
+
+      // File 1 succeeds, File 2 receives 429
+      vi.mocked(uploadAdminProjectMedia)
+        .mockResolvedValueOnce({
+          id: "m-1",
+          projectId: "proj-1",
+          url: "https://example.com/1.webp",
+          mimeType: "image/webp",
+          altText: "Primary",
+          caption: null,
+          isPrimary: true,
+          sortOrder: 0,
+          createdAt: "2026-09-01T00:00:00Z",
+          updatedAt: "2026-09-01T00:00:00Z",
+        })
+        .mockRejectedValueOnce(
+          new ApiError("Too many image upload attempts. Please try again later.", 429, { code: "rate_limited" }),
+        );
+
+      render(
+        <ProjectMediaManager
+          projectId="proj-1"
+          media={[]}
+          projectStatus="draft"
+          onMediaChange={onMediaChange}
+        />,
+      );
+
+      const fileInput = screen.getByLabelText(/Add Images/i) as HTMLInputElement;
+      const file1 = new File(["1"], "batch-1.jpg", { type: "image/jpeg" });
+      const file2 = new File(["2"], "batch-2.jpg", { type: "image/jpeg" });
+      const file3 = new File(["3"], "batch-3.jpg", { type: "image/jpeg" });
+      await user.upload(fileInput, [file1, file2, file3]);
+
+      const uploadBtn = screen.getByRole("button", { name: /Upload 3 Images/i });
+      await user.click(uploadBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText("Too many image upload attempts. Please try again later.")).toBeDefined();
+      });
+
+      // uploadAdminProjectMedia must NOT be called for file 3 because 429 broke the loop
+      expect(uploadAdminProjectMedia).toHaveBeenCalledTimes(2);
+
+      // File 1 (done) is cleared; File 2 (failed) and File 3 (waiting) remain preserved in queue
+      expect(screen.queryByText("batch-1.jpg")).toBeNull();
+      expect(screen.getByText("batch-2.jpg")).toBeDefined();
+      expect(screen.getByText("batch-3.jpg")).toBeDefined();
+      expect(screen.getByText("Waiting")).toBeDefined();
+    });
+  });
 });

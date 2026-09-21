@@ -115,6 +115,50 @@ export function ProjectMediaManager({
     setPendingQueue((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const handleRetryItem = async (id: string) => {
+    if (isUploading) return;
+    const item = pendingQueue.find((q) => q.id === id);
+    if (!item) return;
+
+    setError(null);
+    setSuccess(null);
+    setIsUploading(true);
+
+    setPendingQueue((prev) =>
+      prev.map((q) => (q.id === id ? { ...q, status: "uploading", error: undefined } : q)),
+    );
+
+    const hasPrimary = sortedImages.some((img) => img.isPrimary);
+    const isFirst = !hasPrimary && sortedImages.length === 0;
+    const defaultAlt = isFirst ? "Project primary image" : "";
+
+    try {
+      await uploadAdminProjectMedia(projectId, item.file, {
+        altText: defaultAlt || undefined,
+        isPrimary: isFirst,
+      });
+
+      setPendingQueue((prev) => prev.filter((q) => q.id !== id));
+      setSuccess(`"${item.name}" uploaded successfully.`);
+      await onMediaChange();
+    } catch (err) {
+      const isRateLimited =
+        (err instanceof ApiError && err.status === 429) ||
+        (err instanceof Error && /429|rate limit|too many image upload/i.test(err.message));
+      const msg = isRateLimited
+        ? "Too many image upload attempts. Please try again later."
+        : err instanceof Error
+        ? err.message
+        : "Upload failed";
+      setPendingQueue((prev) =>
+        prev.map((q) => (q.id === id ? { ...q, status: "error", error: msg } : q)),
+      );
+      setError(isRateLimited ? msg : `Upload failed for "${item.name}": ${msg}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleUploadQueue = async () => {
     const waitingItems = pendingQueue.filter(
       (item) => item.status === "waiting" || item.status === "error",
@@ -135,7 +179,8 @@ export function ProjectMediaManager({
         ),
       );
 
-      const isFirst = currentImageCount === 0;
+      const hasPrimary = sortedImages.some((img) => img.isPrimary);
+      const isFirst = !hasPrimary && currentImageCount === 0;
       const defaultAlt = isFirst ? "Project primary image" : "";
 
       try {
@@ -150,11 +195,24 @@ export function ProjectMediaManager({
         );
       } catch (err) {
         anyError = true;
-        const msg = err instanceof Error ? err.message : "Upload failed";
+        const isRateLimited =
+          (err instanceof ApiError && err.status === 429) ||
+          (err instanceof Error && /429|rate limit|too many image upload/i.test(err.message));
+        const msg = isRateLimited
+          ? "Too many image upload attempts. Please try again later."
+          : err instanceof Error
+          ? err.message
+          : "Upload failed";
+
         setPendingQueue((prev) =>
           prev.map((q) => (q.id === item.id ? { ...q, status: "error", error: msg } : q)),
         );
-        setError(`Upload failed for "${item.name}": ${msg}`);
+        setError(isRateLimited ? msg : `Upload failed for "${item.name}": ${msg}`);
+
+        // If rate-limited, stop blindly firing further queued requests
+        if (isRateLimited) {
+          break;
+        }
       }
     }
 
@@ -303,11 +361,14 @@ export function ProjectMediaManager({
               multiple
               style={{ display: "none" }}
               id="image-upload-input"
+              aria-label="Add Images"
               disabled={disabled || isUploading}
             />
-            <label
-              htmlFor="image-upload-input"
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
               className={`btn btn-primary ${disabled || isUploading ? "disabled" : ""}`}
+              disabled={disabled || isUploading}
               style={{ cursor: disabled || isUploading ? "not-allowed" : "pointer" }}
             >
               {isUploading ? (
@@ -324,7 +385,7 @@ export function ProjectMediaManager({
                   Add Images
                 </>
               )}
-            </label>
+            </button>
           </div>
         )}
       </div>
@@ -437,17 +498,28 @@ export function ProjectMediaManager({
                     <span className="badge badge-published">Uploaded</span>
                   )}
                   {item.status === "error" && (
-                    <span
-                      className="badge"
-                      style={{
-                        backgroundColor: "#fef2f2",
-                        color: "#dc2626",
-                        border: "1px solid #fecaca",
-                      }}
-                      title={item.error}
-                    >
-                      Failed
-                    </span>
+                    <>
+                      <span
+                        className="badge"
+                        style={{
+                          backgroundColor: "#fef2f2",
+                          color: "#dc2626",
+                          border: "1px solid #fecaca",
+                        }}
+                        title={item.error}
+                      >
+                        Failed
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => handleRetryItem(item.id)}
+                        disabled={isUploading}
+                        style={{ padding: "0.2rem 0.5rem", fontSize: "0.75rem" }}
+                      >
+                        Retry
+                      </button>
+                    </>
                   )}
 
                   {item.status !== "uploading" && (
@@ -490,13 +562,15 @@ export function ProjectMediaManager({
           <p className="empty-state-desc">
             Upload high-resolution project photography. At least one image is required to publish this project.
           </p>
-          <label
-            htmlFor="image-upload-input"
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
             className="btn btn-secondary"
-            style={{ cursor: "pointer", display: "inline-flex" }}
+            disabled={disabled || isUploading}
+            style={{ cursor: disabled || isUploading ? "not-allowed" : "pointer", display: "inline-flex" }}
           >
             Select Images
-          </label>
+          </button>
         </div>
       ) : (
         <div className="media-list" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>

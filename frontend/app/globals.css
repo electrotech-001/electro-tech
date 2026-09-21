@@ -2701,4 +2701,83 @@ p:last-child {
     transition: none;
     transform: none !important;
   }
+  .project-modal-backdrop,
+  .project-modal-panel {
+    animation: none !important;
+  }
+}
+
+/* ============================================================
+   PROJECTS DIRECTORY & MODAL STYLES
+   ============================================================ */
+.project-directory-card {
+  outline: none;
+}
+
+.project-directory-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card, 0 4px 20px rgba(17, 17, 15, 0.08)) !important;
+  border-color: rgba(245, 196, 0, 0.6) !important;
+}
+
+.project-directory-card:hover .project-card-arrow {
+  background-color: var(--accent, #F5C400) !important;
+  color: var(--dark, #11110F) !important;
+  transform: translate(1px, -1px);
+}
+
+.project-directory-card:focus-visible {
+  outline: 2px solid var(--accent, #F5C400);
+  outline-offset: 3px;
+}
+
+.project-modal-backdrop {
+  animation: projectModalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.project-modal-panel {
+  animation: projectModalScaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.project-modal-close-btn:hover {
+  background-color: #FFFFFF !important;
+  transform: scale(1.05);
+}
+
+.project-modal-close-btn:focus-visible {
+  outline: 2px solid var(--accent, #F5C400);
+  outline-offset: 2px;
+}
+
+@keyframes projectModalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes projectModalScaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .project-modal-panel {
+    max-height: 94vh !important;
+    border-radius: 12px !important;
+  }
+  .project-modal-body {
+    padding: 18px 16px !important;
+  }
+  .project-modal-gallery {
+    padding: 10px 16px !important;
+  }
 }
