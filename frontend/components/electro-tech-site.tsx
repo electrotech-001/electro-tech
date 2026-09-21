@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { ProjectCards } from "./project-cards";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -310,7 +309,7 @@ function ArchitectureDiagram({ active }: { active: SolarType }) {
               <GridTowerIcon size={22} />
             </div>
             <div className="node-text-block">
-              <div className="node-title">Grid</div>
+              <div className="node-title">Grid Feeding</div>
               <div className="node-subtitle">Provides backup power and enables energy export</div>
             </div>
           </div>
@@ -997,9 +996,9 @@ export function ElectroTechSite() {
           <SectionIntro label="OUR WORK" title="Selected projects" copy="Solar installations for homes, businesses, and institutions across Attock." />
           <ProjectCards />
           <div style={{ display: "flex", justifyContent: "center", marginTop: "40px" }}>
-            <Link href="/projects" className="button button-dark">
+            <a href="/projects" className="button button-dark">
               View All Projects <ArrowRight size={15} className="link-icon" aria-hidden="true" />
-            </Link>
+            </a>
           </div>
         </section>
 

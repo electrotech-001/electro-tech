@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -30,6 +30,42 @@ export function ProjectsDirectory() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [headerVisible, setHeaderVisible] = useState(true);
+  const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const currentScrollY = window.scrollY;
+      setScrolled(currentScrollY > 20);
+
+      if (currentScrollY <= 40) {
+        setHeaderVisible(true);
+      } else if (currentScrollY > lastScrollY.current + 6) {
+        setHeaderVisible(false);
+      } else if (currentScrollY < lastScrollY.current - 6) {
+        setHeaderVisible(true);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && menuOpen) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = "";
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
 
   useEffect(() => {
     let mounted = true;
@@ -71,125 +107,77 @@ export function ProjectsDirectory() {
     >
       {/* HEADER */}
       <header
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 100,
-          backgroundColor: "rgba(246, 245, 242, 0.95)",
-          backdropFilter: "blur(12px)",
-          borderBottom: "1px solid var(--border, #E6E4DF)",
-        }}
+        className={`site-header ${scrolled ? "is-scrolled" : ""} ${!headerVisible && !menuOpen ? "is-hidden" : ""} ${menuOpen ? "has-open-menu" : ""}`}
       >
-        <div
-          style={{
-            maxWidth: "var(--max, 1380px)",
-            margin: "0 auto",
-            padding: "0 24px",
-            height: "76px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <Link href="/" style={{ display: "flex", alignItems: "center" }}>
+        <div className="header-inner">
+          <a className="brand" href="/" aria-label="Electro Tech home">
             <Image
               src="/logos/electrotech-horizontal.png"
-              alt="Electro Tech Logo"
-              width={180}
-              height={36}
-              style={{ objectFit: "contain", height: "32px", width: "auto" }}
+              width={407}
+              height={112}
+              alt="Electro Tech — Electrical & Solar Solutions"
               priority
             />
-          </Link>
+          </a>
 
           {/* Desktop Navigation */}
-          <nav
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "28px",
-            }}
-            className="desktop-nav-projects"
-          >
+          <nav className="desktop-nav desktop-nav-projects" aria-label="Primary navigation">
             {navLinks.map((item) => (
-              <Link
+              <a
                 key={item.href}
                 href={item.href}
                 style={{
-                  fontSize: "0.85rem",
-                  fontWeight: item.active ? 600 : 500,
-                  color: item.active ? "var(--accent-hover, #D4A017)" : "var(--text, #111111)",
-                  textDecoration: "none",
-                  transition: "color 0.15s ease",
+                  color: item.active ? "var(--accent-hover, #D4A017)" : undefined,
+                  fontWeight: item.active ? 600 : undefined,
                 }}
               >
                 {item.label}
-              </Link>
+              </a>
             ))}
-            <Link
-              href="/#contact"
-              className="button button-dark"
-              style={{ padding: "8px 18px", fontSize: "0.82rem" }}
-            >
-              Request a Solar Quote <ArrowUpRight size={14} className="link-icon" aria-hidden="true" />
-            </Link>
           </nav>
+
+          <a className="button button-dark header-pill-cta" href="/#contact">
+            Request a Solar Quote <ArrowUpRight size={15} className="link-icon" aria-hidden="true" />
+          </a>
 
           {/* Mobile Menu Toggle */}
           <button
             type="button"
-            className="mobile-menu-btn"
-            onClick={() => setMenuOpen(!menuOpen)}
-            aria-label={menuOpen ? "Close menu" : "Open menu"}
-            style={{
-              background: "none",
-              border: "none",
-              padding: "8px",
-              cursor: "pointer",
-              color: "var(--text, #111111)",
-              display: "none",
-            }}
+            className="menu-button"
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={menuOpen}
+            aria-controls="mobile-menu"
           >
-            {menuOpen ? <X size={24} /> : <Menu size={24} />}
+            <span /><span />
           </button>
         </div>
 
         {/* Mobile Dropdown */}
         {menuOpen && (
-          <div
-            style={{
-              padding: "16px 24px 24px",
-              backgroundColor: "var(--background, #F6F5F2)",
-              borderBottom: "1px solid var(--border, #E6E4DF)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "16px",
-            }}
-          >
+          <nav id="mobile-menu" className="mobile-nav" aria-label="Mobile navigation">
             {navLinks.map((item) => (
-              <Link
+              <a
                 key={item.href}
                 href={item.href}
                 onClick={() => setMenuOpen(false)}
                 style={{
-                  fontSize: "1rem",
-                  fontWeight: item.active ? 600 : 500,
-                  color: item.active ? "var(--accent-hover, #D4A017)" : "var(--text, #111111)",
-                  textDecoration: "none",
+                  color: item.active ? "var(--accent-hover, #D4A017)" : undefined,
+                  fontWeight: item.active ? 600 : undefined,
                 }}
               >
                 {item.label}
-              </Link>
+                <ArrowUpRight className="link-icon" size={16} strokeWidth={1.8} aria-hidden="true" />
+              </a>
             ))}
-            <Link
+            <a
               href="/#contact"
-              className="button button-dark"
+              className="button button-dark mobile-cta"
               onClick={() => setMenuOpen(false)}
-              style={{ textAlign: "center", marginTop: "8px" }}
             >
-              Request a Solar Quote
-            </Link>
-          </div>
+              Request a Solar Quote <ArrowUpRight size={15} aria-hidden="true" />
+            </a>
+          </nav>
         )}
       </header>
 
@@ -567,9 +555,9 @@ export function ProjectsDirectory() {
               Tell us about your project and Electro Tech can review your requirements, inspect your
               electrical infrastructure, and provide an engineered solar proposal.
             </p>
-            <Link href="/#contact" className="button button-dark">
+            <a href="/#contact" className="button button-dark">
               Request a Solar Quote <ArrowRight size={15} className="link-icon" aria-hidden="true" />
-            </Link>
+            </a>
           </div>
         </section>
       </main>

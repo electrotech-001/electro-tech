@@ -150,4 +150,69 @@ describe("ProjectsDirectoryPage (/projects)", () => {
       expect(screen.getByRole("button", { name: /try again/i })).toBeDefined();
     });
   });
+
+  it("renders navbar navigation links with correct destinations and active state", async () => {
+    vi.mocked(fetchAllPublishedProjects).mockResolvedValueOnce(mockAllPublishedProjects);
+
+    const { container } = render(<ProjectsDirectoryPage />);
+
+    // Desktop nav
+    const desktopNav = container.querySelector("nav.desktop-nav-projects");
+    expect(desktopNav).toBeDefined();
+
+    const expectedTargets = [
+      { label: "Home", href: "/" },
+      { label: "About", href: "/#about" },
+      { label: "Services", href: "/#services" },
+      { label: "Projects", href: "/projects", active: true },
+      { label: "Process", href: "/#process" },
+      { label: "Contact", href: "/#contact" },
+    ];
+
+    const desktopAnchors = Array.from(desktopNav?.querySelectorAll("a") ?? []);
+    for (const expected of expectedTargets) {
+      const anchor = desktopAnchors.find((a) => a.textContent?.trim() === expected.label);
+      expect(anchor).toBeDefined();
+      expect(anchor?.getAttribute("href")).toBe(expected.href);
+      if (expected.active) {
+        expect(anchor?.style.fontWeight).toBe("600");
+      }
+    }
+
+    // Header structure matching homepage
+    const header = container.querySelector("header.site-header");
+    expect(header).toBeDefined();
+    const headerInner = container.querySelector(".header-inner");
+    expect(headerInner).toBeDefined();
+
+    // Logo anchor
+    const logoAnchor = container.querySelector("header a.brand");
+    expect(logoAnchor?.getAttribute("href")).toBe("/");
+
+    // Menu button
+    const menuButton = container.querySelector("button.menu-button");
+    expect(menuButton).toBeDefined();
+  });
+
+  it("renders both Request a Solar Quote CTA buttons with href='/#contact' as semantic anchors", async () => {
+    vi.mocked(fetchAllPublishedProjects).mockResolvedValueOnce(mockAllPublishedProjects);
+
+    const { container } = render(<ProjectsDirectoryPage />);
+
+    // 1. Desktop navbar CTA button (header-pill-cta matching homepage)
+    const navbarCta = container.querySelector("header a.header-pill-cta");
+    expect(navbarCta).toBeDefined();
+    expect(navbarCta?.tagName.toLowerCase()).toBe("a");
+    expect(navbarCta?.getAttribute("href")).toBe("/#contact");
+    expect(navbarCta?.textContent).toContain("Request a Solar Quote");
+
+    // 2. Bottom CTA section button
+    const ctaSection = container.querySelector("section:has(.eyebrow)");
+    const allCtaButtons = Array.from(container.querySelectorAll("a.button.button-dark"));
+    const bottomCta = allCtaButtons.find((btn) => btn.closest("section") !== null && btn.textContent?.includes("Request a Solar Quote") && !btn.closest("nav") && !btn.classList.contains("header-pill-cta"));
+    expect(bottomCta).toBeDefined();
+    expect(bottomCta?.tagName.toLowerCase()).toBe("a");
+    expect(bottomCta?.getAttribute("href")).toBe("/#contact");
+    expect(bottomCta?.textContent).toContain("Request a Solar Quote");
+  });
 });

@@ -64,6 +64,9 @@ test("server-renders the complete Electro Tech page", async () => {
   assert.match(html, /aria-label="Chat on WhatsApp"/);
   assert.match(html, /stroke="#25D366"/);
   assert.match(html, /fill="none"/);
+  assert.match(html, /<div class="node-title">\s*Grid Feeding\s*<\/div>/);
+  assert.doesNotMatch(html, /<div class="node-title">\s*Grid\s*<\/div>/);
+  assert.match(html, /Provides backup power and enables energy export/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
 });
 
@@ -117,7 +120,19 @@ test("server-renders the dedicated Projects Directory route", async () => {
   assert.match(html, /OUR WORK/);
   assert.match(html, /Home/);
   assert.match(html, /Request a Solar Quote/);
+  assert.match(html, /<a[^>]+href="\/"[^>]*>Home<\/a>/);
+  assert.match(html, /<a[^>]+href="\/#about"[^>]*>About<\/a>/);
+  assert.match(html, /<a[^>]+href="\/#services"[^>]*>Services<\/a>/);
+  assert.match(html, /<a[^>]+href="\/projects"[^>]*>Projects<\/a>/);
+  assert.match(html, /<a[^>]+href="\/#process"[^>]*>Process<\/a>/);
+  assert.match(html, /<a[^>]+href="\/#contact"[^>]*>Contact<\/a>/);
+  assert.match(html, /<a[^>]+href="\/#contact"[^>]*class="button button-dark"[^>]*>\s*Request a Solar Quote/);
+  assert.match(html, /class="site-header/);
+  assert.match(html, /class="header-inner"/);
+  assert.match(html, /class="brand"/);
+  assert.match(html, /class="button button-dark header-pill-cta"/);
 });
+
 
 test("server-renders the private /admin/login route with noindex robots", async () => {
   const response = await render("/admin/login");
@@ -143,4 +158,12 @@ test("public pages do not expose /admin in navigation, links, or sitemap referen
   const projectsRes = await render("/projects");
   const projectsHtml = await projectsRes.text();
   assert.doesNotMatch(projectsHtml, /href="\/admin/);
+});
+
+test("homepage View All Projects control links to /projects", async () => {
+  const response = await render("/");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /<a\s+href="\/projects"\s+class="button button-dark">\s*View All Projects/);
+  assert.doesNotMatch(html, /href="#projects"[^>]*>View All Projects/);
 });
