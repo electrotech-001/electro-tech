@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { fetchAdminProjects } from "../../lib/admin/api";
 import { StatusBadge } from "./StatusBadge";
 import type { AdminProject } from "../../types/admin/project";
@@ -60,12 +59,12 @@ export function DashboardPage() {
           <p>Monitor, manage, and publish commercial & residential solar installations</p>
         </div>
         <div className="page-actions">
-          <Link href="/admin/projects/new" className="btn btn-primary">
+          <a href="/admin/projects/new" className="btn btn-primary">
             + Create Project
-          </Link>
-          <Link href="/admin/projects" className="btn btn-secondary">
+          </a>
+          <a href="/admin/projects" className="btn btn-secondary">
             View All Projects
-          </Link>
+          </a>
         </div>
       </div>
 
@@ -117,9 +116,9 @@ export function DashboardPage() {
                 <h2 className="card-title">Recently Updated Projects</h2>
                 <p className="card-desc">Quick access to recently modified installations</p>
               </div>
-              <Link href="/admin/projects" className="btn btn-secondary btn-sm">
+              <a href="/admin/projects" className="btn btn-secondary btn-sm">
                 See all
-              </Link>
+              </a>
             </div>
 
             {recentProjects.length === 0 ? (
@@ -128,9 +127,9 @@ export function DashboardPage() {
                 <p className="empty-state-desc">
                   Get started by creating your first solar project record.
                 </p>
-                <Link href="/admin/projects/new" className="btn btn-primary">
+                <a href="/admin/projects/new" className="btn btn-primary">
                   Create Project
-                </Link>
+                </a>
               </div>
             ) : (
               <div className="table-container">
@@ -169,12 +168,12 @@ export function DashboardPage() {
                           </td>
                           <td>
                             <div className="project-title-cell">
-                              <Link
+                              <a
                                 href={`/admin/projects/${project.id}/edit`}
                                 className="project-title-link"
                               >
                                 {project.title}
-                              </Link>
+                              </a>
                               <span className="project-slug-text">
                                 /{project.slug}
                               </span>
@@ -193,18 +192,18 @@ export function DashboardPage() {
                           </td>
                           <td>
                             <div className="table-actions">
-                              <Link
+                              <a
                                 href={`/admin/projects/${project.id}/preview`}
                                 className="btn btn-secondary btn-sm"
                               >
                                 Preview
-                              </Link>
-                              <Link
+                              </a>
+                              <a
                                 href={`/admin/projects/${project.id}/edit`}
                                 className="btn btn-secondary btn-sm"
                               >
                                 Edit
-                              </Link>
+                              </a>
                             </div>
                           </td>
                         </tr>

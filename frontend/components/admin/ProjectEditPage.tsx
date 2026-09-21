@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   archiveAdminProject,
@@ -42,7 +41,18 @@ function slugify(text: string): string {
 
 export function ProjectEditPage({ projectId }: { projectId?: string }) {
   const params = useParams();
-  const id = projectId || (params?.id as string);
+  const pathnameFallback =
+    typeof window !== "undefined"
+      ? window.location.pathname.match(/\/admin\/projects\/([^/]+)\/(?:edit|preview)/)?.[1]
+      : undefined;
+  const paramId =
+    typeof params?.id === "string"
+      ? params.id
+      : Array.isArray(params?.id)
+        ? params.id[0]
+        : undefined;
+  const rawId = (typeof projectId === "string" && projectId.trim()) || paramId || pathnameFallback;
+  const id = typeof rawId === "string" ? rawId.trim() : "";
   const router = useRouter();
 
   const [project, setProject] = useState<AdminProject | null>(null);
@@ -417,9 +427,9 @@ export function ProjectEditPage({ projectId }: { projectId?: string }) {
         <div className="empty-state">
           <h2 className="empty-state-title">Project Not Found</h2>
           <p className="empty-state-desc">The requested project ID does not exist.</p>
-          <Link href="/admin/projects" className="btn btn-primary">
+          <a href="/admin/projects" className="btn btn-primary">
             Back to Projects
-          </Link>
+          </a>
         </div>
       </div>
     );
@@ -430,9 +440,9 @@ export function ProjectEditPage({ projectId }: { projectId?: string }) {
       <div className="page-header">
         <div className="page-title-group">
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem" }}>
-            <Link href="/admin/projects" className="btn btn-secondary btn-sm">
+            <a href="/admin/projects" className="btn btn-secondary btn-sm">
               &larr; Projects
-            </Link>
+            </a>
             <StatusBadge
               status={project.status}
               isFeaturedHomepage={project.isFeaturedHomepage}
@@ -450,13 +460,13 @@ export function ProjectEditPage({ projectId }: { projectId?: string }) {
         </div>
 
         <div className="page-actions">
-          <Link
+          <a
             href={`/admin/projects/${project.id}/preview`}
             className="btn btn-secondary"
             title="Preview how this project looks on public site"
           >
             Preview Site Card
-          </Link>
+          </a>
         </div>
       </div>
 

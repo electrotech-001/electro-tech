@@ -12,10 +12,15 @@ export default async function AdminProjectPreviewRoute({
 }: {
   params: Promise<{ id: string }> | { id: string };
 }) {
-  const resolvedParams = await Promise.resolve(params);
+  const resolvedParams = (await Promise.resolve(params)) ?? {};
+  const projectId =
+    typeof resolvedParams === "object" && resolvedParams !== null
+      ? (resolvedParams as { id?: string }).id
+      : undefined;
+
   return (
     <AdminProtectedShell>
-      <ProjectPreviewPage projectId={resolvedParams.id} />
+      <ProjectPreviewPage projectId={projectId} />
     </AdminProtectedShell>
   );
 }

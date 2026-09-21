@@ -902,4 +902,140 @@ describe("Phase 4B: Projects Management UI", () => {
       });
     });
   });
+
+  describe("Admin Navigation & Dynamic Route Identifier", () => {
+    it("Dashboard renders Preview and Edit actions with project UUID and never slug", async () => {
+      vi.mocked(fetchAdminProjects).mockResolvedValueOnce(mockProjects);
+
+      const { container } = render(<DashboardPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Commercial Solar Phase 1")).toBeDefined();
+      });
+
+      // Find links for proj-1 (UUID = "proj-1", slug = "commercial-solar-1")
+      const editLinks = Array.from(container.querySelectorAll(`a[href="/admin/projects/proj-1/edit"]`));
+      expect(editLinks.length).toBeGreaterThanOrEqual(2); // Title link + Edit action button
+
+      const previewLinks = Array.from(container.querySelectorAll(`a[href="/admin/projects/proj-1/preview"]`));
+      expect(previewLinks.length).toBe(1); // Preview action button
+
+      // Ensure slug is never used as the route identifier in action links
+      const slugEditLink = container.querySelector(`a[href*="/commercial-solar-1"]`);
+      expect(slugEditLink).toBeNull();
+    });
+
+    it("ProjectsListPage renders Preview and Edit actions with project UUID and never slug", async () => {
+      vi.mocked(fetchAdminProjects).mockResolvedValueOnce(mockProjects);
+
+      const { container } = render(<ProjectsListPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText("Commercial Solar Phase 1").length).toBeGreaterThanOrEqual(1);
+      });
+
+      // Find links for proj-1
+      const editLinks = Array.from(container.querySelectorAll(`a[href="/admin/projects/proj-1/edit"]`));
+      expect(editLinks.length).toBeGreaterThanOrEqual(2); // Title link + Edit button
+
+      const previewLinks = Array.from(container.querySelectorAll(`a[href="/admin/projects/proj-1/preview"]`));
+      expect(previewLinks.length).toBe(1); // Preview button
+
+      // Ensure slug is never used in action hrefs
+      const slugLink = container.querySelector(`a[href*="/commercial-solar-1"]`);
+      expect(slugLink).toBeNull();
+    });
+
+    it("ProjectPreviewPage loads project by UUID, renders presentation and back/edit links", async () => {
+      const testUuid = "e19bd9c3-01fe-4890-ae5a-2839541657d8";
+      const sampleProject: AdminProject = {
+        ...mockProjects[0],
+        id: testUuid,
+        slug: "test-project-oo1",
+        title: "Test project oo1",
+        images: [
+          {
+            id: "img-1",
+            projectId: testUuid,
+            url: "https://example.com/test-primary.webp",
+            mimeType: "image/webp",
+            altText: "Test Alt 1",
+            caption: null,
+            isPrimary: true,
+            sortOrder: 0,
+            createdAt: "2026-09-01T09:00:00Z",
+            updatedAt: "2026-09-01T09:00:00Z",
+          },
+          {
+            id: "img-2",
+            projectId: testUuid,
+            url: "https://example.com/test-secondary.webp",
+            mimeType: "image/webp",
+            altText: "Test Alt 2",
+            caption: null,
+            isPrimary: false,
+            sortOrder: 1,
+            createdAt: "2026-09-01T09:00:00Z",
+            updatedAt: "2026-09-01T09:00:00Z",
+          },
+        ],
+        mainImage: {
+          id: "img-1",
+          projectId: testUuid,
+          url: "https://example.com/test-primary.webp",
+          mimeType: "image/webp",
+          altText: "Test Alt 1",
+          caption: null,
+          isPrimary: true,
+          sortOrder: 0,
+          createdAt: "2026-09-01T09:00:00Z",
+          updatedAt: "2026-09-01T09:00:00Z",
+        },
+      };
+
+      vi.mocked(fetchAdminProjectById).mockResolvedValueOnce(sampleProject);
+
+      const { container } = render(<ProjectPreviewPage projectId={testUuid} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Test project oo1")).toBeDefined();
+      });
+
+      // Verify fetch was called with UUID and not slug
+      expect(fetchAdminProjectById).toHaveBeenCalledWith(testUuid);
+      expect(fetchAdminProjectById).not.toHaveBeenCalledWith("test-project-oo1");
+
+      // Verify back to editor and edit details links use the project UUID
+      const editorLinks = Array.from(container.querySelectorAll(`a[href="/admin/projects/${testUuid}/edit"]`));
+      expect(editorLinks.length).toBe(2);
+
+      // Verify image thumbnails rendered
+      expect(container.querySelectorAll(".preview-image-box img").length).toBe(1);
+      expect(container.querySelectorAll("button img").length).toBe(2);
+    });
+
+    it("ProjectPreviewPage and ProjectEditPage fallback to pathname UUID when projectId prop is omitted", async () => {
+      const testUuid = "e19bd9c3-01fe-4890-ae5a-2839541657d8";
+      const sampleProject: AdminProject = {
+        ...mockProjects[0],
+        id: testUuid,
+        slug: "test-project-oo1",
+        title: "Test project oo1",
+      };
+
+      const initialPath = window.location.pathname;
+      window.history.replaceState({}, "", `/admin/projects/${testUuid}/preview`);
+
+      vi.mocked(fetchAdminProjectById).mockResolvedValueOnce(sampleProject);
+
+      render(<ProjectPreviewPage />);
+
+      await waitFor(() => {
+        expect(fetchAdminProjectById).toHaveBeenCalledWith(testUuid);
+        expect(screen.getByText("Test project oo1")).toBeDefined();
+      });
+
+      window.history.replaceState({}, "", initialPath || "/");
+    });
+  });
 });

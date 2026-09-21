@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createAdminProject } from "../../lib/admin/api";
 import {
@@ -180,9 +179,9 @@ export function ProjectCreatePage() {
           </p>
         </div>
         <div className="page-actions">
-          <Link href="/admin/projects" className="btn btn-secondary">
+          <a href="/admin/projects" className="btn btn-secondary">
             Cancel
-          </Link>
+          </a>
         </div>
       </div>
 
@@ -436,9 +435,9 @@ export function ProjectCreatePage() {
 
         {/* Form Actions */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "1rem", marginTop: "1.5rem" }}>
-          <Link href="/admin/projects" className="btn btn-secondary">
+          <a href="/admin/projects" className="btn btn-secondary">
             Cancel
-          </Link>
+          </a>
           <button
             type="submit"
             className="btn btn-primary"

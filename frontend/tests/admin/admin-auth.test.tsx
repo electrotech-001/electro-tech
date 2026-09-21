@@ -16,6 +16,7 @@ const {
   setAuthStateCallback,
   mockSession,
   mockAdminMeUser,
+  mockCleanLegacyLocalStorageAuth,
 } = vi.hoisted(() => {
   let callback: ((event: string, session: any) => void) | null = null;
   const session = {
@@ -27,8 +28,10 @@ const {
     email: "admin@electrotech.pk",
     displayName: "Lead Administrator",
   };
+  const cleanLegacyLocalStorageAuth = vi.fn();
   const supabase = {
     auth: {
+      storageKey: "sb-pugoystdafgmmvnwyslo-auth-token",
       getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
       signInWithPassword: vi.fn(),
       signOut: vi.fn().mockResolvedValue({ error: null }),
@@ -52,11 +55,14 @@ const {
     },
     mockSession: session,
     mockAdminMeUser: adminMeUser,
+    mockCleanLegacyLocalStorageAuth: cleanLegacyLocalStorageAuth,
   };
 });
 
 vi.mock("@/lib/admin/supabase", () => ({
   supabase: mockSupabase,
+  cleanLegacyLocalStorageAuth: mockCleanLegacyLocalStorageAuth,
+  getSupabaseAuthStorageKey: () => "sb-pugoystdafgmmvnwyslo-auth-token",
 }));
 
 // Mock API client
@@ -503,6 +509,89 @@ describe("Admin Portal Authentication & Protected Routing", () => {
       expect(mockRouter.replace).toHaveBeenCalledWith(
         expect.stringContaining("/admin/login"),
       );
+    });
+  });
+
+  // 16. cleanLegacyLocalStorageAuth is called on AuthProvider mount, sign-in, and sign-out
+  it("16. cleanLegacyLocalStorageAuth is invoked on mount, sign-in, and sign-out", async () => {
+    const user = userEvent.setup();
+    mockCleanLegacyLocalStorageAuth.mockClear();
+
+    mockSupabase.auth.signInWithPassword.mockResolvedValueOnce({
+      data: { session: mockSession, user: mockSession.user },
+      error: null,
+    });
+    vi.mocked(fetchAdminMe).mockResolvedValue({ user: mockAdminMeUser });
+
+    render(
+      <AuthProvider>
+        <LoginPage />
+      </AuthProvider>,
+    );
+
+    // Verify cleanup was invoked on mount
+    expect(mockCleanLegacyLocalStorageAuth).toHaveBeenCalled();
+    mockCleanLegacyLocalStorageAuth.mockClear();
+
+    // Transition from loading to login form
+    act(() => {
+      getAuthStateCallback()?.("SIGNED_OUT", null);
+    });
+
+    // Perform sign-in
+    await user.type(screen.getByLabelText(/email address/i), "admin@electrotech.pk");
+    await user.type(screen.getByLabelText("Password"), "CorrectPassword123!");
+    await user.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() => {
+      // Verify cleanup was invoked on sign-in
+      expect(mockCleanLegacyLocalStorageAuth).toHaveBeenCalled();
+    });
+  });
+
+  // 17. Page reload / refresh: active session in sessionStorage restores admin access immediately
+  it("17. page reload with session in sessionStorage restores authenticated state without re-login", async () => {
+    vi.mocked(fetchAdminMe).mockResolvedValue({ user: mockAdminMeUser });
+
+    render(
+      <AuthProvider>
+        <ProtectedRoute>
+          <div data-testid="protected-content">Restored Admin Content</div>
+        </ProtectedRoute>
+      </AuthProvider>,
+    );
+
+    // Simulate page reload bootstrap where Supabase reads session from sessionStorage
+    await act(async () => {
+      await getAuthStateCallback()?.("INITIAL_SESSION", mockSession);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("protected-content")).toBeDefined();
+      expect(mockRouter.replace).not.toHaveBeenCalledWith(expect.stringContaining("/admin/login"));
+    });
+  });
+
+  // 18. Browser closed and reopened: empty sessionStorage ends session and redirects to /admin/login
+  it("18. browser reopen with empty sessionStorage leaves user unauthenticated and redirects to login", async () => {
+    setMockPathname("/admin");
+
+    render(
+      <AuthProvider>
+        <ProtectedRoute>
+          <div data-testid="protected-content">Restored Admin Content</div>
+        </ProtectedRoute>
+      </AuthProvider>,
+    );
+
+    // Simulate new browser launch bootstrap where sessionStorage is empty (session: null)
+    await act(async () => {
+      await getAuthStateCallback()?.("INITIAL_SESSION", null);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("protected-content")).toBeNull();
+      expect(mockRouter.replace).toHaveBeenCalledWith(expect.stringContaining("/admin/login"));
     });
   });
 });

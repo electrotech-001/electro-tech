@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -111,12 +110,11 @@ export function ProjectsDirectory() {
       >
         <div className="header-inner">
           <a className="brand" href="/" aria-label="Electro Tech home">
-            <Image
+            <img
               src="/logos/electrotech-horizontal.png"
               width={407}
               height={112}
               alt="Electro Tech — Electrical & Solar Solutions"
-              priority
             />
           </a>
 
@@ -377,13 +375,18 @@ export function ProjectsDirectory() {
                         overflow: "hidden",
                       }}
                     >
-                      <Image
+                      <img
                         src={primaryImage}
                         alt={primaryAlt}
-                        fill
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                        style={{ objectFit: "cover" }}
-                        unoptimized
+                        loading="lazy"
+                        decoding="async"
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
                       />
                       {project.isFeaturedHomepage && (
                         <div

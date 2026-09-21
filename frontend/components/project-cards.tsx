@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { ArrowUpRight, MapPin, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchHomepageProjects } from "@/lib/projects";
@@ -157,17 +156,27 @@ export function ProjectCards() {
           const expanded = activeProjectId === project.id;
 
           const primaryImage =
-            project.mainImage?.url || project.images[0]?.url || "/images/hero-solar-architectural.webp";
+            project.mainImage?.url ||
+            project.images?.[0]?.url ||
+            (project as any).primaryImageUrl ||
+            "/images/hero-solar-architectural.webp";
+
+          const nonPrimaryImage = project.images?.find((img) => !img.isPrimary)?.url;
           const secondaryImage =
-            project.images.find((img) => !img.isPrimary)?.url ||
-            project.images[1]?.url ||
+            nonPrimaryImage ||
+            (project.images && project.images.length > 1 ? project.images[1]?.url : null) ||
+            (project as any).secondaryImageUrl ||
             primaryImage;
 
-          const primaryAlt = project.mainImage?.altText || project.title;
-          const secondaryAlt =
-            project.images.find((img) => !img.isPrimary)?.altText ||
+          const primaryAlt =
             project.mainImage?.altText ||
+            (project as any).primaryAlt ||
             project.title;
+
+          const secondaryAlt =
+            project.images?.find((img) => !img.isPrimary)?.altText ||
+            (project as any).secondaryAlt ||
+            primaryAlt;
 
           return (
             <article
@@ -177,23 +186,40 @@ export function ProjectCards() {
               key={project.id}
             >
               <div className={styles.image}>
-                <Image
+                <img
                   src={primaryImage}
                   alt={primaryAlt}
-                  fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  loading="lazy"
+                  decoding="async"
                   className={styles.primary}
                   aria-hidden={expanded}
-                  unoptimized
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    objectPosition: (project as any).primaryImagePosition || "center",
+                  }}
                 />
-                <Image
+                <img
                   src={secondaryImage}
                   alt={secondaryAlt}
-                  fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  loading="lazy"
+                  decoding="async"
                   className={styles.secondary}
                   aria-hidden={!expanded}
-                  unoptimized
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    objectPosition:
+                      (project as any).secondaryImagePosition ||
+                      (project as any).primaryImagePosition ||
+                      "center",
+                  }}
                 />
               </div>
 

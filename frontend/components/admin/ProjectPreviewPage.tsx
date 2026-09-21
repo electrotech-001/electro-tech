@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { fetchAdminProjectById } from "../../lib/admin/api";
 import { StatusBadge } from "./StatusBadge";
@@ -9,7 +8,18 @@ import type { AdminProject, ProjectImageItem } from "../../types/admin/project";
 
 export function ProjectPreviewPage({ projectId }: { projectId?: string }) {
   const params = useParams();
-  const id = projectId || (params?.id as string);
+  const pathnameFallback =
+    typeof window !== "undefined"
+      ? window.location.pathname.match(/\/admin\/projects\/([^/]+)\/(?:edit|preview)/)?.[1]
+      : undefined;
+  const paramId =
+    typeof params?.id === "string"
+      ? params.id
+      : Array.isArray(params?.id)
+        ? params.id[0]
+        : undefined;
+  const rawId = (typeof projectId === "string" && projectId.trim()) || paramId || pathnameFallback;
+  const id = typeof rawId === "string" ? rawId.trim() : "";
   const [project, setProject] = useState<AdminProject | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,9 +72,9 @@ export function ProjectPreviewPage({ projectId }: { projectId?: string }) {
         <div className="empty-state">
           <h2 className="empty-state-title">Project Not Found</h2>
           <p className="empty-state-desc">The project could not be found.</p>
-          <Link href="/admin/projects" className="btn btn-primary">
+          <a href="/admin/projects" className="btn btn-primary">
             Back to Projects
-          </Link>
+          </a>
         </div>
       </div>
     );
@@ -80,9 +90,9 @@ export function ProjectPreviewPage({ projectId }: { projectId?: string }) {
       <div className="page-header">
         <div className="page-title-group">
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem" }}>
-            <Link href={`/admin/projects/${project.id}/edit`} className="btn btn-secondary btn-sm">
+            <a href={`/admin/projects/${project.id}/edit`} className="btn btn-secondary btn-sm">
               &larr; Back to Editor
-            </Link>
+            </a>
             <StatusBadge
               status={project.status}
               isFeaturedHomepage={project.isFeaturedHomepage}
@@ -95,9 +105,9 @@ export function ProjectPreviewPage({ projectId }: { projectId?: string }) {
         </div>
 
         <div className="page-actions">
-          <Link href={`/admin/projects/${project.id}/edit`} className="btn btn-primary">
+          <a href={`/admin/projects/${project.id}/edit`} className="btn btn-primary">
             Edit Details
-          </Link>
+          </a>
         </div>
       </div>
 

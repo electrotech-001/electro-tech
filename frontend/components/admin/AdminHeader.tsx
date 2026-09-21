@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./useAuth";
 
@@ -21,7 +20,7 @@ export function AdminHeader() {
   return (
     <header className="admin-header">
       <div style={{ display: "flex", alignItems: "center" }}>
-        <Link href="/admin" className="admin-header-brand">
+        <a href="/admin" className="admin-header-brand">
           <img
             src="/logos/electrotech-horizontal.png"
             alt="Electro Tech"
@@ -30,27 +29,27 @@ export function AdminHeader() {
           <span className="auth-badge" style={{ marginLeft: "0.25rem" }}>
             Admin
           </span>
-        </Link>
+        </a>
 
         <nav className="admin-nav" aria-label="Main Navigation">
-          <Link
+          <a
             href="/admin"
             className={`admin-nav-link ${isDashboardActive ? "active" : ""}`}
           >
             Dashboard
-          </Link>
-          <Link
+          </a>
+          <a
             href="/admin/projects"
             className={`admin-nav-link ${isProjectsActive ? "active" : ""}`}
           >
             Projects
-          </Link>
-          <Link
+          </a>
+          <a
             href="/admin/projects/new"
             className={`admin-nav-link ${isNewProjectActive ? "active" : ""}`}
           >
             + New Project
-          </Link>
+          </a>
         </nav>
       </div>
 

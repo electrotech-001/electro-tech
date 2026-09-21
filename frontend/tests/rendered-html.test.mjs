@@ -167,3 +167,21 @@ test("homepage View All Projects control links to /projects", async () => {
   assert.match(html, /<a\s+href="\/projects"\s+class="button button-dark">\s*View All Projects/);
   assert.doesNotMatch(html, /href="#projects"[^>]*>View All Projects/);
 });
+
+test("server-renders the dynamic /admin/projects/:id/edit route with noindex robots", async () => {
+  const testUuid = "e19bd9c3-01fe-4890-ae5a-2839541657d8";
+  const response = await render(`/admin/projects/${testUuid}/edit`);
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /name="robots"[^>]*content="noindex,\s*nofollow"/i);
+  assert.match(html, new RegExp(testUuid));
+});
+
+test("server-renders the dynamic /admin/projects/:id/preview route with noindex robots", async () => {
+  const testUuid = "e19bd9c3-01fe-4890-ae5a-2839541657d8";
+  const response = await render(`/admin/projects/${testUuid}/preview`);
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /name="robots"[^>]*content="noindex,\s*nofollow"/i);
+  assert.match(html, new RegExp(testUuid));
+});

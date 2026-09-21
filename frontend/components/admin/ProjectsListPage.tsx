@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import {
   archiveAdminProject,
   deleteAdminProject,
@@ -240,9 +239,9 @@ export function ProjectsListPage() {
           <p>Create, update, preview, and configure lifecycle states for all projects</p>
         </div>
         <div className="page-actions">
-          <Link href="/admin/projects/new" className="btn btn-primary">
+          <a href="/admin/projects/new" className="btn btn-primary">
             + New Project
-          </Link>
+          </a>
         </div>
       </div>
 
@@ -408,9 +407,9 @@ export function ProjectsListPage() {
                 ? "No projects have been created yet."
                 : `There are currently no ${activeTab} projects.`}
             </p>
-            <Link href="/admin/projects/new" className="btn btn-primary">
+            <a href="/admin/projects/new" className="btn btn-primary">
               Create Project
-            </Link>
+            </a>
           </div>
         </div>
       ) : (
@@ -452,12 +451,12 @@ export function ProjectsListPage() {
                     </td>
                     <td>
                       <div className="project-title-cell">
-                        <Link
+                        <a
                           href={`/admin/projects/${project.id}/edit`}
                           className="project-title-link"
                         >
                           {project.title}
-                        </Link>
+                        </a>
                         <span className="project-slug-text">
                           /projects/{project.slug}
                         </span>
@@ -507,20 +506,20 @@ export function ProjectsListPage() {
                     </td>
                     <td>
                       <div className="table-actions">
-                        <Link
+                        <a
                           href={`/admin/projects/${project.id}/preview`}
                           className="btn btn-secondary btn-sm"
                           title="Preview public presentation"
                         >
                           Preview
-                        </Link>
-                        <Link
+                        </a>
+                        <a
                           href={`/admin/projects/${project.id}/edit`}
                           className="btn btn-secondary btn-sm"
                           title="Edit project"
                         >
                           Edit
-                        </Link>
+                        </a>
 
                         {/* Homepage Feature Toggle */}
                         {project.status === "published" ? (

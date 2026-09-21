@@ -12,10 +12,15 @@ export default async function AdminProjectEditRoute({
 }: {
   params: Promise<{ id: string }> | { id: string };
 }) {
-  const resolvedParams = await Promise.resolve(params);
+  const resolvedParams = (await Promise.resolve(params)) ?? {};
+  const projectId =
+    typeof resolvedParams === "object" && resolvedParams !== null
+      ? (resolvedParams as { id?: string }).id
+      : undefined;
+
   return (
     <AdminProtectedShell>
-      <ProjectEditPage projectId={resolvedParams.id} />
+      <ProjectEditPage projectId={projectId} />
     </AdminProtectedShell>
   );
 }

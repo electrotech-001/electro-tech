@@ -11,7 +11,7 @@ import {
 } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { ApiError, fetchAdminMe, type AdminMeResponse } from "../../lib/admin/api";
-import { supabase } from "../../lib/admin/supabase";
+import { supabase, cleanLegacyLocalStorageAuth } from "../../lib/admin/supabase";
 
 export type AdminUser = AdminMeResponse["user"];
 
@@ -82,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+    cleanLegacyLocalStorageAuth();
 
     // Listen to Supabase auth state changes
     const {
@@ -187,6 +188,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("Email and password are required.");
       }
 
+      cleanLegacyLocalStorageAuth();
+
       // 1. Authenticate with Supabase Auth
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: trimmedEmail,
@@ -225,6 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async (): Promise<void> => {
     try {
       await supabase.auth.signOut();
+      cleanLegacyLocalStorageAuth();
     } finally {
       setSession(null);
       setUser(null);
