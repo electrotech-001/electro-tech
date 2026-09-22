@@ -185,3 +185,39 @@ test("server-renders the dynamic /admin/projects/:id/preview route with noindex 
   assert.match(html, /name="robots"[^>]*content="noindex,\s*nofollow"/i);
   assert.match(html, new RegExp(testUuid));
 });
+
+test("serves sitemap.xml with canonical production URLs and no admin routes", async () => {
+  const response = await fetch(`${origin}/sitemap.xml`);
+  assert.equal(response.status, 200);
+  const xml = await response.text();
+  assert.match(xml, /<loc>https:\/\/electrotech-attock\.com\/<\/loc>/);
+  assert.match(xml, /<loc>https:\/\/electrotech-attock\.com\/projects<\/loc>/);
+  assert.match(xml, /<loc>https:\/\/electrotech-attock\.com\/solar-bill-analyzer<\/loc>/);
+  assert.doesNotMatch(xml, /electrotech\.example/);
+  assert.doesNotMatch(xml, /\/admin/);
+});
+
+test("serves robots.txt with canonical production sitemap URL", async () => {
+  const response = await fetch(`${origin}/robots.txt`);
+  assert.equal(response.status, 200);
+  const text = await response.text();
+  assert.match(text, /Sitemap: https:\/\/electrotech-attock\.com\/sitemap\.xml/);
+  assert.doesNotMatch(text, /electrotech\.example/);
+});
+
+test("server-renders canonical links and structured data with production domain", async () => {
+  const homeRes = await render("/");
+  const homeHtml = await homeRes.text();
+  assert.match(homeHtml, /<link[^>]+rel="canonical"[^>]+href="https:\/\/electrotech-attock\.com\/?/);
+  assert.match(homeHtml, /"url":"https:\/\/electrotech-attock\.com"/);
+  assert.match(homeHtml, /"name":"Electro Tech"/);
+  assert.doesNotMatch(homeHtml, /electrotech\.example/);
+
+  const projectsRes = await render("/projects");
+  const projectsHtml = await projectsRes.text();
+  assert.match(projectsHtml, /<link[^>]+rel="canonical"[^>]+href="https:\/\/electrotech-attock\.com\/projects"/);
+
+  const analyzerRes = await render("/solar-bill-analyzer");
+  const analyzerHtml = await analyzerRes.text();
+  assert.match(analyzerHtml, /<link[^>]+rel="canonical"[^>]+href="https:\/\/electrotech-attock\.com\/solar-bill-analyzer"/);
+});

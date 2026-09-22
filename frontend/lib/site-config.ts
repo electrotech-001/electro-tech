@@ -2,6 +2,7 @@ export const siteConfig = {
   company: "Electro Tech",
   descriptor: "Electrical & Solar Solutions",
   established: "2019",
+  siteUrl: "https://electrotech-attock.com",
   phoneDisplay: "+92 3105056394",
   phoneHref: "tel:+923105056394",
   whatsappNumber: "923105056394",

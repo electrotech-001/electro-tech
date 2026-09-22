@@ -6,6 +6,13 @@ export const metadata: Metadata = {
   title: `Projects Directory | ${siteConfig.company}`,
   description:
     "Explore our complete portfolio of solar installations, hybrid storage systems, and electrical infrastructure across Attock and surrounding regions.",
+  alternates: { canonical: "/projects" },
+  openGraph: {
+    title: `Projects Directory | ${siteConfig.company}`,
+    description:
+      "Explore our complete portfolio of solar installations, hybrid storage systems, and electrical infrastructure across Attock and surrounding regions.",
+    url: `${siteConfig.siteUrl}/projects`,
+  },
 };
 
 export default function ProjectsPage() {
