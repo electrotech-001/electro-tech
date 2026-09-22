@@ -98,14 +98,7 @@ export function ProjectsDirectory() {
   }, []);
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        backgroundColor: "var(--background, #F6F5F2)",
-      }}
-    >
+    <div className="projects-directory-wrapper">
       {/* HEADER */}
       <header
         className={`site-header ${scrolled ? "is-scrolled" : ""} ${!headerVisible && !menuOpen ? "is-hidden" : ""} ${menuOpen ? "has-open-menu" : ""}`}
@@ -182,424 +175,215 @@ export function ProjectsDirectory() {
       </header>
 
       {/* MAIN CONTENT */}
-      <main style={{ flex: 1 }}>
+      <main style={{ flex: 1, width: "100%" }}>
         {/* HERO INTRO */}
-        <section
-          style={{
-            maxWidth: "var(--max, 1380px)",
-            margin: "0 auto",
-            padding: "64px 24px 40px",
-          }}
-        >
-          <p className="eyebrow" style={{ color: "var(--accent, #F5C400)" }}>
-            OUR WORK
-          </p>
-          <h1
-            style={{
-              fontSize: "clamp(2rem, 3.8vw, 3.2rem)",
-              fontWeight: 700,
-              letterSpacing: "-0.03em",
-              color: "var(--text, #111111)",
-              marginBottom: "16px",
-              lineHeight: 1.1,
-            }}
-          >
-            Projects Directory
-          </h1>
-          <p
-            style={{
-              fontSize: "clamp(1rem, 1.2vw, 1.15rem)",
-              color: "var(--text-muted, #6F706B)",
-              maxWidth: "680px",
-              lineHeight: 1.6,
-              margin: 0,
-            }}
-          >
-            Explore our complete portfolio of solar energy installations, hybrid storage solutions, and
-            electrical infrastructure across Attock and surrounding regions.
-          </p>
+        <section className="projects-hero-section">
+          <div className="projects-hero-shell">
+            <p className="eyebrow" style={{ color: "var(--accent, #F5C400)" }}>
+              OUR WORK
+            </p>
+            <h1 className="projects-hero-title">
+              Projects Directory
+            </h1>
+            <p className="projects-hero-desc">
+              Explore our complete portfolio of solar energy installations, hybrid storage solutions, and
+              electrical infrastructure across Attock and surrounding regions.
+            </p>
+          </div>
         </section>
 
         {/* PROJECTS GRID SECTION */}
-        <section
-          style={{
-            maxWidth: "var(--max, 1380px)",
-            margin: "0 auto",
-            padding: "0 24px 80px",
-          }}
-        >
-          {isLoading && (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
-                gap: "28px",
-              }}
-              aria-busy="true"
-              aria-label="Loading projects directory"
-            >
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div
-                  key={i}
-                  style={{
-                    backgroundColor: "var(--surface, #FFFFFF)",
-                    border: "1px solid var(--border, #E6E4DF)",
-                    borderRadius: "var(--radius-md, 14px)",
-                    overflow: "hidden",
-                    height: "440px",
-                    display: "flex",
-                    flexDirection: "column",
-                  }}
-                >
-                  <div
-                    style={{
-                      height: "240px",
-                      backgroundColor: "var(--surface-subtle, #EFECE6)",
-                      animation: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-                    }}
-                  />
-                  <div style={{ padding: "24px", flex: 1 }}>
-                    <div
-                      style={{
-                        width: "100px",
-                        height: "14px",
-                        backgroundColor: "var(--surface-subtle, #EFECE6)",
-                        marginBottom: "16px",
-                        borderRadius: "4px",
-                      }}
-                    />
-                    <div
-                      style={{
-                        width: "80%",
-                        height: "22px",
-                        backgroundColor: "var(--surface-subtle, #EFECE6)",
-                        marginBottom: "16px",
-                        borderRadius: "4px",
-                      }}
-                    />
-                    <div
-                      style={{
-                        width: "60%",
-                        height: "14px",
-                        backgroundColor: "var(--surface-subtle, #EFECE6)",
-                        borderRadius: "4px",
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {error && (
-            <div
-              style={{
-                padding: "48px 24px",
-                textAlign: "center",
-                backgroundColor: "var(--surface, #FFFFFF)",
-                border: "1px solid var(--border, #E6E4DF)",
-                borderRadius: "var(--radius-md, 14px)",
-                color: "var(--text-muted, #6F706B)",
-              }}
-            >
-              <h3 style={{ color: "var(--text, #111111)", marginBottom: "8px" }}>
-                Unable to Load Projects
-              </h3>
-              <p style={{ margin: "0 0 20px" }}>{error}</p>
-              <button
-                type="button"
-                className="button button-dark"
-                onClick={() => window.location.reload()}
+        <section className="projects-grid-section">
+          <div className="projects-grid-shell">
+            {isLoading && (
+              <div
+                className="projects-grid"
+                aria-busy="true"
+                aria-label="Loading projects directory"
               >
-                Try Again
-              </button>
-            </div>
-          )}
-
-          {!isLoading && !error && projects.length === 0 && (
-            <div
-              style={{
-                padding: "64px 24px",
-                textAlign: "center",
-                backgroundColor: "var(--surface, #FFFFFF)",
-                border: "1px solid var(--border, #E6E4DF)",
-                borderRadius: "var(--radius-md, 14px)",
-                color: "var(--text-muted, #6F706B)",
-              }}
-            >
-              <h3 style={{ color: "var(--text, #111111)", marginBottom: "8px" }}>
-                No Published Projects
-              </h3>
-              <p style={{ margin: "0 0 20px" }}>
-                Our projects directory is currently being updated with new installations.
-              </p>
-              <Link href="/" className="button button-dark">
-                Return to Home
-              </Link>
-            </div>
-          )}
-
-          {!isLoading && !error && projects.length > 0 && (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
-                gap: "28px",
-              }}
-            >
-              {projects.map((project) => {
-                const primaryImage =
-                  project.mainImage?.url ||
-                  project.images?.[0]?.url ||
-                  "/images/hero-solar-architectural.webp";
-                const primaryAlt = project.mainImage?.altText || project.title;
-
-                return (
-                  <article
-                    key={project.id}
-                    tabIndex={0}
-                    role="button"
-                    aria-haspopup="dialog"
-                    aria-label={`View details for ${project.title}`}
-                    onClick={() => setSelectedProject(project)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setSelectedProject(project);
-                      }
-                    }}
-                    className="project-directory-card"
-                    style={{
-                      backgroundColor: "var(--surface, #FFFFFF)",
-                      border: "1px solid var(--border, #E6E4DF)",
-                      borderRadius: "var(--radius-md, 14px)",
-                      overflow: "hidden",
-                      boxShadow: "var(--shadow-subtle, 0 2px 10px rgba(17, 17, 15, 0.03))",
-                      display: "flex",
-                      flexDirection: "column",
-                      transition: "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
-                      cursor: "pointer",
-                      textAlign: "left",
-                    }}
-                  >
-                    {/* Card Image Box */}
-                    <div
-                      style={{
-                        position: "relative",
-                        height: "260px",
-                        backgroundColor: "var(--surface-subtle, #EFECE6)",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <img
-                        src={primaryImage}
-                        alt={primaryAlt}
-                        loading="lazy"
-                        decoding="async"
-                        style={{
-                          position: "absolute",
-                          inset: 0,
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                        }}
-                      />
-                      {project.isFeaturedHomepage && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            top: "12px",
-                            right: "12px",
-                            backgroundColor: "var(--accent, #F5C400)",
-                            color: "var(--dark, #11110F)",
-                            fontSize: "0.7rem",
-                            fontWeight: 700,
-                            padding: "4px 10px",
-                            borderRadius: "9999px",
-                            letterSpacing: "0.04em",
-                            textTransform: "uppercase",
-                          }}
-                        >
-                          Featured
-                        </div>
-                      )}
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="project-directory-card project-card-skeleton">
+                    <div className="project-card-image-wrap skeleton-pulse" />
+                    <div className="project-card-body">
+                      <div className="skeleton-line skeleton-w-30" />
+                      <div className="skeleton-line skeleton-w-80" />
+                      <div className="skeleton-line skeleton-w-60" />
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
-                    {/* Card Body */}
-                    <div
-                      style={{
-                        padding: "24px",
-                        display: "flex",
-                        flexDirection: "column",
-                        flex: 1,
+            {error && (
+              <div
+                style={{
+                  padding: "48px 24px",
+                  textAlign: "center",
+                  backgroundColor: "var(--surface, #FFFFFF)",
+                  border: "1px solid var(--border, #E6E4DF)",
+                  borderRadius: "var(--radius-md, 14px)",
+                  color: "var(--text-muted, #6F706B)",
+                }}
+              >
+                <h3 style={{ color: "var(--text, #111111)", marginBottom: "8px" }}>
+                  Unable to Load Projects
+                </h3>
+                <p style={{ margin: "0 0 20px" }}>{error}</p>
+                <button
+                  type="button"
+                  className="button button-dark"
+                  onClick={() => window.location.reload()}
+                >
+                  Try Again
+                </button>
+              </div>
+            )}
+
+            {!isLoading && !error && projects.length === 0 && (
+              <div
+                style={{
+                  padding: "64px 24px",
+                  textAlign: "center",
+                  backgroundColor: "var(--surface, #FFFFFF)",
+                  border: "1px solid var(--border, #E6E4DF)",
+                  borderRadius: "var(--radius-md, 14px)",
+                  color: "var(--text-muted, #6F706B)",
+                }}
+              >
+                <h3 style={{ color: "var(--text, #111111)", marginBottom: "8px" }}>
+                  No Published Projects
+                </h3>
+                <p style={{ margin: "0 0 20px" }}>
+                  Our projects directory is currently being updated with new installations.
+                </p>
+                <Link href="/" className="button button-dark">
+                  Return to Home
+                </Link>
+              </div>
+            )}
+
+            {!isLoading && !error && projects.length > 0 && (
+              <div className="projects-grid">
+                {projects.map((project) => {
+                  const primaryImage =
+                    project.mainImage?.url ||
+                    project.images?.[0]?.url ||
+                    "/images/hero-solar-architectural.webp";
+                  const primaryAlt = project.mainImage?.altText || project.title;
+
+                  return (
+                    <article
+                      key={project.id}
+                      tabIndex={0}
+                      role="button"
+                      aria-haspopup="dialog"
+                      aria-label={`View details for ${project.title}`}
+                      onClick={() => setSelectedProject(project)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedProject(project);
+                        }
                       }}
+                      className="project-directory-card"
                     >
-                      {/* Category & Year */}
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          marginBottom: "12px",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: "0.72rem",
-                            fontWeight: 600,
-                            color: "var(--accent-hover, #E5B800)",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.05em",
-                          }}
-                        >
-                          {project.category || "Solar Project"}
-                        </span>
-                        {project.completionYear && (
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "4px",
-                              fontSize: "0.76rem",
-                              color: "var(--text-muted, #6F706B)",
-                            }}
-                          >
-                            <Calendar size={12} aria-hidden="true" />
-                            {project.completionYear}
+                      {/* Card Image Box */}
+                      <div className="project-card-image-wrap">
+                        <img
+                          src={primaryImage}
+                          alt={primaryAlt}
+                          loading="lazy"
+                          decoding="async"
+                          className="project-card-img"
+                        />
+                        {project.isFeaturedHomepage && (
+                          <div className="project-card-featured-badge">
+                            Featured
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Card Body */}
+                      <div className="project-card-body">
+                        {/* Category & Year */}
+                        <div className="project-card-header-meta">
+                          <span className="project-card-category">
+                            {project.category || "Solar Project"}
                           </span>
-                        )}
-                      </div>
-
-                      {/* Project Title & Action Icon */}
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "flex-start",
-                          gap: "8px",
-                          marginBottom: "14px",
-                        }}
-                      >
-                        <h3
-                          style={{
-                            fontSize: "1.35rem",
-                            fontWeight: 700,
-                            color: "var(--text, #111111)",
-                            lineHeight: 1.25,
-                            margin: 0,
-                            letterSpacing: "-0.02em",
-                          }}
-                        >
-                          {project.title}
-                        </h3>
-                        <span
-                          aria-hidden="true"
-                          className="project-card-arrow"
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: "32px",
-                            height: "32px",
-                            borderRadius: "9999px",
-                            backgroundColor: "var(--surface-subtle, #EFECE6)",
-                            color: "var(--dark, #11110F)",
-                            flexShrink: 0,
-                            marginTop: "2px",
-                            transition: "background-color 0.2s, color 0.2s, transform 0.2s",
-                          }}
-                        >
-                          <ArrowUpRight size={16} />
-                        </span>
-                      </div>
-
-                      {/* Metadata Row: Client, Location, Size */}
-                      <div
-                        style={{
-                          display: "grid",
-                          gap: "8px",
-                          marginBottom: "16px",
-                          fontSize: "0.84rem",
-                          color: "var(--text-muted, #6F706B)",
-                        }}
-                      >
-                        {project.clientOrganization && (
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <Building2 size={15} style={{ flexShrink: 0, color: "var(--text-light, #9B9C96)" }} aria-hidden="true" />
-                            <span style={{ fontWeight: 500, color: "var(--text, #111111)" }}>{project.clientOrganization}</span>
-                          </div>
-                        )}
-                        {project.location && (
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <MapPin size={15} style={{ flexShrink: 0, color: "var(--text-light, #9B9C96)" }} aria-hidden="true" />
-                            <span>{project.location}</span>
-                          </div>
-                        )}
-                        {project.size && (
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <Zap size={15} style={{ flexShrink: 0, color: "var(--accent, #F5C400)" }} aria-hidden="true" />
-                            <span style={{ fontWeight: 600, color: "var(--text, #111111)" }}>
-                              {project.size}
+                          {project.completionYear && (
+                            <span className="project-card-year">
+                              <Calendar size={12} aria-hidden="true" />
+                              {project.completionYear}
                             </span>
-                          </div>
+                          )}
+                        </div>
+
+                        {/* Project Title & Action Icon */}
+                        <div className="project-card-title-row">
+                          <h3 className="project-card-title">
+                            {project.title}
+                          </h3>
+                          <span
+                            aria-hidden="true"
+                            className="project-card-arrow"
+                          >
+                            <ArrowUpRight size={16} />
+                          </span>
+                        </div>
+
+                        {/* Metadata Row: Client, Location, Size */}
+                        <div className="project-card-metadata">
+                          {project.clientOrganization && (
+                            <div className="project-card-meta-item">
+                              <Building2 size={15} className="project-card-meta-icon" aria-hidden="true" />
+                              <span className="project-card-meta-value project-card-client-name">
+                                {project.clientOrganization}
+                              </span>
+                            </div>
+                          )}
+                          {project.location && (
+                            <div className="project-card-meta-item">
+                              <MapPin size={15} className="project-card-meta-icon" aria-hidden="true" />
+                              <span className="project-card-meta-value">
+                                {project.location}
+                              </span>
+                            </div>
+                          )}
+                          {project.size && (
+                            <div className="project-card-meta-item">
+                              <Zap size={15} className="project-card-meta-icon accent-icon" aria-hidden="true" />
+                              <span className="project-card-meta-value project-card-size-value">
+                                {project.size}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Short Summary */}
+                        {(project.shortSummary || project.description) && (
+                          <p className="project-card-summary">
+                            {project.shortSummary || project.description}
+                          </p>
                         )}
                       </div>
-
-                      {/* Short Summary */}
-                      {(project.shortSummary || project.description) && (
-                        <p
-                          style={{
-                            fontSize: "0.9rem",
-                            color: "var(--text-muted, #6F706B)",
-                            lineHeight: 1.6,
-                            margin: 0,
-                            flex: 1,
-                          }}
-                        >
-                          {project.shortSummary || project.description}
-                        </p>
-                      )}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </section>
 
         {/* CALL TO ACTION */}
-        <section
-          style={{
-            backgroundColor: "var(--surface, #FFFFFF)",
-            borderTop: "1px solid var(--border, #E6E4DF)",
-            padding: "80px 24px",
-            textAlign: "center",
-          }}
-        >
-          <div style={{ maxWidth: "680px", margin: "0 auto" }}>
+        <section className="projects-cta-section">
+          <div className="projects-cta-inner">
             <p className="eyebrow" style={{ color: "var(--accent, #F5C400)" }}>
               START YOUR PROJECT
             </p>
-            <h2
-              style={{
-                fontSize: "clamp(1.8rem, 3vw, 2.5rem)",
-                fontWeight: 700,
-                color: "var(--text, #111111)",
-                marginBottom: "16px",
-                lineHeight: 1.15,
-                letterSpacing: "-0.025em",
-              }}
-            >
+            <h2 className="projects-cta-title">
               Ready to explore solar for your property?
             </h2>
-            <p
-              style={{
-                fontSize: "1rem",
-                color: "var(--text-muted, #6F706B)",
-                lineHeight: 1.6,
-                marginBottom: "32px",
-              }}
-            >
+            <p className="projects-cta-desc">
               Tell us about your project and Electro Tech can review your requirements, inspect your
               electrical infrastructure, and provide an engineered solar proposal.
             </p>
@@ -611,44 +395,26 @@ export function ProjectsDirectory() {
       </main>
 
       {/* FOOTER */}
-      <footer
-        style={{
-          borderTop: "1px solid var(--border, #E6E4DF)",
-          backgroundColor: "var(--background, #F6F5F2)",
-          padding: "36px 24px",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: "var(--max, 1380px)",
-            margin: "0 auto",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "16px",
-            fontSize: "0.82rem",
-            color: "var(--text-muted, #6F706B)",
-          }}
-        >
+      <footer className="projects-footer">
+        <div className="projects-footer-inner">
           <div>&copy; {new Date().getFullYear()} Electro Tech. All rights reserved.</div>
-          <div style={{ display: "flex", gap: "24px", flexWrap: "wrap" }}>
-            <Link href="/" style={{ color: "var(--text, #111111)", textDecoration: "none" }}>
+          <div className="projects-footer-nav">
+            <Link href="/" className="projects-footer-link">
               Home
             </Link>
-            <Link href="/#about" style={{ color: "var(--text, #111111)", textDecoration: "none" }}>
+            <Link href="/#about" className="projects-footer-link">
               About
             </Link>
-            <Link href="/#services" style={{ color: "var(--text, #111111)", textDecoration: "none" }}>
+            <Link href="/#services" className="projects-footer-link">
               Services
             </Link>
-            <Link href="/projects" style={{ color: "var(--text, #111111)", fontWeight: 600, textDecoration: "none" }}>
+            <Link href="/projects" className="projects-footer-link active">
               Projects
             </Link>
-            <Link href="/#process" style={{ color: "var(--text, #111111)", textDecoration: "none" }}>
+            <Link href="/#process" className="projects-footer-link">
               Process
             </Link>
-            <Link href="/#contact" style={{ color: "var(--text, #111111)", textDecoration: "none" }}>
+            <Link href="/#contact" className="projects-footer-link">
               Contact
             </Link>
           </div>

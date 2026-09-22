@@ -89,37 +89,10 @@ export function ProjectDetailModal({ project, onClose }: ProjectDetailModalProps
           onClose();
         }
       }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1000,
-        backgroundColor: "rgba(17, 17, 15, 0.72)",
-        backdropFilter: "blur(4px)",
-        WebkitBackdropFilter: "blur(4px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "20px 16px",
-        overflowY: "auto",
-      }}
     >
       <div
         className="project-modal-panel"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          position: "relative",
-          width: "100%",
-          maxWidth: "860px",
-          maxHeight: "90vh",
-          backgroundColor: "var(--surface, #FFFFFF)",
-          borderRadius: "var(--radius-md, 14px)",
-          border: "1px solid var(--border, #E6E4DF)",
-          boxShadow: "0 20px 50px rgba(17, 17, 15, 0.25)",
-          display: "flex",
-          flexDirection: "column",
-          overflowY: "auto",
-          margin: "auto",
-        }}
       >
         {/* Floating Close Button */}
         <button
@@ -128,76 +101,26 @@ export function ProjectDetailModal({ project, onClose }: ProjectDetailModalProps
           onClick={onClose}
           aria-label="Close project details"
           className="project-modal-close-btn"
-          style={{
-            position: "absolute",
-            top: "14px",
-            right: "14px",
-            zIndex: 30,
-            width: "38px",
-            height: "38px",
-            borderRadius: "9999px",
-            backgroundColor: "rgba(255, 255, 255, 0.94)",
-            backdropFilter: "blur(6px)",
-            WebkitBackdropFilter: "blur(6px)",
-            border: "1px solid var(--border, #E6E4DF)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            color: "var(--dark, #11110F)",
-            boxShadow: "0 2px 10px rgba(0, 0, 0, 0.12)",
-            transition: "background-color 0.15s, transform 0.15s",
-          }}
         >
           <X size={20} strokeWidth={2.2} />
         </button>
 
         {/* Main Media Showcase */}
-        <div
-          className="project-modal-main-image-wrap"
-          style={{
-            position: "relative",
-            width: "100%",
-            height: "clamp(260px, 44vh, 440px)",
-            backgroundColor: "var(--surface-subtle, #EFECE6)",
-            overflow: "hidden",
-            flexShrink: 0,
-          }}
-        >
+        <div className="project-modal-main-image-wrap">
           <img
             src={activeImageUrl}
             alt={activeImageAlt}
+            className="project-modal-main-img"
             onError={(e) => {
               const target = e.currentTarget;
               if (target.src !== "/images/hero-solar-architectural.webp") {
                 target.src = "/images/hero-solar-architectural.webp";
               }
             }}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              display: "block",
-            }}
           />
 
           {project.isFeaturedHomepage && (
-            <div
-              style={{
-                position: "absolute",
-                top: "14px",
-                left: "14px",
-                backgroundColor: "var(--accent, #F5C400)",
-                color: "var(--dark, #11110F)",
-                fontSize: "0.72rem",
-                fontWeight: 700,
-                padding: "4px 10px",
-                borderRadius: "9999px",
-                letterSpacing: "0.04em",
-                textTransform: "uppercase",
-                boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
-              }}
-            >
+            <div className="project-modal-featured-badge">
               Featured
             </div>
           )}
@@ -207,15 +130,6 @@ export function ProjectDetailModal({ project, onClose }: ProjectDetailModalProps
         {sortedImages.length > 0 && (
           <div
             className="project-modal-gallery"
-            style={{
-              display: "flex",
-              gap: "10px",
-              padding: "12px 24px",
-              backgroundColor: "var(--surface-subtle, #EFECE6)",
-              borderBottom: "1px solid var(--border, #E6E4DF)",
-              overflowX: "auto",
-              flexShrink: 0,
-            }}
             aria-label="Project images gallery"
           >
             {sortedImages.map((img, idx) => {
@@ -227,38 +141,17 @@ export function ProjectDetailModal({ project, onClose }: ProjectDetailModalProps
                   onClick={() => setSelectedImageIndex(idx)}
                   aria-label={`View image ${idx + 1}: ${img.altText || project.title}`}
                   aria-pressed={isSelected}
-                  style={{
-                    width: "72px",
-                    height: "48px",
-                    borderRadius: "6px",
-                    overflow: "hidden",
-                    border: isSelected
-                      ? "2px solid var(--accent, #F5C400)"
-                      : "1px solid var(--border, #E6E4DF)",
-                    padding: 0,
-                    cursor: "pointer",
-                    backgroundColor: "var(--surface, #FFFFFF)",
-                    position: "relative",
-                    flexShrink: 0,
-                    outline: isSelected ? "1px solid var(--accent, #F5C400)" : "none",
-                    boxShadow: isSelected ? "0 0 0 2px rgba(245, 196, 0, 0.3)" : "none",
-                    transition: "border-color 0.15s, transform 0.15s, box-shadow 0.15s",
-                  }}
+                  className={`project-modal-thumb-btn ${isSelected ? "is-selected" : ""}`}
                 >
                   <img
                     src={img.url}
                     alt={img.altText || `Thumbnail ${idx + 1}`}
+                    className="project-modal-thumb-img"
                     onError={(e) => {
                       const target = e.currentTarget;
                       if (target.src !== "/images/hero-solar-architectural.webp") {
                         target.src = "/images/hero-solar-architectural.webp";
                       }
-                    }}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                      display: "block",
                     }}
                   />
                 </button>
@@ -268,48 +161,14 @@ export function ProjectDetailModal({ project, onClose }: ProjectDetailModalProps
         )}
 
         {/* Project Information Panel */}
-        <div
-          className="project-modal-body"
-          style={{
-            padding: "24px 28px",
-            display: "flex",
-            flexDirection: "column",
-            flex: 1,
-          }}
-        >
+        <div className="project-modal-body">
           {/* Header Row: Category (Left) and Completion Year (Right) */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              flexWrap: "wrap",
-              gap: "8px",
-              marginBottom: "8px",
-            }}
-          >
-            <span
-              style={{
-                fontSize: "0.75rem",
-                fontWeight: 700,
-                color: "var(--accent-hover, #D4A017)",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-              }}
-            >
+          <div className="project-modal-header-meta">
+            <span className="project-modal-category">
               {project.category || "Complete Solar System Installation"}
             </span>
             {project.completionYear && (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "0.82rem",
-                  fontWeight: 500,
-                  color: "var(--text-muted, #6F706B)",
-                }}
-              >
+              <span className="project-modal-year">
                 <Calendar size={13} aria-hidden="true" />
                 Completed {project.completionYear}
               </span>
@@ -317,107 +176,35 @@ export function ProjectDetailModal({ project, onClose }: ProjectDetailModalProps
           </div>
 
           {/* Project Title */}
-          <h2
-            id="project-modal-title"
-            style={{
-              fontSize: "clamp(1.4rem, 2.4vw, 1.85rem)",
-              fontWeight: 700,
-              color: "var(--text, #111111)",
-              lineHeight: 1.25,
-              marginBottom: "16px",
-              letterSpacing: "-0.02em",
-            }}
-          >
+          <h2 id="project-modal-title" className="project-modal-title">
             {project.title}
           </h2>
 
           {/* Metadata Panel: Client, Location, Capacity */}
           {(project.clientOrganization || project.location || project.size) && (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                gap: "12px",
-                padding: "14px 18px",
-                backgroundColor: "var(--surface-subtle, #EFECE6)",
-                borderRadius: "var(--radius-sm, 8px)",
-                border: "1px solid var(--border, #E6E4DF)",
-                marginBottom: "20px",
-              }}
-            >
+            <div className="project-modal-meta-grid">
               {project.clientOrganization && (
-                <div>
-                  <div
-                    style={{
-                      fontSize: "0.68rem",
-                      fontWeight: 700,
-                      color: "var(--text-muted, #6F706B)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      marginBottom: "3px",
-                    }}
-                  >
-                    Client / Organization
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "0.92rem",
-                      fontWeight: 600,
-                      color: "var(--text, #111111)",
-                    }}
-                  >
+                <div className="project-modal-meta-cell">
+                  <span className="project-modal-meta-label">Client / Organization</span>
+                  <span className="project-modal-meta-val bold">
                     {project.clientOrganization}
-                  </div>
+                  </span>
                 </div>
               )}
               {project.location && (
-                <div>
-                  <div
-                    style={{
-                      fontSize: "0.68rem",
-                      fontWeight: 700,
-                      color: "var(--text-muted, #6F706B)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      marginBottom: "3px",
-                    }}
-                  >
-                    Location
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "0.92rem",
-                      fontWeight: 500,
-                      color: "var(--text, #111111)",
-                    }}
-                  >
+                <div className="project-modal-meta-cell">
+                  <span className="project-modal-meta-label">Location</span>
+                  <span className="project-modal-meta-val">
                     {project.location}
-                  </div>
+                  </span>
                 </div>
               )}
               {project.size && (
-                <div>
-                  <div
-                    style={{
-                      fontSize: "0.68rem",
-                      fontWeight: 700,
-                      color: "var(--text-muted, #6F706B)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      marginBottom: "3px",
-                    }}
-                  >
-                    Capacity / Size
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "0.92rem",
-                      fontWeight: 700,
-                      color: "var(--text, #111111)",
-                    }}
-                  >
+                <div className="project-modal-meta-cell">
+                  <span className="project-modal-meta-label">Capacity / Size</span>
+                  <span className="project-modal-meta-val bold">
                     {project.size}
-                  </div>
+                  </span>
                 </div>
               )}
             </div>
@@ -425,15 +212,8 @@ export function ProjectDetailModal({ project, onClose }: ProjectDetailModalProps
 
           {/* Short Summary */}
           {(project.shortSummary || project.description) && (
-            <div style={{ marginBottom: project.fullStory ? "20px" : "0" }}>
-              <p
-                style={{
-                  fontSize: "0.96rem",
-                  color: "var(--text, #111111)",
-                  lineHeight: 1.65,
-                  margin: 0,
-                }}
-              >
+            <div className="project-modal-summary">
+              <p>
                 {project.shortSummary || project.description}
               </p>
             </div>
@@ -441,50 +221,15 @@ export function ProjectDetailModal({ project, onClose }: ProjectDetailModalProps
 
           {/* Project Story & Technical Breakdown */}
           {project.fullStory && (
-            <div
-              style={{
-                borderTop: "1px solid var(--border, #E6E4DF)",
-                paddingTop: "18px",
-                marginTop: "16px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: isStoryExpanded ? "12px" : "0",
-                }}
-              >
-                <h4
-                  style={{
-                    fontSize: "0.85rem",
-                    fontWeight: 700,
-                    color: "var(--text, #111111)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    margin: 0,
-                  }}
-                >
+            <div className="project-modal-story-section">
+              <div className="project-modal-story-header">
+                <h4 className="project-modal-story-title">
                   Project Story &amp; Technical Breakdown
                 </h4>
                 <button
                   type="button"
                   onClick={() => setIsStoryExpanded((prev) => !prev)}
-                  style={{
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    padding: "4px 10px",
-                    borderRadius: "6px",
-                    backgroundColor: "var(--surface-subtle, #EFECE6)",
-                    border: "1px solid var(--border, #E6E4DF)",
-                    color: "var(--text, #111111)",
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    transition: "background-color 0.15s ease",
-                  }}
+                  className="project-modal-story-toggle"
                   aria-expanded={isStoryExpanded}
                 >
                   {isStoryExpanded ? "Collapse" : "Read Full Story"}
@@ -492,14 +237,7 @@ export function ProjectDetailModal({ project, onClose }: ProjectDetailModalProps
               </div>
 
               {isStoryExpanded && (
-                <div
-                  style={{
-                    fontSize: "0.92rem",
-                    color: "var(--text-muted, #6F706B)",
-                    lineHeight: 1.75,
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
+                <div className="project-modal-story-content">
                   {project.fullStory}
                 </div>
               )}

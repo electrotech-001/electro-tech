@@ -514,4 +514,115 @@ describe("ProjectsDirectoryPage (/projects)", () => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
   });
+
+  describe("Responsive Layout & Mobile Adaptation", () => {
+    it("renders responsive shell, grid, card, and footer structure", async () => {
+      vi.mocked(fetchAllPublishedProjects).mockResolvedValueOnce(mockAllPublishedProjects);
+
+      const { container } = render(<ProjectsDirectoryPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Commercial Rooftop Solar Phase 1")).toBeDefined();
+      });
+
+      // Wrapper has responsive class
+      const wrapper = container.querySelector(".projects-directory-wrapper");
+      expect(wrapper).toBeDefined();
+
+      // Hero section has responsive shell
+      const heroSection = container.querySelector(".projects-hero-section");
+      expect(heroSection).toBeDefined();
+      const heroShell = container.querySelector(".projects-hero-shell");
+      expect(heroShell).toBeDefined();
+      const heroTitle = container.querySelector(".projects-hero-title");
+      expect(heroTitle?.textContent).toBe("Projects Directory");
+
+      // Grid section has responsive shell and grid
+      const gridSection = container.querySelector(".projects-grid-section");
+      expect(gridSection).toBeDefined();
+      const gridShell = container.querySelector(".projects-grid-shell");
+      expect(gridShell).toBeDefined();
+      const grid = container.querySelector(".projects-grid");
+      expect(grid).toBeDefined();
+
+      // Cards have responsive sub-elements
+      const cards = container.querySelectorAll(".project-directory-card");
+      expect(cards.length).toBe(2);
+
+      const firstCard = cards[0];
+      expect(firstCard.querySelector(".project-card-image-wrap")).toBeDefined();
+      expect(firstCard.querySelector(".project-card-body")).toBeDefined();
+      expect(firstCard.querySelector(".project-card-header-meta")).toBeDefined();
+      expect(firstCard.querySelector(".project-card-title-row")).toBeDefined();
+      expect(firstCard.querySelector(".project-card-title")).toBeDefined();
+      expect(firstCard.querySelector(".project-card-arrow")).toBeDefined();
+      expect(firstCard.querySelector(".project-card-metadata")).toBeDefined();
+
+      // CTA section and footer
+      expect(container.querySelector(".projects-cta-section")).toBeDefined();
+      expect(container.querySelector(".projects-cta-inner")).toBeDefined();
+      expect(container.querySelector(".projects-footer")).toBeDefined();
+      expect(container.querySelector(".projects-footer-inner")).toBeDefined();
+      expect(container.querySelector(".projects-footer-nav")).toBeDefined();
+    });
+
+    it("handles long project titles gracefully within the responsive title row", async () => {
+      const longTitleProject: PublicProject = {
+        ...mockAllPublishedProjects[0],
+        id: "proj-long-title",
+        title: "Darul Islam Colony Solar Project With Extended Name That Wraps Naturally Across Multiple Screen Widths",
+      };
+
+      vi.mocked(fetchAllPublishedProjects).mockResolvedValueOnce([longTitleProject]);
+
+      const { container } = render(<ProjectsDirectoryPage />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(
+            "Darul Islam Colony Solar Project With Extended Name That Wraps Naturally Across Multiple Screen Widths",
+          ),
+        ).toBeDefined();
+      });
+
+      const titleEl = container.querySelector(".project-card-title");
+      expect(titleEl).toBeDefined();
+      const arrowEl = container.querySelector(".project-card-arrow");
+      expect(arrowEl).toBeDefined();
+
+      // Both reside cleanly in the title row without collision
+      const titleRow = container.querySelector(".project-card-title-row");
+      expect(titleRow?.contains(titleEl!)).toBe(true);
+      expect(titleRow?.contains(arrowEl!)).toBe(true);
+    });
+
+    it("renders modal with responsive structure and metadata cells", async () => {
+      vi.mocked(fetchAllPublishedProjects).mockResolvedValueOnce(mockAllPublishedProjects);
+
+      const { container } = render(<ProjectsDirectoryPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Commercial Rooftop Solar Phase 1")).toBeDefined();
+      });
+
+      fireEvent.click(screen.getByLabelText(/View details for Commercial Rooftop Solar Phase 1/i));
+
+      // Modal panel and body have responsive classes
+      const panel = container.querySelector(".project-modal-panel");
+      expect(panel).toBeDefined();
+      const modalBody = container.querySelector(".project-modal-body");
+      expect(modalBody).toBeDefined();
+
+      // Metadata grid has responsive grid class with individual cells
+      const metaGrid = container.querySelector(".project-modal-meta-grid");
+      expect(metaGrid).toBeDefined();
+      const cells = container.querySelectorAll(".project-modal-meta-cell");
+      expect(cells.length).toBe(3); // Client, Location, Capacity
+
+      // Close button and gallery
+      expect(container.querySelector(".project-modal-close-btn")).toBeDefined();
+      expect(container.querySelector(".project-modal-gallery")).toBeDefined();
+      expect(container.querySelector(".project-modal-story-section")).toBeDefined();
+    });
+  });
 });
