@@ -9,6 +9,8 @@ export const siteConfig = {
   whatsappHref:
     "https://wa.me/923105056394?text=Hello%20Electro%20Tech%2C%20I%20would%20like%20to%20discuss%20a%20solar%20or%20electrical%20project.",
   email: "aqeel@electrotech-attock.com",
+  facebookHref: "https://www.facebook.com/share/1S14P3UZRs/?mibextid=wwXIfr",
+  tiktokHref: "https://www.tiktok.com/@electrotech8084?_r=1&_t=ZS-99rWh4Wbo0q",
   services: [
     "Solar Energy",
     "Solar Structures",

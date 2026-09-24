@@ -11,6 +11,7 @@ import {
   ArrowUp,
   ArrowUpRight,
   Check,
+  Facebook,
   Mail,
   MessageCircle,
   Phone,
@@ -117,6 +118,35 @@ function WhatsAppIcon({ size = 28, className }: { size?: number; className?: str
     >
       <path d="M3 21l1.65 -3.8a9 9 0 1 1 3.4 2.9l-5.05 .9" />
       <path d="M9 10a.5 .5 0 0 0 1 0v-1a.5 .5 0 0 0 -1 0v1a5 5 0 0 0 5 5h1a.5 .5 0 0 0 0 -1h-1a.5 .5 0 0 0 0 1" />
+    </svg>
+  );
+}
+
+function TikTokIcon({
+  size = 17,
+  strokeWidth = 2.3,
+  className,
+}: {
+  size?: number;
+  strokeWidth?: number;
+  className?: string;
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      focusable="false"
+      className={className}
+    >
+      <path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5" />
     </svg>
   );
 }
@@ -652,8 +682,8 @@ export function ElectroTechSite() {
               </motion.p>
 
               <motion.div className="hero-actions-wrap" {...motionProps} transition={{ duration: 0.5, delay: reducedMotion ? 0 : 0.16 }}>
-                <a className="button hero-white-pill" href="#contact" onClick={(e) => { e.preventDefault(); scrollToSection("contact"); }}>
-                  Get a Solar Quote <ArrowRight size={15} className="link-icon" aria-hidden="true" />
+                <a className="button hero-analyzer-pill" href="/solar-bill-analyzer">
+                  Analyze Your Electricity Bill <ArrowRight size={15} className="link-icon" aria-hidden="true" />
                 </a>
               </motion.div>
             </div>
@@ -1126,6 +1156,28 @@ export function ElectroTechSite() {
               <a href={siteConfig.phoneHref}><Phone size={15} strokeWidth={1.8} aria-hidden="true" /><span>{siteConfig.phoneDisplay}</span></a>
               <a href={siteConfig.whatsappHref} target="_blank" rel="noreferrer"><MessageCircle size={15} strokeWidth={1.8} aria-hidden="true" /><span>WhatsApp</span></a>
               <a href={`mailto:${siteConfig.email}`}><Mail size={15} strokeWidth={1.8} aria-hidden="true" /><span>{siteConfig.email}</span></a>
+            </div>
+            <div className="footer-socials" aria-label="Social media">
+              <a
+                href={siteConfig.facebookHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Visit Electro Tech on Facebook"
+                title="Visit Electro Tech on Facebook"
+                className="footer-social-link"
+              >
+                <Facebook size={17} strokeWidth={2.3} aria-hidden="true" />
+              </a>
+              <a
+                href={siteConfig.tiktokHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Visit Electro Tech on TikTok"
+                title="Visit Electro Tech on TikTok"
+                className="footer-social-link"
+              >
+                <TikTokIcon size={17} strokeWidth={2.3} aria-hidden="true" />
+              </a>
             </div>
           </div>
           <div className="footer-column">
