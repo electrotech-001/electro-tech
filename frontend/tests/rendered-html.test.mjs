@@ -73,6 +73,10 @@ test("server-renders the complete Electro Tech page", async () => {
   assert.match(html, /class="button hero-analyzer-pill"[^>]*href="\/solar-bill-analyzer"[^>]*>\s*Analyze Your Electricity Bill/);
   assert.match(html, /href="(?:https:\/\/www\.facebook\.com\/share\/1S14P3UZRs\/\?mibextid=wwXIfr|https:\/\/www\.fb\.com\/l\/6lp1kJRRR)"[^>]*target="_blank"[^>]*rel="noopener noreferrer"[^>]*aria-label="Visit Electro Tech on Facebook"/);
   assert.match(html, /href="https:\/\/www\.tiktok\.com\/@electrotech8084\?_r=1(?:&amp;|&)_t=ZS-99rWh4Wbo0q"[^>]*target="_blank"[^>]*rel="noopener noreferrer"[^>]*aria-label="Visit Electro Tech on TikTok"/);
+  // Floating Solar Analyzer button
+  assert.match(html, /class="floating-solar-analyzer"/);
+  assert.match(html, /href="\/solar-bill-analyzer"[^>]*class="floating-solar-analyzer"/);
+  assert.match(html, /aria-label="Analyze Your Electricity Bill"[^>]*title="Analyze Your Electricity Bill"/);
 });
 
 test("adds security headers", async () => {

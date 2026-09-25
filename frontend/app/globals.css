@@ -528,7 +528,7 @@ p:last-child {
 .hero-analyzer-pill {
   min-height: 46px;
   padding: 12px 26px;
-  border-radius: 9999px;
+  border-radius: 14px;
   background: var(--accent);
   color: var(--dark);
   font-size: 0.88rem;
@@ -2277,6 +2277,50 @@ p:last-child {
 }
 
 /* ============================================================
+   GLOBAL FLOATING SOLAR ANALYZER BUTTON
+   ============================================================ */
+.floating-solar-analyzer {
+  position: fixed;
+  left: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  z-index: 800;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #11110F;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.32), 0 2px 6px rgba(0, 0, 0, 0.2);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+  text-decoration: none;
+}
+
+.floating-solar-analyzer:hover {
+  transform: translateY(-2px) scale(1.03);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38), 0 2px 8px rgba(245, 196, 0, 0.18);
+}
+
+.floating-solar-analyzer:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.floating-solar-analyzer:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(245, 196, 0, 0.25);
+}
+
+.floating-solar-analyzer-icon {
+  width: 23px;
+  height: 23px;
+  display: block;
+  color: var(--accent);
+}
+
+/* ============================================================
    13. RESPONSIVE BREAKPOINTS
    ============================================================ */
 @media (max-width: 1080px) {
@@ -2552,15 +2596,33 @@ p:last-child {
     width: 26px;
     height: 26px;
   }
+  .floating-solar-analyzer {
+    width: 52px;
+    height: 52px;
+    left: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .floating-solar-analyzer-icon {
+    width: 21px;
+    height: 21px;
+  }
 }
 
 @media (max-width: 520px) {
   .hero-actions-wrap {
     width: 100%;
+    display: flex;
+    justify-content: flex-start;
   }
-  .hero-actions-wrap .button {
-    width: 100%;
-    justify-content: center;
+  .hero-analyzer-pill {
+    width: fit-content;
+    max-width: calc(100% - 32px);
+    padding: 10px 24px;
+    min-height: 44px;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
@@ -2747,6 +2809,10 @@ p:last-child {
     stroke-dasharray: none;
   }
   .floating-whatsapp {
+    transition: none;
+    transform: none !important;
+  }
+  .floating-solar-analyzer {
     transition: none;
     transform: none !important;
   }

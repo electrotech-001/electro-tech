@@ -12,6 +12,7 @@ import {
   ArrowUpRight,
   Check,
   Facebook,
+  FileSearch,
   Mail,
   MessageCircle,
   Phone,
@@ -1242,6 +1243,15 @@ export function ElectroTechSite() {
         title="Chat on WhatsApp"
       >
         <WhatsAppIcon className="floating-whatsapp-icon" />
+      </a>
+
+      <a
+        href="/solar-bill-analyzer"
+        className="floating-solar-analyzer"
+        aria-label="Analyze Your Electricity Bill"
+        title="Analyze Your Electricity Bill"
+      >
+        <FileSearch className="floating-solar-analyzer-icon" size={23} strokeWidth={2.3} aria-hidden="true" />
       </a>
     </>
   );
