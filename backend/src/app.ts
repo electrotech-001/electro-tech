@@ -1,3 +1,4 @@
+import { createAdminReviewsRouter } from "./routes/project-reviews.js";
 import cors, { type CorsOptions } from "cors";
 import express, { type ErrorRequestHandler, type RequestHandler } from "express";
 import multer from "multer";
@@ -28,6 +29,7 @@ type AppDependencies = {
   projectsRouter?: express.Router;
   adminProjectsRouter?: express.Router;
   adminMeRouter?: express.Router;
+  adminReviewsRouter?: express.Router;
 };
 
 function isLocalDevelopmentOrigin(origin: string): boolean {
@@ -103,6 +105,7 @@ export function createApp(dependencies: AppDependencies) {
     "/api/projects",
     dependencies.projectsRouter ?? createProjectsRouter(),
   );
+  app.use("/api/admin", dependencies.adminReviewsRouter ?? createAdminReviewsRouter());
   app.use(
     "/api/admin/projects",
     express.json(),

@@ -1,4 +1,5 @@
-import { Router } from "express";
+import { createPublicReviewsRouter } from "./project-reviews.js";
+import { Router, type RequestHandler } from "express";
 import {
   getPublishedProjectBySlug,
   listPublishedProjects,
@@ -9,8 +10,9 @@ import {
   publicProjectsQuerySchema,
 } from "../validation/projects.js";
 
-export function createProjectsRouter(dependencies: ProjectServiceDependencies = {}) {
+export function createProjectsRouter(dependencies: ProjectServiceDependencies & { reviewRateLimiter?: RequestHandler } = {}) {
   const router = Router();
+  router.use(createPublicReviewsRouter({ ...dependencies, ...(dependencies.reviewRateLimiter ? { rateLimiter: dependencies.reviewRateLimiter } : {}) }));
 
   /**
    * GET /api/projects

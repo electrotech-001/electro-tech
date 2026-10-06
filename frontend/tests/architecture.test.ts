@@ -45,6 +45,8 @@ describe("frontend security and architectural invariants", () => {
       await readFile(join(process.cwd(), "components", "solar-bill-analyzer.tsx"), "utf8"),
       await readFile(join(process.cwd(), "components", "projects-directory.tsx"), "utf8"),
       await readFile(join(process.cwd(), "lib", "projects.ts"), "utf8"),
+      await readFile(join(process.cwd(), "lib", "project-reviews.ts"), "utf8"),
+      await readFile(join(process.cwd(), "components", "project-reviews.tsx"), "utf8"),
       await readFile(join(process.cwd(), "app", "page.tsx"), "utf8"),
       await readFile(join(process.cwd(), "app", "projects", "page.tsx"), "utf8"),
     ].join("\n");

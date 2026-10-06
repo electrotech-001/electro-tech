@@ -1,0 +1,13 @@
+
+> electro-tech-website@0.1.0 test:ui
+> vitest run --maxWorkers=2
+
+
+ RUN  v4.1.11 D:/Web-Dev-Projects/Electro/frontend
+
+
+ Test Files  12 passed (12)
+      Tests  137 passed (137)
+   Start at  19:23:40
+   Duration  61.25s (transform 2.61s, setup 4.83s, import 9.89s, tests 73.08s, environment 28.99s)
+

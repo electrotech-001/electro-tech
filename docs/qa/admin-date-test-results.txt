@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 D:/Web-Dev-Projects/Electro/frontend
+
+
+ Test Files  2 passed (2)
+      Tests  35 passed (35)
+   Start at  19:18:54
+   Duration  15.72s (transform 1.73s, setup 1.46s, import 3.06s, tests 14.30s, environment 7.06s)
+

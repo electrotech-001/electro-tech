@@ -1,4 +1,6 @@
 "use client";
+import { formatProjectCompletion } from "../../lib/project-date";
+
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
@@ -218,9 +220,9 @@ export function ProjectPreviewPage({ projectId }: { projectId?: string }) {
               >
                 {project.category || "Solar Installation"}
               </span>
-              {project.completionYear && (
+              {formatProjectCompletion(project) && (
                 <span style={{ fontSize: "0.8rem", color: "var(--text-muted, #6F706B)" }}>
-                  Completed {project.completionYear}
+                  Completed {formatProjectCompletion(project)}
                 </span>
               )}
             </div>

@@ -19,6 +19,8 @@ export type ProjectDatabaseRow = {
   size: string | null;
   category?: string | null;
   completion_year?: number | null;
+  completion_date?: string | null;
+  completion_date_required?: boolean;
   short_summary?: string | null;
   full_story?: string | null;
   description: string | null;
@@ -57,6 +59,7 @@ export type PublicProjectResponse = {
   size: string | null;
   category: string | null;
   completionYear: number | null;
+  completionDate: string | null;
   shortSummary: string | null;
   fullStory: string | null;
   description: string | null;
@@ -83,6 +86,7 @@ export type AdminProjectResponse = {
   size: string | null;
   category: string | null;
   completionYear: number | null;
+  completionDate: string | null;
   shortSummary: string | null;
   fullStory: string | null;
   description: string | null;
@@ -215,6 +219,7 @@ export function toPublicProject(
     size: row.size,
     category: row.category ?? null,
     completionYear: row.completion_year ?? null,
+    completionDate: row.completion_date ?? null,
     shortSummary: row.short_summary ?? (row.description ? row.description.slice(0, 400) : null),
     fullStory: row.full_story ?? null,
     description: row.description,
@@ -258,6 +263,7 @@ export function toAdminProject(
     size: row.size,
     category: row.category ?? null,
     completionYear: row.completion_year ?? null,
+    completionDate: row.completion_date ?? null,
     shortSummary: row.short_summary ?? (row.description ? row.description.slice(0, 400) : null),
     fullStory: row.full_story ?? null,
     description: row.description,
@@ -441,6 +447,8 @@ export async function createProject(
     size: input.size ? input.size.trim() : null,
     category: input.category || null,
     completion_year: input.completionYear ?? null,
+    completion_date: input.completionDate ?? null,
+    completion_date_required: true,
     short_summary: shortSummary,
     full_story: input.fullStory ? input.fullStory.trim() : null,
     description,
@@ -528,6 +536,13 @@ export async function updateProject(
   }
   if (input.category !== undefined) {
     updatePayload.category = input.category || null;
+  }
+  if (input.completionDate !== undefined) {
+    updatePayload.completion_date = input.completionDate;
+    if (input.completionDate) updatePayload.completion_date_required = true;
+    if (current.status === "published" && !input.completionDate && (current.completion_date || current.completion_date_required)) {
+      throw new ProjectValidationError("A published project must have a completion date.", ["completionDate"]);
+    }
   }
   if (input.completionYear !== undefined) {
     updatePayload.completion_year = input.completionYear ?? null;
@@ -620,7 +635,7 @@ export async function publishProject(
   if (!current.size || !current.size.trim()) missingFields.push("size");
   if (!current.client_organization || !current.client_organization.trim()) missingFields.push("clientOrganization");
   if (!current.category || !current.category.trim()) missingFields.push("category");
-  if (!current.completion_year) missingFields.push("completionYear");
+  if (!current.completion_date && (current.completion_date_required || !current.completion_year)) missingFields.push("completionDate");
 
   const summary = current.short_summary || current.description;
   if (!summary || summary.trim().length < 10) {

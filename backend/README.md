@@ -32,3 +32,22 @@ Analyzer routes:
 Belmo documents one regional edge load balancer between the client and the application container. Express therefore trusts exactly one proxy hop (`app.set("trust proxy", 1)`) before using `req.ip` for rate limiting. It does not trust arbitrary proxy chains.
 
 The API uses process-local in-memory limits per IP: 3 bill extractions, 20 calculations, and 5 quote handoffs per 30 minutes. Counters reset whenever the application process restarts and are not shared across multiple instances. This is intentional for the current low-volume, storage-free architecture.
+
+## Project reviews and completion dates
+
+Apply `supabase/migrations/20261006090000_project_reviews_and_completion_dates.sql` after the existing migrations. It preserves projects, media, publication state and legacy completion years, and never invents completion dates. Tests apply the application migrations unchanged to an isolated PostgreSQL engine using PGlite with minimal Supabase platform schemas. Deployment and live migration application remain manual.
+
+Public routes:
+
+- `GET /api/projects/:projectId/reviews?page=1`: 20 visible reviews, newest first, plus `reviewCount`, `averageRating` and `hasMore`. Totals include all visible reviews.
+- `POST /api/projects/:projectId/reviews`: `{ reviewerName, rating, reviewText }`; immediately visible on a published project. Names are trimmed and limited to 80 characters, ratings are integers 1–5, and trimmed review text is limited to 10–1000 characters. Unknown fields and unsupported control characters are rejected.
+
+Admin routes use the existing `authenticateAdmin` middleware:
+
+- `GET /api/admin/projects/:projectId/reviews?page=1`: 20 reviews including hidden reviews, plus `hasMore`.
+- `PATCH /api/admin/project-reviews/:reviewId`: `{ isVisible: boolean }`.
+- `DELETE /api/admin/project-reviews/:reviewId`: permanent deletion; the Admin UI requires confirmation.
+
+Public submissions are limited to 5 attempts per IP per 30 minutes, including invalid requests and retries. Like the existing limits, counters are process-local and reset on restart. PostgreSQL serializes submissions per project and treats identical name/rating/text submitted within 10 minutes as retries. A visible duplicate returns the existing review with HTTP 200; a hidden duplicate returns HTTP 409 without exposing its content. No IP address is persisted. Bodies are capped at 8 KB. Browser table/RPC access is revoked; only the server role can access reviews.
+
+Project create/update payloads accept nullable `completionDate` as a real `YYYY-MM-DD` calendar date. New drafts may omit the date, but publication requires it. Existing year-only projects retain legacy publication eligibility until a real date is entered; once supplied, an exact date is required for subsequent publication. The internal `completion_date_required` flag preserves this distinction without inferring dates. `completionYear` remains a legacy API field during the transition.

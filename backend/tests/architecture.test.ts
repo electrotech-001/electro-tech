@@ -41,6 +41,8 @@ test("frontend workspace enforces Supabase isolation: public site is Supabase-fr
     await readFile(join(frontendDir, "components", "electro-tech-site.tsx"), "utf8"),
     await readFile(join(frontendDir, "components", "projects-directory.tsx"), "utf8"),
     await readFile(join(frontendDir, "lib", "projects.ts"), "utf8"),
+    await readFile(join(frontendDir, "lib", "project-reviews.ts"), "utf8"),
+    await readFile(join(frontendDir, "components", "project-reviews.tsx"), "utf8"),
   ].join("\n").toLowerCase();
 
   const allFrontendSrc = [

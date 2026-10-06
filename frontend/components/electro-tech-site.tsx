@@ -12,7 +12,7 @@ import {
   ArrowUpRight,
   Check,
   Facebook,
-  FileSearch,
+  Calculator,
   Mail,
   MessageCircle,
   Phone,
@@ -1251,7 +1251,7 @@ export function ElectroTechSite() {
         aria-label="Analyze Your Electricity Bill"
         title="Analyze Your Electricity Bill"
       >
-        <FileSearch className="floating-solar-analyzer-icon" size={23} strokeWidth={2.3} aria-hidden="true" />
+        <Calculator className="floating-solar-analyzer-icon" size={23} strokeWidth={2.3} aria-hidden="true" />
       </a>
     </>
   );

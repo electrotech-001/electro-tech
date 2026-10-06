@@ -1,0 +1,462 @@
+{
+  "modal": [
+    {
+      "cardCount": 20,
+      "date": "Completed 15 September 2026",
+      "pageOverflow": false,
+      "panelClipped": false,
+      "panelOverflow": false,
+      "scrollable": true,
+      "starControlWidth": 260,
+      "width": 320
+    },
+    {
+      "cardCount": 20,
+      "date": "Completed 15 September 2026",
+      "pageOverflow": false,
+      "panelClipped": false,
+      "panelOverflow": false,
+      "scrollable": true,
+      "starControlWidth": 300,
+      "width": 360
+    },
+    {
+      "cardCount": 20,
+      "date": "Completed 15 September 2026",
+      "pageOverflow": false,
+      "panelClipped": false,
+      "panelOverflow": false,
+      "scrollable": true,
+      "starControlWidth": 318.3999938964844,
+      "width": 375
+    },
+    {
+      "cardCount": 20,
+      "date": "Completed 15 September 2026",
+      "pageOverflow": false,
+      "panelClipped": false,
+      "panelOverflow": false,
+      "scrollable": true,
+      "starControlWidth": 336.8000183105469,
+      "width": 394
+    },
+    {
+      "cardCount": 20,
+      "date": "Completed 15 September 2026",
+      "pageOverflow": false,
+      "panelClipped": false,
+      "panelOverflow": false,
+      "scrollable": true,
+      "starControlWidth": 373.6000061035156,
+      "width": 430
+    },
+    {
+      "cardCount": 20,
+      "date": "Completed 15 September 2026",
+      "pageOverflow": false,
+      "panelClipped": false,
+      "panelOverflow": false,
+      "scrollable": true,
+      "starControlWidth": 647.2000122070312,
+      "width": 768
+    },
+    {
+      "cardCount": 20,
+      "date": "Completed 15 September 2026",
+      "pageOverflow": false,
+      "panelClipped": false,
+      "panelOverflow": false,
+      "scrollable": true,
+      "starControlWidth": 787.2000122070312,
+      "width": 1024
+    },
+    {
+      "cardCount": 20,
+      "date": "Completed 15 September 2026",
+      "pageOverflow": false,
+      "panelClipped": false,
+      "panelOverflow": false,
+      "scrollable": true,
+      "starControlWidth": 787.2000122070312,
+      "width": 1280
+    },
+    {
+      "cardCount": 20,
+      "date": "Completed 15 September 2026",
+      "pageOverflow": false,
+      "panelClipped": false,
+      "panelOverflow": false,
+      "scrollable": true,
+      "starControlWidth": 787.2000122070312,
+      "width": 1440
+    },
+    {
+      "cardCount": 20,
+      "date": "Completed 15 September 2026",
+      "pageOverflow": false,
+      "panelClipped": false,
+      "panelOverflow": false,
+      "scrollable": true,
+      "starControlWidth": 787.2000122070312,
+      "width": 1920
+    }
+  ],
+  "floating": [
+    {
+      "analyzerHref": "/solar-bill-analyzer",
+      "calculator": true,
+      "dimensions": [
+        52,
+        52
+      ],
+      "gap": 12,
+      "inBounds": true,
+      "overflow": false,
+      "rightAligned": true,
+      "whatsappHref": "https://wa.me/923105056394",
+      "width": 320
+    },
+    {
+      "analyzerHref": "/solar-bill-analyzer",
+      "calculator": true,
+      "dimensions": [
+        52,
+        52
+      ],
+      "gap": 12,
+      "inBounds": true,
+      "overflow": false,
+      "rightAligned": true,
+      "whatsappHref": "https://wa.me/923105056394",
+      "width": 360
+    },
+    {
+      "analyzerHref": "/solar-bill-analyzer",
+      "calculator": true,
+      "dimensions": [
+        52,
+        52
+      ],
+      "gap": 12,
+      "inBounds": true,
+      "overflow": false,
+      "rightAligned": true,
+      "whatsappHref": "https://wa.me/923105056394",
+      "width": 375
+    },
+    {
+      "analyzerHref": "/solar-bill-analyzer",
+      "calculator": true,
+      "dimensions": [
+        52,
+        52
+      ],
+      "gap": 12,
+      "inBounds": true,
+      "overflow": false,
+      "rightAligned": true,
+      "whatsappHref": "https://wa.me/923105056394",
+      "width": 394
+    },
+    {
+      "analyzerHref": "/solar-bill-analyzer",
+      "calculator": true,
+      "dimensions": [
+        52,
+        52
+      ],
+      "gap": 12,
+      "inBounds": true,
+      "overflow": false,
+      "rightAligned": true,
+      "whatsappHref": "https://wa.me/923105056394",
+      "width": 430
+    },
+    {
+      "analyzerHref": "/solar-bill-analyzer",
+      "calculator": true,
+      "dimensions": [
+        56,
+        56
+      ],
+      "gap": 12,
+      "inBounds": true,
+      "overflow": false,
+      "rightAligned": true,
+      "whatsappHref": "https://wa.me/923105056394",
+      "width": 768
+    },
+    {
+      "analyzerHref": "/solar-bill-analyzer",
+      "calculator": true,
+      "dimensions": [
+        56,
+        56
+      ],
+      "gap": 12,
+      "inBounds": true,
+      "overflow": false,
+      "rightAligned": true,
+      "whatsappHref": "https://wa.me/923105056394",
+      "width": 1024
+    },
+    {
+      "analyzerHref": "/solar-bill-analyzer",
+      "calculator": true,
+      "dimensions": [
+        56,
+        56
+      ],
+      "gap": 12,
+      "inBounds": true,
+      "overflow": false,
+      "rightAligned": true,
+      "whatsappHref": "https://wa.me/923105056394",
+      "width": 1280
+    },
+    {
+      "analyzerHref": "/solar-bill-analyzer",
+      "calculator": true,
+      "dimensions": [
+        56,
+        56
+      ],
+      "gap": 12,
+      "inBounds": true,
+      "overflow": false,
+      "rightAligned": true,
+      "whatsappHref": "https://wa.me/923105056394",
+      "width": 1440
+    },
+    {
+      "analyzerHref": "/solar-bill-analyzer",
+      "calculator": true,
+      "dimensions": [
+        56,
+        56
+      ],
+      "gap": 12,
+      "inBounds": true,
+      "overflow": false,
+      "rightAligned": true,
+      "whatsappHref": "https://wa.me/923105056394",
+      "width": 1920
+    }
+  ],
+  "finalScrolledModal": [
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "fractionalStarWidths": [
+        "100%",
+        "100%",
+        "100%",
+        "100%",
+        "52.1739%"
+      ],
+      "overflow": false,
+      "width": 320
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "fractionalStarWidths": [
+        "100%",
+        "100%",
+        "100%",
+        "100%",
+        "52.1739%"
+      ],
+      "overflow": false,
+      "width": 360
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "fractionalStarWidths": [
+        "100%",
+        "100%",
+        "100%",
+        "100%",
+        "52.1739%"
+      ],
+      "overflow": false,
+      "width": 375
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "fractionalStarWidths": [
+        "100%",
+        "100%",
+        "100%",
+        "100%",
+        "52.1739%"
+      ],
+      "overflow": false,
+      "width": 394
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "fractionalStarWidths": [
+        "100%",
+        "100%",
+        "100%",
+        "100%",
+        "52.1739%"
+      ],
+      "overflow": false,
+      "width": 430
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "fractionalStarWidths": [
+        "100%",
+        "100%",
+        "100%",
+        "100%",
+        "52.1739%"
+      ],
+      "overflow": false,
+      "width": 768
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "fractionalStarWidths": [
+        "100%",
+        "100%",
+        "100%",
+        "100%",
+        "52.1739%"
+      ],
+      "overflow": false,
+      "width": 1024
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "fractionalStarWidths": [
+        "100%",
+        "100%",
+        "100%",
+        "100%",
+        "52.1739%"
+      ],
+      "overflow": false,
+      "width": 1280
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "fractionalStarWidths": [
+        "100%",
+        "100%",
+        "100%",
+        "100%",
+        "52.1739%"
+      ],
+      "overflow": false,
+      "width": 1440
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "fractionalStarWidths": [
+        "100%",
+        "100%",
+        "100%",
+        "100%",
+        "52.1739%"
+      ],
+      "overflow": false,
+      "width": 1920
+    }
+  ],
+  "requestedWidths": [
+    320,
+    360,
+    375,
+    393,
+    430,
+    768,
+    1024,
+    1280,
+    1440,
+    1920
+  ],
+  "finalHeader": [
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "dateCloseOverlap": false,
+      "overflow": false,
+      "width": 320
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "dateCloseOverlap": false,
+      "overflow": false,
+      "width": 360
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "dateCloseOverlap": false,
+      "overflow": false,
+      "width": 375
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "dateCloseOverlap": false,
+      "overflow": false,
+      "width": 394
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "dateCloseOverlap": false,
+      "overflow": false,
+      "width": 430
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "dateCloseOverlap": false,
+      "overflow": false,
+      "width": 768
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "dateCloseOverlap": false,
+      "overflow": false,
+      "width": 1024
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "dateCloseOverlap": false,
+      "overflow": false,
+      "width": 1280
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "dateCloseOverlap": false,
+      "overflow": false,
+      "width": 1440
+    },
+    {
+      "clipped": false,
+      "closeVisible": true,
+      "dateCloseOverlap": false,
+      "overflow": false,
+      "width": 1920
+    }
+  ]
+}

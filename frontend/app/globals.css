@@ -2281,8 +2281,8 @@ p:last-child {
    ============================================================ */
 .floating-solar-analyzer {
   position: fixed;
-  left: 24px;
-  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  right: 24px;
+  bottom: calc(92px + env(safe-area-inset-bottom, 0px));
   z-index: 800;
   width: 56px;
   height: 56px;
@@ -2599,8 +2599,8 @@ p:last-child {
   .floating-solar-analyzer {
     width: 52px;
     height: 52px;
-    left: 16px;
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    right: 16px;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   }
   .floating-solar-analyzer-icon {
     width: 21px;
@@ -3251,7 +3251,10 @@ p:last-child {
 }
 
 .project-modal-close-btn {
-  position: absolute;
+  position: sticky;
+  align-self: flex-end;
+  flex-shrink: 0;
+  margin: 14px 14px -52px 0;
   top: 14px;
   right: 14px;
   z-index: 30;
@@ -3702,6 +3705,7 @@ p:last-child {
     border-radius: 12px;
   }
   .project-modal-close-btn {
+    margin: 10px 10px -46px 0;
     top: 10px;
     right: 10px;
     width: 36px;
@@ -3831,6 +3835,7 @@ p:last-child {
     border-radius: 10px;
   }
   .project-modal-close-btn {
+    margin: 8px 8px -40px 0;
     top: 8px;
     right: 8px;
     width: 32px;
@@ -3885,4 +3890,46 @@ p:last-child {
   .project-modal-story-content {
     font-size: 0.82rem;
   }
+}
+
+/* Customer reviews use the existing project surface, accent and type scale. */
+.project-reviews { border-top: 1px solid var(--border, #E6E4DF); margin-top: 28px; padding-top: 24px; min-width: 0; }
+.review-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 18px 0; }
+.review-summary > strong { font-size: 1.7rem; }
+.review-stars { display: inline-flex; gap: 3px; color: var(--accent, #F5C400); flex-shrink: 0; }
+.review-star-cell { position: relative; display: inline-block; width: 18px; height: 18px; }
+.review-star-fill { position: absolute; inset: 0 auto 0 0; overflow: hidden; }
+.review-star-fill svg { min-width: 18px; max-width: none; display: block; }
+.review-list { display: grid; gap: 12px; }
+.review-card { padding: 18px; border: 1px solid var(--border, #E6E4DF); border-radius: 12px; background: #fff; min-width: 0; overflow-wrap: anywhere; }
+.review-card-header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; }
+.review-card time { font-size: .8rem; display: block; margin-top: 8px; }
+.review-card p { white-space: pre-wrap; margin: 12px 0 0; line-height: 1.6; }
+.review-form { margin-top: 28px; }
+.review-form h4 { font-size: 1.1rem; margin-bottom: 16px; }
+.review-form fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.review-form > fieldset { display: grid; gap: 12px; }
+.review-form input:not([type="radio"]), .review-form textarea {
+ box-sizing: border-box; width: 100%; min-width: 0; padding: 12px; border: 1px solid var(--border, #E6E4DF);
+ border-radius: 8px; background: #fff; color: var(--text, #111111); font: inherit;
+}
+.review-form textarea { resize: vertical; }
+.review-form label, .review-rating legend { font-size: .9rem; font-weight: 600; }
+.review-form > fieldset > span { font-size: .8rem; }
+.review-rating-options { display: flex; gap: 4px; margin-top: 8px; }
+.review-rating-option { position: relative; display: grid; place-items: center; width: 44px; height: 44px; cursor: pointer; color: var(--accent, #F5C400); border-radius: 8px; }
+.review-rating-option input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.review-rating-option:has(input:focus-visible) { outline: 2px solid #111111; outline-offset: 2px; }
+.review-form input:focus-visible, .review-form textarea:focus-visible, .review-submit-button:focus-visible, .review-secondary-button:focus-visible { outline: 2px solid #111111; outline-offset: 3px; }
+.review-submit-button, .review-secondary-button { min-height: 44px; border-radius: 8px; padding: 10px 16px; font: inherit; cursor: pointer; }
+.review-submit-button { background: #11110F; color: var(--accent, #F5C400); border: 1px solid #11110F; justify-self: start; }
+.review-secondary-button { background: #fff; border: 1px solid var(--border, #E6E4DF); color: #111111; }
+.review-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 16px; }
+.review-form :disabled, .review-pagination :disabled { opacity: .6; cursor: wait; }
+.project-modal-header-meta { flex-wrap: wrap; padding-right: 44px; }
+.project-modal-year { white-space: normal; }
+@media (max-width: 430px) {
+ .review-card { padding: 14px; }
+ .review-summary > span:last-child { flex-basis: 100%; }
+ .review-submit-button { width: 100%; }
 }

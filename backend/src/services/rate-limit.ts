@@ -60,3 +60,7 @@ export function createAdminImageUploadRateLimiter(
       }),
   });
 }
+
+export function createReviewRateLimiter(limit = 5) {
+  return createApiRateLimiter(limit, "Too many review submissions. Please try again later.");
+}

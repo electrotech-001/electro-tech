@@ -14,6 +14,7 @@ import {
   updateAdminProject,
   ApiError,
 } from "../../lib/admin/api";
+import { ProjectReviewsManager } from "./ProjectReviewsManager";
 import { StatusBadge } from "./StatusBadge";
 import { ProjectMediaManager } from "./ProjectMediaManager";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
@@ -73,7 +74,7 @@ export function ProjectEditPage({ projectId }: { projectId?: string }) {
   const [locationField, setLocationField] = useState("");
   const [size, setSize] = useState("");
   const [category, setCategory] = useState<ProjectCategory | "">("");
-  const [completionYear, setCompletionYear] = useState<string>("");
+  const [completionDate, setCompletionDate] = useState<string>("");
   const [shortSummary, setShortSummary] = useState("");
   const [fullStory, setFullStory] = useState("");
 
@@ -105,10 +106,10 @@ export function ProjectEditPage({ projectId }: { projectId?: string }) {
             ? (draft.category as ProjectCategory) || ""
             : (data.category as ProjectCategory) || "",
         );
-        setCompletionYear(
-          draft.completionYear !== undefined
-            ? draft.completionYear ? String(draft.completionYear) : ""
-            : data.completionYear ? String(data.completionYear) : "",
+        setCompletionDate(
+          draft.completionDate !== undefined
+            ? draft.completionDate ? String(draft.completionDate) : ""
+            : data.completionDate ? String(data.completionDate) : "",
         );
         setShortSummary(
           draft.shortSummary !== undefined ? (draft.shortSummary || "") : (data.shortSummary || ""),
@@ -125,7 +126,7 @@ export function ProjectEditPage({ projectId }: { projectId?: string }) {
         setLocationField(data.location || "");
         setSize(data.size || "");
         setCategory((data.category as ProjectCategory) || "");
-        setCompletionYear(data.completionYear ? String(data.completionYear) : "");
+        setCompletionDate(data.completionDate ? String(data.completionDate) : "");
         setShortSummary(data.shortSummary || "");
         setFullStory(data.fullStory || "");
       }
@@ -174,7 +175,7 @@ export function ProjectEditPage({ projectId }: { projectId?: string }) {
         locationField !== (project.location || "") ||
         size !== (project.size || "") ||
         category !== (project.category || "") ||
-        completionYear !== (project.completionYear ? String(project.completionYear) : "") ||
+        completionDate !== (project.completionDate ? String(project.completionDate) : "") ||
         shortSummary !== (project.shortSummary || "") ||
         fullStory !== (project.fullStory || "")),
   );
@@ -192,7 +193,7 @@ export function ProjectEditPage({ projectId }: { projectId?: string }) {
         location: locationField,
         size,
         category: category || null,
-        completionYear: completionYear ? parseInt(completionYear, 10) : null,
+        completionDate: completionDate || null,
         shortSummary,
         fullStory,
       });
@@ -210,7 +211,7 @@ export function ProjectEditPage({ projectId }: { projectId?: string }) {
     locationField,
     size,
     category,
-    completionYear,
+    completionDate,
     shortSummary,
     fullStory,
   ]);
@@ -246,7 +247,7 @@ export function ProjectEditPage({ projectId }: { projectId?: string }) {
       location: locationField.trim() || null,
       size: size.trim() || null,
       category: category ? (category as ProjectCategory) : null,
-      completionYear: completionYear ? parseInt(completionYear, 10) : null,
+      completionDate: completionDate || null,
       shortSummary: shortSummary.trim() || null,
       fullStory: fullStory.trim() || null,
     };
@@ -647,21 +648,19 @@ export function ProjectEditPage({ projectId }: { projectId?: string }) {
             </div>
 
             <div className="form-group">
-              <label htmlFor="edit-completionYear" className="form-label">
-                Completion Year
+              <label htmlFor="edit-completionDate" className="form-label">
+                Completion Date
               </label>
               <input
-                id="edit-completionYear"
-                type="number"
-                min="2000"
-                max={new Date().getFullYear() + 1}
+                id="edit-completionDate"
+                type="date"
                 className="form-input"
-                value={completionYear}
-                onChange={(e) => setCompletionYear(e.target.value)}
-                placeholder={String(new Date().getFullYear())}
+                value={completionDate}
+                onChange={(e) => setCompletionDate(e.target.value)}
                 disabled={isSaving}
               />
-              <span className="form-hint">4-digit year completed. Required for publishing.</span>
+              <span className="form-hint">Exact date completed. Required for publishing new projects.</span>
+              {!project.completionDate && project.completionYear && <span className="form-hint">Legacy completion year: {project.completionYear}. Enter the actual date when known.</span>}
             </div>
           </div>
         </div>
@@ -953,6 +952,7 @@ export function ProjectEditPage({ projectId }: { projectId?: string }) {
         </div>
       </div>
 
+      <ProjectReviewsManager key={id} projectId={id} />
       {showDeleteModal && project && (
         <DeleteConfirmModal
           isOpen={true}

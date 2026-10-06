@@ -75,6 +75,8 @@ test("server-renders the complete Electro Tech page", async () => {
   assert.match(html, /href="https:\/\/www\.tiktok\.com\/@electrotech8084\?_r=1(?:&amp;|&)_t=ZS-99rWh4Wbo0q"[^>]*target="_blank"[^>]*rel="noopener noreferrer"[^>]*aria-label="Visit Electro Tech on TikTok"/);
   // Floating Solar Analyzer button
   assert.match(html, /class="floating-solar-analyzer"/);
+  assert.match(html, /lucide-calculator/);
+  assert.doesNotMatch(html, /lucide-file-search/);
   assert.match(html, /href="\/solar-bill-analyzer"[^>]*class="floating-solar-analyzer"/);
   assert.match(html, /aria-label="Analyze Your Electricity Bill"[^>]*title="Analyze Your Electricity Bill"/);
 });

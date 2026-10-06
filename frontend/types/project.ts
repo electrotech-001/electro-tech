@@ -15,6 +15,7 @@ export type PublicProject = {
   location: string | null;
   size: string | null;
   category: string | null;
+  completionDate?: string | null;
   completionYear: number | null;
   shortSummary: string | null;
   fullStory: string | null;

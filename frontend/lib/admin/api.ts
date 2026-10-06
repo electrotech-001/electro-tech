@@ -1,3 +1,4 @@
+import type { AdminProjectReview, AdminReviewPage } from "../../types/project-review";
 import { apiUrl } from "../api-origin";
 import { supabase } from "./supabase";
 import type {
@@ -330,4 +331,14 @@ export async function updateAdminHomepageProjects(
     method: "PUT",
     body: JSON.stringify({ projectIds }),
   });
+}
+
+export function fetchAdminProjectReviews(id: string, page = 1) {
+  return adminApiFetch<AdminReviewPage>("/api/admin/projects/" + encodeURIComponent(id) + "/reviews?page=" + page);
+}
+export function setAdminReviewVisibility(id: string, isVisible: boolean) {
+  return adminApiFetch<AdminProjectReview>("/api/admin/project-reviews/" + encodeURIComponent(id), { method: "PATCH", body: JSON.stringify({ isVisible }) });
+}
+export function deleteAdminReview(id: string) {
+  return adminApiFetch<void>("/api/admin/project-reviews/" + encodeURIComponent(id), { method: "DELETE" });
 }

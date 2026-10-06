@@ -1,12 +1,12 @@
 "use client";
+import { formatProjectCompletion } from "@/lib/project-date";
 
+
+import { ProjectReviews } from "./project-reviews";
 import { useEffect, useMemo, useState, useRef } from "react";
 import {
   Calendar,
   X,
-  Building2,
-  MapPin,
-  Zap,
 } from "lucide-react";
 import type { PublicProject, PublicProjectImage } from "@/types/project";
 
@@ -44,9 +44,9 @@ export function ProjectDetailModal({ project, onClose }: ProjectDetailModalProps
 
   // Accessibility: Focus close button on mount
   useEffect(() => {
-    if (project && closeButtonRef.current) {
-      closeButtonRef.current.focus();
-    }
+    const previous = document.activeElement;
+    if (project && closeButtonRef.current) closeButtonRef.current.focus();
+    return () => { if (project && previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
   }, [project]);
 
   // Lock background page scroll while open, restore previous state on unmount
@@ -64,6 +64,13 @@ export function ProjectDetailModal({ project, onClose }: ProjectDetailModalProps
   useEffect(() => {
     if (!project) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Tab") {
+        const panel = closeButtonRef.current?.closest(".project-modal-panel");
+        const controls = Array.from(panel?.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), textarea:not(:disabled), a[href]") ?? []).filter((control) => control.tabIndex >= 0);
+        const first = controls[0]; const last = controls[controls.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      }
       if (e.key === "Escape") {
         onClose();
       }
@@ -167,10 +174,10 @@ export function ProjectDetailModal({ project, onClose }: ProjectDetailModalProps
             <span className="project-modal-category">
               {project.category || "Complete Solar System Installation"}
             </span>
-            {project.completionYear && (
+            {formatProjectCompletion(project) && (
               <span className="project-modal-year">
                 <Calendar size={13} aria-hidden="true" />
-                Completed {project.completionYear}
+                Completed {formatProjectCompletion(project)}
               </span>
             )}
           </div>
@@ -243,6 +250,7 @@ export function ProjectDetailModal({ project, onClose }: ProjectDetailModalProps
               )}
             </div>
           )}
+          <ProjectReviews key={project.id} projectId={project.id} />
         </div>
       </div>
     </div>

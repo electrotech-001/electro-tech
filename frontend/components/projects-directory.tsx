@@ -1,4 +1,6 @@
 "use client";
+import { formatProjectCompletion } from "@/lib/project-date";
+
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -310,10 +312,10 @@ export function ProjectsDirectory() {
                           <span className="project-card-category">
                             {project.category || "Solar Project"}
                           </span>
-                          {project.completionYear && (
+                          {formatProjectCompletion(project) && (
                             <span className="project-card-year">
                               <Calendar size={12} aria-hidden="true" />
-                              {project.completionYear}
+                              {formatProjectCompletion(project)}
                             </span>
                           )}
                         </div>

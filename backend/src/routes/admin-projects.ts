@@ -295,6 +295,10 @@ export function createAdminProjectsRouter(
         response.status(409).json({ error: error.message });
         return;
       }
+      if (error instanceof ProjectValidationError) {
+        response.status(400).json({ message: error.message, missingFields: error.missingFields });
+        return;
+      }
       response.status(503).json({
         error: "Service Unavailable",
         message: "Could not update project at this time.",

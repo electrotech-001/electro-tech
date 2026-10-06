@@ -67,6 +67,11 @@ export const equipmentSchema = z
   )
   .max(20, "Equipment list cannot exceed 20 items");
 
+export const completionDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD.").refine((value) => {
+  const date = new Date(value + "T00:00:00Z");
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value && value.slice(0, 4) !== "0000";
+}, "Enter a real calendar date.");
+
 export const createProjectSchema = z
   .object({
     title: z
@@ -97,6 +102,7 @@ export const createProjectSchema = z
       message:
         "Invalid category. Allowed values: 'Complete Solar System Installation', 'Solar Structures', 'Security Systems (CCTV)', 'Electrical Works'.",
     }).nullable().optional(),
+    completionDate: completionDateSchema.nullable().optional(),
     completionYear: z
       .number()
       .int("Completion year must be an integer")
@@ -154,6 +160,7 @@ export const updateProjectSchema = z
       message:
         "Invalid category. Allowed values: 'Complete Solar System Installation', 'Solar Structures', 'Security Systems (CCTV)', 'Electrical Works'.",
     }).nullable().optional(),
+    completionDate: completionDateSchema.nullable().optional(),
     completionYear: z
       .number()
       .int("Completion year must be an integer")

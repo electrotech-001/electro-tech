@@ -1,4 +1,6 @@
 "use client";
+import { formatProjectCompletion } from "../../lib/project-date";
+
 
 import { useEffect, useState } from "react";
 import {
@@ -479,7 +481,7 @@ export function ProjectsListPage() {
                       <div style={{ fontSize: "0.85rem" }}>
                         <div>{project.size || "—"}</div>
                         <div style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>
-                          {project.completionYear ? `Completed ${project.completionYear}` : "—"}
+                          {formatProjectCompletion(project) ? `Completed ${formatProjectCompletion(project)}` : "—"}
                         </div>
                       </div>
                     </td>

@@ -45,6 +45,7 @@ export type AdminProject = {
   location: string | null;
   size: string | null;
   category: ProjectCategory | null;
+  completionDate?: string | null;
   completionYear: number | null;
   shortSummary: string | null;
   fullStory: string | null;
@@ -78,6 +79,7 @@ export type CreateProjectPayload = {
   location?: string | null;
   size?: string | null;
   category?: ProjectCategory | null;
+  completionDate?: string | null;
   completionYear?: number | null;
   shortSummary?: string | null;
   fullStory?: string | null;

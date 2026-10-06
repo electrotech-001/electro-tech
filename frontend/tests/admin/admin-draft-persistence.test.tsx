@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ProjectCreatePage } from "@/components/admin/ProjectCreatePage";
 import { ProjectEditPage } from "@/components/admin/ProjectEditPage";
@@ -17,6 +17,7 @@ vi.mock("@/lib/admin/api", async (importOriginal) => {
   const actual = (await importOriginal()) as any;
   return {
     ...actual,
+    fetchAdminProjectReviews: vi.fn().mockResolvedValue({ reviews: [], hasMore: false }),
     createAdminProject: vi.fn(),
     fetchAdminProjectById: vi.fn(),
     updateAdminProject: vi.fn(),
@@ -87,11 +88,14 @@ describe("Draft Persistence & Unsaved Changes Protection", () => {
     const locationInput = screen.getByLabelText(/location/i);
     await user.type(locationInput, "Attock Facility");
 
+    fireEvent.change(screen.getByLabelText("Completion Date"), { target: { value: "2026-09-15" } });
+
     // Check that draft was stored in sessionStorage
     const saved = getProjectDraft(NEW_PROJECT_DRAFT_KEY);
     expect(saved).not.toBeNull();
     expect(saved?.title).toBe("Persistent Draft Title");
     expect(saved?.location).toBe("Attock Facility");
+    expect(saved?.completionDate).toBe("2026-09-15");
 
     // Unsaved changes indicator should be visible
     expect(screen.getByText(/unsaved changes/i)).toBeDefined();
@@ -105,6 +109,7 @@ describe("Draft Persistence & Unsaved Changes Protection", () => {
       size: "20 kW",
       clientOrganization: "Restored Client Org",
       shortSummary: "Restored Short Summary",
+      completionDate: "2026-09-15",
     });
 
     render(<ProjectCreatePage />);
@@ -114,6 +119,7 @@ describe("Draft Persistence & Unsaved Changes Protection", () => {
     expect(screen.getByDisplayValue("20 kW")).toBeDefined();
     expect(screen.getByDisplayValue("Restored Client Org")).toBeDefined();
     expect(screen.getByDisplayValue("Restored Short Summary")).toBeDefined();
+    expect(screen.getByDisplayValue("2026-09-15")).toBeDefined();
   });
 
   // 3. Create Project: Successful save clears draft
@@ -183,6 +189,7 @@ describe("Draft Persistence & Unsaved Changes Protection", () => {
     const titleInput = screen.getByDisplayValue("Original Title");
     await user.clear(titleInput);
     await user.type(titleInput, "Modified Project Title");
+    fireEvent.change(screen.getByLabelText("Completion Date"), { target: { value: "2026-09-15" } });
 
     await waitFor(() => {
       expect(screen.getByText(/unsaved changes/i)).toBeDefined();
@@ -191,6 +198,7 @@ describe("Draft Persistence & Unsaved Changes Protection", () => {
     // Verify sessionStorage has project-specific draft
     const draft = getProjectDraft(getEditProjectDraftKey("proj-edit-1"));
     expect(draft).not.toBeNull();
+    expect(draft?.completionDate).toBe("2026-09-15");
     expect(draft?.title).toBe("Modified Project Title");
   });
 

@@ -121,11 +121,12 @@ it("renders a floating Solar Analyzer button linking to /solar-bill-analyzer wit
   expect(solarFloat?.getAttribute("aria-label")).toBe("Analyze Your Electricity Bill");
   expect(solarFloat?.getAttribute("title")).toBe("Analyze Your Electricity Bill");
 
-  // FileSearch icon is rendered inside
+  // Calculator icon is rendered inside
   const icon = solarFloat?.querySelector("svg");
   expect(icon).not.toBeNull();
   expect(icon?.getAttribute("aria-hidden")).toBe("true");
   expect(icon?.classList.contains("floating-solar-analyzer-icon")).toBe(true);
+  expect(icon?.classList.contains("lucide-calculator")).toBe(true);
 });
 
 it("WhatsApp floating button remains unchanged alongside the new Solar Analyzer float", () => {

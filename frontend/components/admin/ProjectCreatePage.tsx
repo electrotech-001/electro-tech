@@ -41,8 +41,8 @@ export function ProjectCreatePage() {
   const [category, setCategory] = useState<ProjectCategory | "">(
     (initialDraft?.category as ProjectCategory) ?? "",
   );
-  const [completionYear, setCompletionYear] = useState<string>(
-    initialDraft?.completionYear ? String(initialDraft.completionYear) : "",
+  const [completionDate, setCompletionDate] = useState<string>(
+    initialDraft?.completionDate ?? "",
   );
   const [shortSummary, setShortSummary] = useState(
     initialDraft?.shortSummary ?? "",
@@ -74,7 +74,7 @@ export function ProjectCreatePage() {
       location.trim() ||
       size.trim() ||
       category ||
-      completionYear ||
+      completionDate ||
       shortSummary.trim() ||
       fullStory.trim(),
   );
@@ -90,7 +90,7 @@ export function ProjectCreatePage() {
         location,
         size,
         category: category || null,
-        completionYear: completionYear ? parseInt(completionYear, 10) : null,
+        completionDate: completionDate || null,
         shortSummary,
         fullStory,
       });
@@ -106,7 +106,7 @@ export function ProjectCreatePage() {
     location,
     size,
     category,
-    completionYear,
+    completionDate,
     shortSummary,
     fullStory,
   ]);
@@ -140,7 +140,7 @@ export function ProjectCreatePage() {
       location: location.trim() || null,
       size: size.trim() || null,
       category: category ? (category as ProjectCategory) : null,
-      completionYear: completionYear ? parseInt(completionYear, 10) : null,
+      completionDate: completionDate || null,
       shortSummary: shortSummary.trim() || null,
       fullStory: fullStory.trim() || null,
     };
@@ -349,21 +349,18 @@ export function ProjectCreatePage() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="completionYear" className="form-label">
-                Completion Year
+              <label htmlFor="completionDate" className="form-label">
+                Completion Date
               </label>
               <input
-                id="completionYear"
-                type="number"
-                min="2000"
-                max={new Date().getFullYear() + 1}
+                id="completionDate"
+                type="date"
                 className="form-input"
-                value={completionYear}
-                onChange={(e) => setCompletionYear(e.target.value)}
-                placeholder={String(new Date().getFullYear())}
+                value={completionDate}
+                onChange={(e) => setCompletionDate(e.target.value)}
                 disabled={isSubmitting}
               />
-              <span className="form-hint">4-digit year completed. Required for publishing.</span>
+              <span className="form-hint">Exact date completed. Required for publishing new projects.</span>
             </div>
           </div>
         </div>

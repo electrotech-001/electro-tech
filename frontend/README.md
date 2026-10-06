@@ -46,3 +46,11 @@ Business details, services, projects and technology names live in `lib/site-conf
 - Roll back by redeploying the prior successful build.
 
 The included Sites/vinext runtime also supports Cloudflare-compatible previews and publishing.
+
+## Project reviews and exact completion dates
+
+The `/projects` detail modal loads visible reviews and their summary through Express. It provides paginated cards, a keyboard-operable native radio star control and an anonymous review form. Submission refreshes the first page and resets the form. Admin project editing includes visibility controls and confirmed permanent deletion through authenticated Express endpoints.
+
+Admin forms use a date input, persist `completionDate` in draft storage and leave unknown legacy dates blank. Public cards, the modal, Admin Preview and Admin lists share one UTC date-only formatter; exact dates display as `15 September 2026`, with year-only fallback when needed.
+
+For isolated responsive QA without writes to a live API, run `npx vite --config tests/qa/vite.config.ts` and open `http://127.0.0.1:5174`. This harness uses explicit QA fixtures and actual components/CSS; it is separate from the production build. Evidence and the implementation report are in `../docs/qa` and `../docs/project-reviews-completion-dates.md`.

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DashboardPage } from "@/components/admin/DashboardPage";
 import { ProjectsListPage } from "@/components/admin/ProjectsListPage";
@@ -19,6 +19,7 @@ vi.mock("@/lib/admin/api", async (importOriginal) => {
   const actual = (await importOriginal()) as any;
   return {
     ...actual,
+    fetchAdminProjectReviews: vi.fn().mockResolvedValue({ reviews: [], hasMore: false }),
     fetchAdminProjects: vi.fn(),
     fetchAdminProjectById: vi.fn(),
     createAdminProject: vi.fn(),
@@ -127,7 +128,8 @@ const mockProjects: AdminProject[] = [
     location: "Kamra",
     size: "15 kW",
     category: "Complete Solar System Installation",
-    completionYear: 2025,
+    completionYear: null,
+    completionDate: "2025-09-15",
     shortSummary: "15 kW hybrid setup with battery storage in Kamra.",
     fullStory: null,
     description: "15 kW hybrid setup with battery storage.",
@@ -230,6 +232,8 @@ describe("Phase 4B: Projects Management UI", () => {
       expect(screen.getByText("Residential Hybrid Solar")).toBeDefined();
     });
 
+    expect(screen.getByText("Completed 15 September 2025")).toBeDefined();
+
     // Click Draft tab
     vi.mocked(fetchAdminProjects).mockResolvedValueOnce([mockProjects[1]]);
     const draftTab = screen.getByRole("tab", { name: /^drafts$/i });
@@ -284,6 +288,11 @@ describe("Phase 4B: Projects Management UI", () => {
 
     expect(screen.getByText("Create New Project")).toBeDefined();
 
+    const dateInput = screen.getByLabelText("Completion Date") as HTMLInputElement;
+    expect(dateInput.type).toBe("date");
+    expect(dateInput.value).toBe("");
+    fireEvent.change(dateInput, { target: { value: "2026-09-15" } });
+
     // Verify Section 1 and Section 2 are present
     expect(screen.getByText("1. Core Information")).toBeDefined();
     expect(screen.getByText("2. Project Narrative & Summary")).toBeDefined();
@@ -305,6 +314,7 @@ describe("Phase 4B: Projects Management UI", () => {
       expect(createAdminProject).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "New Solar Array",
+          completionDate: "2026-09-15",
         }),
       );
       expect(mockRouter.push).toHaveBeenCalledWith("/admin/projects/new-proj-uuid/edit");
@@ -329,6 +339,12 @@ describe("Phase 4B: Projects Management UI", () => {
       expect(screen.getByDisplayValue("Commercial Solar Phase 1")).toBeDefined();
     });
 
+    const dateInput = screen.getByLabelText("Completion Date") as HTMLInputElement;
+    expect(dateInput.type).toBe("date");
+    expect(dateInput.value).toBe("");
+    expect(screen.getByText(/Legacy completion year: 2026/)).toBeDefined();
+    fireEvent.change(dateInput, { target: { value: "2026-09-15" } });
+
     // Verify all 4 sections are rendered on Edit screen
     expect(screen.getByText("1. Core Information")).toBeDefined();
     expect(screen.getByText("2. Project Narrative & Summary")).toBeDefined();
@@ -350,6 +366,7 @@ describe("Phase 4B: Projects Management UI", () => {
         "proj-1",
         expect.objectContaining({
           title: "Updated Commercial Solar Title",
+          completionDate: "2026-09-15",
         }),
       );
       expect(screen.getByText(/project details updated successfully/i)).toBeDefined();
