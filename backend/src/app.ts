@@ -1,3 +1,6 @@
+import { createBillingDocumentsRouter } from "./routes/billing-documents.js";
+import { createBillingProjectsRouter, createBillingQuotationsRouter } from "./routes/billing-quotations.js";
+import { createBillingWhatsAppRouter } from "./routes/billing-whatsapp.js";
 import { createAdminReviewsRouter } from "./routes/project-reviews.js";
 import cors, { type CorsOptions } from "cors";
 import express, { type ErrorRequestHandler, type RequestHandler } from "express";
@@ -30,6 +33,10 @@ type AppDependencies = {
   adminProjectsRouter?: express.Router;
   adminMeRouter?: express.Router;
   adminReviewsRouter?: express.Router;
+  billingWhatsAppRouter?: express.Router;
+  billingQuotationsRouter?: express.Router;
+  billingProjectsRouter?: express.Router;
+  billingDocumentsRouter?: express.Router;
 };
 
 function isLocalDevelopmentOrigin(origin: string): boolean {
@@ -114,6 +121,24 @@ export function createApp(dependencies: AppDependencies) {
   app.use(
     "/api/admin/me",
     dependencies.adminMeRouter ?? createAdminMeRouter(),
+  );
+  app.use(
+    "/api/billing/whatsapp",
+    dependencies.billingWhatsAppRouter ?? createBillingWhatsAppRouter(),
+  );
+  app.use(
+    "/api/billing/quotations",
+    express.json({ limit: "1mb" }),
+    dependencies.billingQuotationsRouter ?? createBillingQuotationsRouter(),
+  );
+  app.use(
+    "/api/billing/projects",
+    dependencies.billingProjectsRouter ?? createBillingProjectsRouter(),
+  );
+  app.use(
+    "/api/billing",
+    express.json({ limit: "12mb" }),
+    dependencies.billingDocumentsRouter ?? createBillingDocumentsRouter(),
   );
 
   const errorHandler: ErrorRequestHandler = (error, _request, response, _next) => {

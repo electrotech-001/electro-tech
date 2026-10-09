@@ -4,7 +4,7 @@ import { siteConfig } from "@/lib/site-config";
 export default function robots(): MetadataRoute.Robots {
   const base = (process.env.NEXT_PUBLIC_SITE_URL || siteConfig.siteUrl).replace(/\/+$/, "");
   return {
-    rules: { userAgent: "*", allow: "/", disallow: "/api/" },
+    rules: { userAgent: "*", allow: "/", disallow: ["/api/", "/billing"] },
     sitemap: `${base}/sitemap.xml`,
   };
 }

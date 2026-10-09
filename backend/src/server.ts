@@ -4,6 +4,7 @@ import { loadRuntimeConfig } from "./config.js";
 import { loadQuoteEmailConfig } from "./services/email.js";
 import { loadGeminiConfig } from "./services/gemini.js";
 import { loadSupabaseConfig } from "./config.js";
+import { restoreWhatsAppSession, shutdownWhatsAppSession } from "./services/whatsapp/session.js";
 
 const HOST = "0.0.0.0";
 const config = loadRuntimeConfig();
@@ -24,15 +25,20 @@ console.log(`Supabase configured: ${isConfigured(() => loadSupabaseConfig())}`);
 
 const server = app.listen(config.port, HOST, () => {
   console.log(`Electrotech API listening on ${HOST}:${config.port}`);
+  if (isConfigured(() => loadSupabaseConfig())) {
+    void restoreWhatsAppSession();
+  }
 });
 
 function shutdown(signal: string) {
   console.log(`Received ${signal}; closing HTTP server.`);
-  server.close((error) => {
-    if (error) {
-      console.error("HTTP server shutdown failed", error);
-      process.exitCode = 1;
-    }
+  void shutdownWhatsAppSession().finally(() => {
+    server.close((error) => {
+      if (error) {
+        console.error("HTTP server shutdown failed", error);
+        process.exitCode = 1;
+      }
+    });
   });
 }
 

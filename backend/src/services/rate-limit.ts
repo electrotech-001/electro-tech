@@ -64,3 +64,19 @@ export function createAdminImageUploadRateLimiter(
 export function createReviewRateLimiter(limit = 5) {
   return createApiRateLimiter(limit, "Too many review submissions. Please try again later.");
 }
+
+export function createWhatsAppSendRateLimiter(limit = 20) {
+  return rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    keyGenerator: (request) => request.billingUser?.userId || "whatsapp-send",
+    validate: { keyGeneratorIpFallback: false },
+    handler: (_request, response) =>
+      response.status(429).json({
+        code: "rate_limited",
+        message: "Too many WhatsApp documents were sent. Try again shortly.",
+      }),
+  });
+}
