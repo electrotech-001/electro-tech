@@ -146,6 +146,9 @@ export function LoginPage() {
             {isSubmitting ? "Signing in..." : "Sign In"}
           </button>
         </form>
+        <a className="auth-portal-link" href="https://electrotech-attock.com/billing/login">
+          Billing CMS
+        </a>
       </div>
     </div>
   );

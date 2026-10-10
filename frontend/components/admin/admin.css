@@ -225,6 +225,42 @@
   color: var(--text-muted);
 }
 
+.auth-card .btn-primary {
+  width: 100%;
+}
+
+.auth-portal-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 1rem;
+  padding: 0.7rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid #101410;
+  background:
+    linear-gradient(180deg, rgba(245, 196, 0, 0.22), transparent 46%),
+    #101410;
+  color: #f5c400;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  box-shadow: 0 8px 18px rgba(16, 20, 16, 0.12);
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.auth-portal-link:hover {
+  color: #ffe56a;
+  transform: translateY(-1px);
+}
+
+.auth-portal-link:focus-visible {
+  outline: 2px solid #f5c400;
+  outline-offset: 3px;
+}
+
 .password-toggle-btn {
   position: absolute;
   right: 0.75rem;

@@ -226,6 +226,37 @@
   padding: 4px 8px;
 }
 
+.portalLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  margin-top: 18px;
+  border-radius: 12px;
+  border: 1px solid #101410;
+  background:
+    linear-gradient(180deg, rgba(245, 196, 0, 0.16), transparent 42%),
+    #101410;
+  color: #f5c400;
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  box-shadow: 0 10px 22px rgba(16, 20, 16, 0.16);
+}
+
+.portalLink:hover {
+  background:
+    linear-gradient(180deg, rgba(245, 196, 0, 0.28), transparent 48%),
+    #1a211c;
+  color: #ffe56a;
+}
+
+.portalLink:focus-visible {
+  outline: 2px solid #f5c400;
+  outline-offset: 3px;
+}
+
 .footer {
   margin: 18px 0 0;
   text-align: center;

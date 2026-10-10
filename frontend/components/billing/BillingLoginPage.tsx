@@ -240,6 +240,9 @@ export function BillingLoginPage() {
               </button>
             </form>
           )}
+          <a className={styles.portalLink} href="https://electrotech-attock.com/admin/login">
+            Website Admin Panel
+          </a>
           <p className={styles.footer}>Electro Tech · Electrical &amp; Solar Solutions</p>
         </div>
       </section>
