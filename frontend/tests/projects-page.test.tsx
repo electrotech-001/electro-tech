@@ -146,7 +146,7 @@ describe("ProjectsDirectoryPage (/projects)", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Unable to Load Projects")).toBeDefined();
-      expect(screen.getByText("Database connection lost")).toBeDefined();
+      expect(screen.getByText("The project list could not be loaded. Please try again.")).toBeDefined();
       expect(screen.getByRole("button", { name: /try again/i })).toBeDefined();
     });
   });

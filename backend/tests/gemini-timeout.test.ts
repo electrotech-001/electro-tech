@@ -9,6 +9,7 @@ import {
   createGeminiExtractionRequest,
   extractBillWithGemini,
   extractRetryDelayMs,
+  geminiModelsToTry,
   GEMINI_EXTRACTION_MAX_ATTEMPTS,
   GEMINI_EXTRACTION_MAX_PROVIDER_TIME_MS,
   GEMINI_EXTRACTION_MAX_TOTAL_TIME_MS,
@@ -128,6 +129,22 @@ test("1. first Gemini call returns 503, second succeeds -> extraction succeeds",
   assert.equal(sleepCalls.length, 1);
 });
 
+test("switches to the backup model when the configured model is overloaded", async () => {
+  const seen: string[] = [];
+  const attempt: GeminiExtractionAttempt = async (_file, _apiKey, usedModel) => {
+    seen.push(usedModel);
+    if (usedModel === "gemini-3.6-flash") throw new GeminiExtractionError("provider_error", "503 UNAVAILABLE", 503);
+    return extraction;
+  };
+  const result = await extractBillWithGemini(file, {
+    environment,
+    attempt,
+    models: geminiModelsToTry("gemini-3.6-flash"),
+  });
+  assert.equal(result, extraction);
+  assert.deepEqual(seen, ["gemini-3.6-flash", "gemini-3.8-flash"]);
+});
+
 test("2. first call 503 -> retry is delayed, not immediate", async () => {
   let attempts = 0;
   const sleepCalls: number[] = [];
@@ -165,7 +182,7 @@ test("3. jitter/backoff remains within configured bound", () => {
   assert.equal(calculateRetryDelayMs(0, { retryAfterMs: 60_000 }), GEMINI_RETRY_MAX_DELAY_MS);
 });
 
-test("4. both calls return 503 -> controlled HTTP 503 returned", async () => {
+test("4. both calls return 503 -> controlled readable error returned", async () => {
   let attempts = 0;
   const sleepCalls: number[] = [];
   const attempt: GeminiExtractionAttempt = async () => {
@@ -197,7 +214,7 @@ test("4. both calls return 503 -> controlled HTTP 503 returned", async () => {
     method: "POST",
     body: formFor("bill.pdf", "application/pdf", file.bytes),
   });
-  assert.equal(response.status, 503);
+  assert.equal(response.status, 422);
   const data = (await response.json()) as { code: string; message: string };
   assert.equal(data.code, "unavailable");
   assert.equal(data.message, "Bill extraction is temporarily unavailable. You can enter consumption manually.");
@@ -351,7 +368,7 @@ test("11. manual fallback remains available", async () => {
     method: "POST",
     body: formFor("bill.pdf", "application/pdf", file.bytes),
   });
-  assert.equal(extractRes.status, 503);
+  assert.equal(extractRes.status, 422);
   const extractBody = (await extractRes.json()) as { message: string };
   assert.match(extractBody.message, /enter consumption manually/i);
 

@@ -5,6 +5,8 @@ import { billExtractionSchema, normalizeBillExtraction, type BillExtraction } fr
 
 export const GEMINI_EXTRACTION_TIMEOUT_MS = DEFAULT_OPERATIONAL_CONFIG.geminiTimeoutMs;
 export const GEMINI_EXTRACTION_MAX_ATTEMPTS = 2;
+export const GEMINI_PREFERRED_MODEL = "gemini-3.8-flash";
+export const GEMINI_BACKUP_MODEL = "gemini-3.5-flash-lite";
 export const GEMINI_RETRY_BASE_DELAY_MS = 1500;
 export const GEMINI_RETRY_MAX_JITTER_MS = 1000;
 export const GEMINI_RETRY_MAX_DELAY_MS = 3500;
@@ -49,7 +51,13 @@ type GeminiExtractionDependencies = {
   timeoutMs?: number | undefined;
   sleep?: SleepFunction | undefined;
   random?: (() => number) | undefined;
+  models?: readonly string[] | undefined;
 };
+
+export function geminiModelsToTry(primary: string): readonly string[] {
+  const backup = primary === GEMINI_PREFERRED_MODEL ? GEMINI_BACKUP_MODEL : GEMINI_PREFERRED_MODEL;
+  return backup === primary ? [primary] : [primary, backup];
+}
 
 export type GeminiProviderFailureCategory =
   | "authentication"
@@ -311,6 +319,25 @@ export async function extractBillWithGemini(
   const executeAttempt = dependencies.attempt ?? runGeminiAttempt;
   const timeoutMs = dependencies.timeoutMs ?? GEMINI_EXTRACTION_TIMEOUT_MS;
   const sleep = dependencies.sleep ?? defaultSleep;
+  const switchModels = dependencies.models ?? (dependencies.attempt ? undefined : geminiModelsToTry(model));
+
+  if (switchModels) {
+    let lastError: GeminiExtractionError | undefined;
+    for (let index = 0; index < switchModels.length; index += 1) {
+      const currentModel = switchModels[index];
+      if (!currentModel) continue;
+      try {
+        if (index > 0) console.warn("Gemini extraction is retrying with a backup model.");
+        return await executeAttempt(file, apiKey, currentModel, timeoutMs);
+      } catch (error) {
+        if (!(error instanceof GeminiExtractionError)) throw error;
+        lastError = error;
+        const anotherModel = index < switchModels.length - 1;
+        if (!anotherModel || error.code === "timeout" || !isRetryableGeminiError(error)) throw error;
+      }
+    }
+    throw lastError ?? new GeminiExtractionError("provider_error", "Bill extraction is temporarily unavailable.");
+  }
 
   for (let attempt = 0; attempt < GEMINI_EXTRACTION_MAX_ATTEMPTS; attempt += 1) {
     if (attempt > 0) {

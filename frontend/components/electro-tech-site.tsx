@@ -21,7 +21,7 @@ import {
   Zap,
 } from "lucide-react";
 import { siteConfig, type ServiceName } from "@/lib/site-config";
-import { apiUrl } from "@/lib/api-origin";
+import { apiUrl, friendlyFetchError } from "@/lib/api-origin";
 import { analyzerLeadMessage, consumeAnalyzerLeadContext } from "@/lib/solar-analyzer";
 import { QuoteInput, quoteSchema } from "@/lib/validation";
 
@@ -590,7 +590,7 @@ export function ElectroTechSite() {
       reset();
     } catch (error) {
       setSubmitState("error");
-      setServerMessage(error instanceof Error ? error.message : "We couldn't submit your enquiry. Please try again.");
+      setServerMessage(friendlyFetchError(error, "We couldn't submit your enquiry. Please try again or use WhatsApp."));
     }
   }
 

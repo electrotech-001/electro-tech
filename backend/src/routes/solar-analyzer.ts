@@ -15,11 +15,12 @@ export type SolarAnalyzerRouterDependencies = {
 };
 
 function extractionErrorResponse(error: GeminiExtractionError) {
-  if (error.code === "timeout") return { status: 504, code: "timeout", message: "Bill extraction timed out. Please retry or enter consumption manually." };
-  if (error.code === "quota") return { status: 503, code: "rate_limited", message: "Bill extraction is temporarily busy. Please retry shortly or enter consumption manually." };
-  if (error.code === "structured_output_validation") return { status: 502, code: "invalid_output", message: "The bill could not be read reliably. Try the original PDF or enter consumption manually." };
+  if (error.code === "not_configured") return { status: 503, code: "unavailable", message: "Bill extraction is temporarily unavailable. You can enter consumption manually." };
+  if (error.code === "timeout") return { status: 422, code: "timeout", message: "Bill extraction timed out. Please retry or enter consumption manually." };
+  if (error.code === "quota") return { status: 422, code: "rate_limited", message: "Bill extraction is temporarily busy. Please retry shortly or enter consumption manually." };
+  if (error.code === "structured_output_validation") return { status: 422, code: "invalid_output", message: "The bill could not be read reliably. Try the original PDF or enter consumption manually." };
   if (error.code === "unreadable") return { status: 422, code: "unreadable", message: "No readable consumption data was found. Upload a clearer bill or enter consumption manually." };
-  return { status: 503, code: "unavailable", message: "Bill extraction is temporarily unavailable. You can enter consumption manually." };
+  return { status: 422, code: "unavailable", message: "Bill extraction is temporarily unavailable. You can enter consumption manually." };
 }
 
 export function createSolarAnalyzerRouter(dependencies: SolarAnalyzerRouterDependencies = {}) {

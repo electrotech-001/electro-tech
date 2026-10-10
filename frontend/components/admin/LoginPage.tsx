@@ -33,7 +33,7 @@ export function LoginPage() {
   }
 
   // If still checking initial session on client, show loading
-  if (typeof window !== "undefined" && status === "loading" && !isSubmitting) {
+  if (status === "loading" && !isSubmitting) {
     return (
       <div className="loading-container" role="status" aria-live="polite">
         <div className="spinner" />

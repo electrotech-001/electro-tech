@@ -186,7 +186,7 @@ test("rejects missing and malformed multipart requests safely", async () => {
 test("maps mocked Gemini timeout and invalid-output failures to safe responses", async () => {
   const timeoutUrl = await startApi({ extractBill: async () => { throw new GeminiExtractionError("timeout", "private detail"); } });
   const timeout = await fetch(`${timeoutUrl}/api/solar-analyzer/extract`, { method: "POST", body: formFor("bill.pdf", "application/pdf", pdf) });
-  assert.equal(timeout.status, 504);
+  assert.equal(timeout.status, 422);
   assert.doesNotMatch(JSON.stringify(await timeout.json()), /private detail/);
 
   assert.throws(() => parseGeminiExtraction({ provider: "IESCO" }), /invalid response/);

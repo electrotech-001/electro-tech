@@ -81,9 +81,9 @@ export function ProjectsDirectory() {
         if (mounted) {
           setProjects(data);
         }
-      } catch (err) {
+      } catch {
         if (mounted) {
-          setError(err instanceof Error ? err.message : "Failed to load projects.");
+          setError("The project list could not be loaded. Please try again.");
         }
       } finally {
         if (mounted) {

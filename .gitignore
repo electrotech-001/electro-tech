@@ -40,6 +40,10 @@ yarn-error.log*
 .env*
 !.env.example
 
+# local hosting link
+.hostingguru/
+/backend/.hostingguru/
+
 # vercel
 .vercel
 /frontend/.vercel/
