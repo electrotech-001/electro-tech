@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { blankDraft, formatDisplayDate, formatRupees, type QuotationDraft, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { approveQuotation, deleteQuotation, disapproveQuotation, listQuotations, nextQuotationSerial, QuotationApiError, saveQuotation } from "@/lib/billing/quotations-api";
+import { printBillingLetter } from "@/lib/billing/print-letter";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import shell from "./billing-shell.module.css";
 import { QuotationDialog, QuotationLetter } from "./QuotationLetter";
@@ -174,7 +175,10 @@ export function QuotationsPage() {
 
   function onPrint(quotation: QuotationRecord) {
     setViewing(quotation);
-    window.setTimeout(() => window.print(), 80);
+    window.setTimeout(() => {
+      const dialog = document.querySelector("[role='dialog']");
+      printBillingLetter(dialog instanceof HTMLElement ? dialog : document.body);
+    }, 80);
   }
 
   async function onWhatsApp(quotation: QuotationRecord) {
@@ -294,7 +298,7 @@ export function QuotationsPage() {
       </div>
 
       {viewing ? (
-        <QuotationDialog quotation={viewing} onClose={() => setViewing(null)} onPrint={() => window.print()} />
+        <QuotationDialog quotation={viewing} onClose={() => setViewing(null)} />
       ) : null}
 
       {disapproving ? (

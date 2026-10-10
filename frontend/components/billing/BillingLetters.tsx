@@ -153,13 +153,16 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
           </table>
         </div>
       ) : null}
-      <table className={styles.totals}>
-        <tbody>
-          <tr><th>Total amount</th><td>{formatRupees(invoice.grandTotal)}</td></tr>
-          <tr><th>Received</th><td>{formatRupees(invoice.advancePaid)}</td></tr>
-          <tr className={styles.grand}><th>Balance due</th><td>{formatRupees(invoice.balanceDue)}</td></tr>
-        </tbody>
-      </table>
+      <div className={styles.letterFoot}>
+        <div />
+        <table className={styles.totals}>
+          <tbody>
+            <tr><th>Total amount</th><td>{formatRupees(invoice.grandTotal)}</td></tr>
+            <tr><th>Received</th><td>{formatRupees(invoice.advancePaid)}</td></tr>
+            <tr className={styles.grand}><th>Balance due</th><td>{formatRupees(invoice.balanceDue)}</td></tr>
+          </tbody>
+        </table>
+      </div>
       {paid ? (
         <footer className={styles.signOff}>
           <div className={styles.paidStamp}>
@@ -209,11 +212,14 @@ export function PaymentSlip({
           {payment.installmentNumber ? <div><dt>Installment</dt><dd>{payment.installmentNumber}</dd></div> : null}
         </dl>
       </section>
-      <table className={styles.totals}>
-        <tbody>
-          <tr className={styles.grand}><th>Amount received</th><td>{formatRupees(payment.paidAmount)}</td></tr>
-        </tbody>
-      </table>
+      <div className={styles.letterFoot}>
+        <div />
+        <table className={styles.totals}>
+          <tbody>
+            <tr className={styles.grand}><th>Amount received</th><td>{formatRupees(payment.paidAmount)}</td></tr>
+          </tbody>
+        </table>
+      </div>
       <footer className={styles.signOff}>
         <div className={styles.paidStamp}>
           Paid

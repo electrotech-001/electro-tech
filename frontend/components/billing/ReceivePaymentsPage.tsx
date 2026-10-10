@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { DocumentApiError, listReceiveProjects, recordPayment, updateDueDate, updatePayment, type BankMode, type PaymentRecord, type ReceiveProject } from "@/lib/billing/documents-api";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { formatDisplayDate, formatRupees, todayIsoDate } from "@/lib/billing/quotation-math";
+import { printFromControl } from "@/lib/billing/print-letter";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import { PaymentSlip } from "./BillingLetters";
 import { FancySelect } from "./FancyControls";
@@ -282,7 +283,7 @@ export function ReceivePaymentsPage() {
             <div className={styles.modalBar}>
               <h2>Paid slip</h2>
               <div>
-                <button className={styles.secondaryButton} type="button" onClick={() => window.print()}>Print</button>
+                <button className={styles.secondaryButton} type="button" onClick={(event) => printFromControl(event.currentTarget)}>Print</button>
                 <button className={styles.secondaryButton} type="button" onClick={() => void sendSlip(slip)} disabled={sendingId === slip.id}>
                   <MessageCircle size={15} /> {sendingId === slip.id ? "Sending…" : "Send on WhatsApp"}
                 </button>

@@ -1,5 +1,6 @@
 import type { QuotationRecord } from "@/lib/billing/quotation-math";
 import { formatDisplayDate, formatRupees, letterhead } from "@/lib/billing/quotation-math";
+import { printFromControl } from "@/lib/billing/print-letter";
 import styles from "./quotation.module.css";
 
 export function QuotationLetter({
@@ -136,11 +137,9 @@ export function QuotationLetter({
 export function QuotationDialog({
   quotation,
   onClose,
-  onPrint,
 }: {
   quotation: QuotationRecord;
   onClose: () => void;
-  onPrint: () => void;
 }) {
   return (
     <div className={styles.modal} role="presentation" onClick={onClose}>
@@ -154,7 +153,7 @@ export function QuotationDialog({
         <div className={styles.modalBar}>
           <h2 id="quotation-dialog-title">{quotation.serial}</h2>
           <div>
-            <button className={styles.secondaryButton} type="button" onClick={onPrint}>Print</button>
+            <button className={styles.secondaryButton} type="button" onClick={(event) => printFromControl(event.currentTarget)}>Print</button>
             <button className={styles.secondaryButton} type="button" onClick={onClose}>Close</button>
           </div>
         </div>

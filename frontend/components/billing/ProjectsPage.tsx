@@ -6,6 +6,7 @@ import { completeProject, DocumentApiError, listAgreements, listInvoices, listRe
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { formatDisplayDate, formatRupees, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { disapproveProject, listProjects, QuotationApiError } from "@/lib/billing/quotations-api";
+import { printFromControl } from "@/lib/billing/print-letter";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import { AgreementLetter, InvoiceLetter } from "./BillingLetters";
 import shell from "./billing-shell.module.css";
@@ -205,14 +206,14 @@ export function ProjectsPage() {
         </>
       ) : null}
 
-      {viewing ? <QuotationDialog quotation={viewing} onClose={() => setViewing(null)} onPrint={() => window.print()} /> : null}
+      {viewing ? <QuotationDialog quotation={viewing} onClose={() => setViewing(null)} /> : null}
       {agreementView ? (
         <div className={styles.modal} role="presentation" onClick={() => setAgreementView(null)}>
           <div className={styles.modalCard} role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
             <div className={styles.modalBar}>
               <h2>{agreementView.serial}</h2>
               <div>
-                <button className={styles.secondaryButton} type="button" onClick={() => window.print()}>Print</button>
+                <button className={styles.secondaryButton} type="button" onClick={(event) => printFromControl(event.currentTarget)}>Print</button>
                 <button className={styles.secondaryButton} type="button" onClick={() => setAgreementView(null)}>Close</button>
               </div>
             </div>
@@ -225,7 +226,10 @@ export function ProjectsPage() {
           <div className={styles.modalCard} role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
             <div className={styles.modalBar}>
               <h2>{invoiceView.serial}</h2>
-              <button className={styles.secondaryButton} type="button" onClick={() => setInvoiceView(null)}>Close</button>
+              <div>
+                <button className={styles.secondaryButton} type="button" onClick={(event) => printFromControl(event.currentTarget)}>Print</button>
+                <button className={styles.secondaryButton} type="button" onClick={() => setInvoiceView(null)}>Close</button>
+              </div>
             </div>
             <div className={styles.modalScroll}><InvoiceLetter invoice={invoiceView} /></div>
           </div>

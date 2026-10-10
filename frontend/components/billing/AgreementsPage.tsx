@@ -3,6 +3,7 @@
 import { Eye } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DocumentApiError, listAgreements, type AgreementRecord } from "@/lib/billing/documents-api";
+import { printFromControl } from "@/lib/billing/print-letter";
 import { formatDisplayDate, formatRupees } from "@/lib/billing/quotation-math";
 import { AgreementLetter } from "./BillingLetters";
 import shell from "./billing-shell.module.css";
@@ -71,7 +72,7 @@ export function AgreementsPage() {
             <div className={styles.modalBar}>
               <h2>{viewing.serial}</h2>
               <div>
-                <button className={styles.secondaryButton} type="button" onClick={() => window.print()}>Print</button>
+                <button className={styles.secondaryButton} type="button" onClick={(event) => printFromControl(event.currentTarget)}>Print</button>
                 <button className={styles.secondaryButton} type="button" onClick={() => setViewing(null)}>Close</button>
               </div>
             </div>

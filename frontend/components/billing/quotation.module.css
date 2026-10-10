@@ -890,7 +890,144 @@
   color: #1f6b45;
 }
 
-@media (max-width: 800px) {
+@media print {
+  :global(.print-host) .letter,
+  :global(.print-host) .letter * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  :global(.print-host) .letter {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #171717 !important;
+  }
+
+  :global(.print-host) .letterHead {
+    grid-template-columns: 38mm minmax(0, 1fr) 34mm;
+    gap: 4mm;
+    align-items: start;
+  }
+
+  :global(.print-host) .logo {
+    width: 38mm;
+  }
+
+  :global(.print-host) .company {
+    justify-items: center;
+    text-align: center;
+    font-size: 9pt;
+  }
+
+  :global(.print-host) .company strong {
+    font-size: 13pt;
+  }
+
+  :global(.print-host) .docTitle {
+    margin: 0;
+    text-align: right;
+    font-size: 13pt;
+  }
+
+  :global(.print-host) .parties {
+    grid-template-columns: minmax(0, 1fr) 58mm;
+    gap: 4mm;
+    margin-top: 5mm;
+  }
+
+  :global(.print-host) .signature {
+    justify-items: end;
+    text-align: right;
+    margin-top: 8mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  :global(.print-host) .signature img {
+    width: 42mm;
+  }
+
+  :global(.print-host) .signOff {
+    justify-content: flex-end;
+    margin-top: 8mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  :global(.print-host) .letterFoot {
+    grid-template-columns: minmax(0, 1fr) 68mm;
+    gap: 4mm;
+    margin-top: 4mm;
+  }
+
+  :global(.print-host) .letter .tableWrap {
+    overflow: visible;
+    margin-top: 4mm;
+  }
+
+  :global(.print-host) .letter .tableWrap table {
+    min-width: 0;
+    width: 100%;
+  }
+
+  :global(.print-host) .letter th,
+  :global(.print-host) .letter td {
+    padding: 4px 5px;
+    font-size: 8.5pt;
+  }
+
+  :global(.print-host) .letter thead {
+    display: table-header-group;
+  }
+
+  :global(.print-host) .letter thead th {
+    background: #171717 !important;
+    color: #fff !important;
+    font-size: 7.5pt;
+    line-height: 1.25;
+  }
+
+  :global(.print-host) .ledgerSheet thead th {
+    background: #1f6b45 !important;
+    color: #f4f1ea !important;
+  }
+
+  :global(.print-host) .letter tr,
+  :global(.print-host) .letterHead,
+  :global(.print-host) .parties {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  :global(.print-host) .grand th,
+  :global(.print-host) .grand td {
+    background: #171717 !important;
+    color: #fff !important;
+  }
+
+  :global(.print-host) .ledgerSheet tfoot td {
+    background: #f5c400 !important;
+    color: #101410 !important;
+  }
+
+  :global(.print-host) .paidStamp {
+    border-color: #1f6b45;
+    color: #1f6b45;
+  }
+
+  :global(.print-host) .cnicRow img {
+    width: 42mm;
+  }
+}
+
+@media screen and (max-width: 800px) {
   .formGrid,
   .summaryRow,
   .letterHead,

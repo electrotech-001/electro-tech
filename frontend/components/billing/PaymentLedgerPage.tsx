@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { LedgerLetter } from "@/components/billing/BillingLetters";
 import { customerKey } from "@/lib/billing/customers";
 import { DocumentApiError, listLedger, type LedgerEntry } from "@/lib/billing/documents-api";
+import { printBillingLetter } from "@/lib/billing/print-letter";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { formatDisplayDate, formatRupees, roundMoney } from "@/lib/billing/quotation-math";
 import shell from "./billing-shell.module.css";
@@ -147,7 +148,7 @@ export function PaymentLedgerPage() {
           <p className={shell.summary}>Payments received, including completed projects. Filter by month or date, then print or download the letterhead.</p>
         </div>
         <div className={styles.ledgerActions}>
-          <button className={styles.secondaryButton} type="button" onClick={() => window.print()} disabled={loading || Boolean(banner) || entries.length === 0}>Print</button>
+          <button className={styles.secondaryButton} type="button" onClick={() => printBillingLetter(letterRef.current)} disabled={loading || Boolean(banner) || entries.length === 0}>Print</button>
           <button className={styles.primaryButton} type="button" onClick={() => void downloadPdf()} disabled={loading || downloading || Boolean(banner) || entries.length === 0}>{downloading ? "Preparing PDF…" : "Download PDF"}</button>
         </div>
       </header>
