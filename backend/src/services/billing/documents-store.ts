@@ -25,7 +25,7 @@ export type ReceiveProject = Workspace & {
 };
 
 export type DocumentsRepository = {
-  listAgreements(): Promise<AgreementRecord[]>;
+  listAgreements(includeImages?: boolean): Promise<AgreementRecord[]>;
   listGuarantors(): Promise<GuarantorRecord[]>;
   listInvoices(): Promise<InvoiceRecord[]>;
   listReceiveProjects(): Promise<ReceiveProject[]>;
@@ -37,7 +37,17 @@ export type DocumentsRepository = {
   completeProject(projectId: string): Promise<void>;
   projectHasDocuments(projectId: string): Promise<boolean>;
   listLedger(): Promise<LedgerEntry[]>;
+  summary(): Promise<BillingSummary>;
   renameCustomer(projectIds: string[], customerName: string): Promise<void>;
+};
+
+export type BillingSummary = {
+  projectsInProcess: number;
+  openInvoices: number;
+  overdueInstallments: number;
+  receivedTotal: number;
+  paymentCount: number;
+  recent: LedgerEntry[];
 };
 
 export type LedgerEntry = {
@@ -77,6 +87,33 @@ export function toLedger(workspaces: Workspace[]): LedgerEntry[] {
     }
   }
   return entries.sort((left, right) => left.paymentDate.localeCompare(right.paymentDate) || left.id.localeCompare(right.id));
+}
+
+export function todayIso(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+export function summarizeDocuments(workspaces: Workspace[], today = todayIso()): BillingSummary {
+  const entries = toLedger(workspaces);
+  let projectsInProcess = 0;
+  let openInvoices = 0;
+  let overdueInstallments = 0;
+  for (const workspace of workspaces) {
+    if (workspace.project.status !== "completed") projectsInProcess += 1;
+    openInvoices += workspace.invoices.filter((invoice) => invoice.status !== "paid").length;
+    for (const line of workspace.agreement?.schedule ?? []) {
+      if (line.status === "due" && line.dueDate < today) overdueInstallments += 1;
+    }
+  }
+  const receivedTotal = Math.round(entries.reduce((sum, entry) => sum + entry.paidAmount, 0) * 100) / 100;
+  return {
+    projectsInProcess,
+    openInvoices,
+    overdueInstallments,
+    receivedTotal,
+    paymentCount: entries.length,
+    recent: entries.slice(-5).reverse(),
+  };
 }
 
 type DirectPayment = { kind: "direct"; paidAmount: number; paymentDate: string; paymentMode: BankMode };
@@ -159,6 +196,9 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
     async listLedger() {
       return toLedger([...workspaces.values()]);
     },
+    async summary() {
+      return summarizeDocuments([...workspaces.values()]);
+    },
     async renameCustomer(projectIds, customerName) {
       const name = customerName.trim();
       if (!name) return;
@@ -201,8 +241,8 @@ type GuarantorRow = {
   designation: string;
   occupation: string;
   sector: "private" | "government";
-  cnic_front: string;
-  cnic_back: string;
+  cnic_front?: string | null;
+  cnic_back?: string | null;
 };
 
 type InvoiceRow = {
@@ -248,8 +288,8 @@ function guarantorFrom(row: GuarantorRow): GuarantorRecord {
     designation: row.designation,
     occupation: row.occupation,
     sector: row.sector,
-    cnicFront: row.cnic_front,
-    cnicBack: row.cnic_back,
+    cnicFront: row.cnic_front ?? "",
+    cnicBack: row.cnic_back ?? "",
   };
 }
 
@@ -279,20 +319,15 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
     return toQuotationRecord(data as Parameters<typeof toQuotationRecord>[0], "project");
   }
 
-  async function loadWorkspace(projectId: string): Promise<Workspace> {
-    const project = await loadProject(projectId);
-    const [agreementResult, guarantorResult, invoiceResult, paymentResult] = await Promise.all([
-      client.from("billing_agreements").select("id, project_id, serial, payment_mode, schedule, created_at").eq("project_id", projectId).maybeSingle(),
-      client.from("billing_guarantors").select("id, agreement_id, project_id, customer_name, slot, full_name, designation, occupation, sector, cnic_front, cnic_back").eq("project_id", projectId).order("slot"),
-      client.from("billing_invoices").select("id, project_id, serial, serial_number, kind, status, invoice_date, due_date, payment_date, payment_mode, advance_paid, balance_due, grand_total, installment_number").eq("project_id", projectId),
-      client.from("billing_payments").select("id, project_id, invoice_id, installment_number, expected_amount, paid_amount, payment_date, payment_mode").eq("project_id", projectId),
-    ]);
-    if (agreementResult.error) throw storageFailure(agreementResult.error, "read");
-    if (guarantorResult.error) throw storageFailure(guarantorResult.error, "read");
-    if (invoiceResult.error) throw storageFailure(invoiceResult.error, "read");
-    if (paymentResult.error) throw storageFailure(paymentResult.error, "read");
-    const payments = ((paymentResult.data ?? []) as PaymentRow[]).map(paymentFrom);
-    const invoices = ((invoiceResult.data ?? []) as InvoiceRow[]).map((row): InvoiceRecord => ({
+  function assembleWorkspace(
+    project: QuotationRecord,
+    agreementRow: AgreementRow | null,
+    guarantorRows: GuarantorRow[],
+    invoiceRows: InvoiceRow[],
+    paymentRows: PaymentRow[],
+  ): Workspace {
+    const payments = paymentRows.map(paymentFrom);
+    const invoices = invoiceRows.map((row): InvoiceRecord => ({
       id: row.id,
       projectId: row.project_id,
       serial: row.serial,
@@ -312,8 +347,7 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
         : payment.invoiceId === row.id),
       project,
     }));
-    const agreementRow = agreementResult.data as AgreementRow | null;
-    const guarantors = ((guarantorResult.data ?? []) as GuarantorRow[]).map(guarantorFrom);
+    const guarantors = guarantorRows.map(guarantorFrom);
     const agreement: AgreementRecord | null = agreementRow ? {
       id: agreementRow.id,
       projectId: agreementRow.project_id,
@@ -325,6 +359,27 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       project,
     } : null;
     return { project, agreement, invoices, payments };
+  }
+
+  async function loadWorkspace(projectId: string): Promise<Workspace> {
+    const project = await loadProject(projectId);
+    const [agreementResult, guarantorResult, invoiceResult, paymentResult] = await Promise.all([
+      client.from("billing_agreements").select("id, project_id, serial, payment_mode, schedule, created_at").eq("project_id", projectId).maybeSingle(),
+      client.from("billing_guarantors").select("id, agreement_id, project_id, customer_name, slot, full_name, designation, occupation, sector, cnic_front, cnic_back").eq("project_id", projectId).order("slot"),
+      client.from("billing_invoices").select("id, project_id, serial, serial_number, kind, status, invoice_date, due_date, payment_date, payment_mode, advance_paid, balance_due, grand_total, installment_number").eq("project_id", projectId),
+      client.from("billing_payments").select("id, project_id, invoice_id, installment_number, expected_amount, paid_amount, payment_date, payment_mode").eq("project_id", projectId),
+    ]);
+    if (agreementResult.error) throw storageFailure(agreementResult.error, "read");
+    if (guarantorResult.error) throw storageFailure(guarantorResult.error, "read");
+    if (invoiceResult.error) throw storageFailure(invoiceResult.error, "read");
+    if (paymentResult.error) throw storageFailure(paymentResult.error, "read");
+    return assembleWorkspace(
+      project,
+      agreementResult.data as AgreementRow | null,
+      (guarantorResult.data ?? []) as GuarantorRow[],
+      (invoiceResult.data ?? []) as InvoiceRow[],
+      (paymentResult.data ?? []) as PaymentRow[],
+    );
   }
 
   async function reservedSerial(): Promise<number> {
@@ -413,25 +468,109 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
     void previous;
   }
 
-  async function listedWorkspaces(): Promise<Workspace[]> {
-    const { data, error } = await client.from("billing_projects").select("id").order("created_at", { ascending: false });
+  function groupByProject<T extends { project_id: string }>(rows: T[]): Map<string, T[]> {
+    const grouped = new Map<string, T[]>();
+    for (const row of rows) {
+      const list = grouped.get(row.project_id) ?? [];
+      list.push(row);
+      grouped.set(row.project_id, list);
+    }
+    return grouped;
+  }
+
+  async function listedWorkspaces(guarantorsMode: "full" | "names" | "none"): Promise<Workspace[]> {
+    const { data, error } = await client.from("billing_projects").select(PROJECT_SELECT).order("created_at", { ascending: false });
     if (error) throw storageFailure(error, "listed");
-    const ids = ((data ?? []) as { id: string }[]).map((row) => row.id);
-    return Promise.all(ids.map((id) => loadWorkspace(id)));
+    const projects = ((data ?? []) as Parameters<typeof toQuotationRecord>[0][]).map((row) => toQuotationRecord(row, "project"));
+    if (projects.length === 0) return [];
+    const ids = projects.map((project) => project.id);
+    const [agreementResult, guarantorResult, invoiceResult, paymentResult] = await Promise.all([
+      client.from("billing_agreements").select("id, project_id, serial, payment_mode, schedule, created_at").in("project_id", ids),
+      guarantorsMode === "none"
+        ? Promise.resolve({ data: [] as GuarantorRow[], error: null })
+        : client.from("billing_guarantors").select(guarantorsMode === "full"
+          ? "id, agreement_id, project_id, customer_name, slot, full_name, designation, occupation, sector, cnic_front, cnic_back"
+          : "id, agreement_id, project_id, customer_name, slot, full_name, designation, occupation, sector").in("project_id", ids).order("slot"),
+      client.from("billing_invoices").select("id, project_id, serial, serial_number, kind, status, invoice_date, due_date, payment_date, payment_mode, advance_paid, balance_due, grand_total, installment_number").in("project_id", ids),
+      client.from("billing_payments").select("id, project_id, invoice_id, installment_number, expected_amount, paid_amount, payment_date, payment_mode").in("project_id", ids),
+    ]);
+    if (agreementResult.error) throw storageFailure(agreementResult.error, "listed");
+    if (guarantorResult.error) throw storageFailure(guarantorResult.error, "listed");
+    if (invoiceResult.error) throw storageFailure(invoiceResult.error, "listed");
+    if (paymentResult.error) throw storageFailure(paymentResult.error, "listed");
+    const agreements = new Map(((agreementResult.data ?? []) as AgreementRow[]).map((row) => [row.project_id, row]));
+    const guarantors = groupByProject((guarantorResult.data ?? []) as GuarantorRow[]);
+    const invoices = groupByProject((invoiceResult.data ?? []) as InvoiceRow[]);
+    const payments = groupByProject((paymentResult.data ?? []) as PaymentRow[]);
+    return projects.map((project) => assembleWorkspace(
+      project,
+      agreements.get(project.id) ?? null,
+      guarantors.get(project.id) ?? [],
+      invoices.get(project.id) ?? [],
+      payments.get(project.id) ?? [],
+    ));
+  }
+
+  async function listLedgerRows(): Promise<LedgerEntry[]> {
+    const { data, error } = await client
+      .from("billing_payments")
+      .select("id, project_id, invoice_id, installment_number, paid_amount, payment_date, payment_mode")
+      .order("payment_date", { ascending: true });
+    if (error) throw storageFailure(error, "listed");
+    const payments = (data ?? []) as Array<{
+      id: string;
+      project_id: string;
+      invoice_id: string | null;
+      installment_number: number | null;
+      paid_amount: number | string;
+      payment_date: string;
+      payment_mode: BankMode;
+    }>;
+    if (payments.length === 0) return [];
+    const projectIds = [...new Set(payments.map((row) => row.project_id))];
+    const [projectResult, invoiceResult] = await Promise.all([
+      client.from("billing_projects").select("id, customer_name, cnic, serial").in("id", projectIds),
+      client.from("billing_invoices").select("id, project_id, serial, installment_number").in("project_id", projectIds),
+    ]);
+    if (projectResult.error) throw storageFailure(projectResult.error, "listed");
+    if (invoiceResult.error) throw storageFailure(invoiceResult.error, "listed");
+    const projects = new Map(((projectResult.data ?? []) as Array<{ id: string; customer_name: string; cnic: string; serial: string }>).map((row) => [row.id, row]));
+    const invoices = groupByProject((invoiceResult.data ?? []) as Array<{ id: string; project_id: string; serial: string; installment_number: number | null }>);
+    const entries = payments.map((payment): LedgerEntry => {
+      const project = projects.get(payment.project_id);
+      const invoice = (invoices.get(payment.project_id) ?? []).find((entry) => (
+        payment.invoice_id
+          ? entry.id === payment.invoice_id
+          : payment.installment_number != null && entry.installment_number === payment.installment_number
+      ));
+      return {
+        id: payment.id,
+        paymentDate: payment.payment_date,
+        paidAmount: asNumber(payment.paid_amount),
+        paymentMode: payment.payment_mode,
+        installmentNumber: payment.installment_number,
+        customerName: project?.customer_name ?? "",
+        cnic: project?.cnic ?? "",
+        projectId: payment.project_id,
+        projectSerial: project?.serial ?? "",
+        invoiceSerial: invoice?.serial ?? null,
+      };
+    });
+    return entries.sort((left, right) => left.paymentDate.localeCompare(right.paymentDate) || left.id.localeCompare(right.id));
   }
 
   return {
-    async listAgreements() {
-      return (await listedWorkspaces()).flatMap((workspace) => workspace.agreement ? [workspace.agreement] : []);
+    async listAgreements(includeImages = true) {
+      return (await listedWorkspaces(includeImages ? "full" : "names")).flatMap((workspace) => workspace.agreement ? [workspace.agreement] : []);
     },
     async listGuarantors() {
-      return (await listedWorkspaces()).flatMap((workspace) => workspace.agreement?.guarantors ?? []);
+      return (await listedWorkspaces("full")).flatMap((workspace) => workspace.agreement?.guarantors ?? []);
     },
     async listInvoices() {
-      return (await listedWorkspaces()).flatMap((workspace) => workspace.invoices);
+      return (await listedWorkspaces("none")).flatMap((workspace) => workspace.invoices);
     },
     async listReceiveProjects() {
-      return (await listedWorkspaces()).filter((workspace) => workspace.project.status !== "completed").map(present);
+      return (await listedWorkspaces("none")).filter((workspace) => workspace.project.status !== "completed").map(present);
     },
     async workspace(projectId) {
       return present(await loadWorkspace(projectId));
@@ -481,7 +620,37 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       return (agreements.data?.length ?? 0) > 0 || (payments.data?.length ?? 0) > 0;
     },
     async listLedger() {
-      return toLedger(await listedWorkspaces());
+      return listLedgerRows();
+    },
+    async summary() {
+      const today = todayIso();
+      const [projectResult, invoiceResult, agreementResult, entries] = await Promise.all([
+        client.from("billing_projects").select("status"),
+        client.from("billing_invoices").select("status"),
+        client.from("billing_agreements").select("schedule"),
+        listLedgerRows(),
+      ]);
+      if (projectResult.error) throw storageFailure(projectResult.error, "listed");
+      if (invoiceResult.error) throw storageFailure(invoiceResult.error, "listed");
+      if (agreementResult.error) throw storageFailure(agreementResult.error, "listed");
+      const projects = (projectResult.data ?? []) as Array<{ status: string | null }>;
+      const invoices = (invoiceResult.data ?? []) as Array<{ status: string | null }>;
+      const agreements = (agreementResult.data ?? []) as Array<{ schedule: ScheduleLine[] | null }>;
+      let overdueInstallments = 0;
+      for (const agreement of agreements) {
+        for (const line of Array.isArray(agreement.schedule) ? agreement.schedule : []) {
+          if (line.status === "due" && line.dueDate < today) overdueInstallments += 1;
+        }
+      }
+      const receivedTotal = Math.round(entries.reduce((sum, entry) => sum + entry.paidAmount, 0) * 100) / 100;
+      return {
+        projectsInProcess: projects.filter((project) => project.status !== "completed").length,
+        openInvoices: invoices.filter((invoice) => invoice.status !== "paid").length,
+        overdueInstallments,
+        receivedTotal,
+        paymentCount: entries.length,
+        recent: entries.slice(-5).reverse(),
+      };
     },
     async renameCustomer(projectIds, customerName) {
       const name = customerName.trim();

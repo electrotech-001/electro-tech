@@ -277,7 +277,7 @@
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 14px;
 }
 
@@ -289,6 +289,18 @@
   border: 1px solid rgba(16, 20, 16, 0.06);
   border-radius: 18px;
   box-shadow: 0 10px 30px rgba(23, 32, 25, 0.04);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 4px;
+  background: #1f6b45;
 }
 
 .stat:hover {
@@ -307,9 +319,34 @@
   line-height: 1;
 }
 
+.statValueMoney {
+  font-size: 1.35rem;
+  color: #1f6b45;
+}
+
+.statMoney::before {
+  background: #f5c400;
+}
+
+.statAlert::before {
+  background: #b42318;
+}
+
+.statAlert .statValue {
+  color: #b42318;
+}
+
 .statHint {
   color: #8a918b;
   font-size: 0.8rem;
+}
+
+.banner {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff4f2;
+  color: #8d2b2b;
 }
 
 .panels {
@@ -336,6 +373,62 @@
 .panel p {
   margin: 0;
   color: #667066;
+}
+
+.panelHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.panelHead h2 {
+  margin: 0;
+}
+
+.panelHead a {
+  color: #1f6b45;
+  font-weight: 750;
+  font-size: 0.9rem;
+}
+
+.recent {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recentRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(16, 20, 16, 0.08);
+}
+
+.recentRow strong,
+.recentRow span {
+  display: block;
+}
+
+.recentRow span {
+  margin-top: 3px;
+  color: #667066;
+  font-size: 0.84rem;
+}
+
+.recentRow b {
+  color: #1f6b45;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.recentEmpty {
+  margin-top: 12px;
 }
 
 .steps {
@@ -617,9 +710,8 @@
 }
 
 @media (max-width: 1100px) {
-  .stats,
   .panels {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 }
 

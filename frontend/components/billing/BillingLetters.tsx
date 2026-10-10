@@ -229,6 +229,55 @@ export function PaymentSlip({
   );
 }
 
+export function LedgerLetter({
+  period,
+  rows,
+  total,
+}: {
+  period: string;
+  rows: Array<{ id: string; date: string; customer: string; cnic: string; project: string; detail: string; mode: string; amount: string }>;
+  total: string;
+}) {
+  return (
+    <article className={`${styles.letter} ${styles.ledgerSheet} ${styles.ledgerPrint} quotation-letter`}>
+      <Letterhead title="PAYMENT LEDGER" />
+      <p className={styles.ledgerPeriod}>{period}</p>
+      <div className={styles.tableWrap}>
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Customer</th>
+              <th>Project</th>
+              <th>Detail</th>
+              <th>Mode</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id}>
+                <td>{row.date}</td>
+                <td>{row.customer}<small>{row.cnic}</small></td>
+                <td>{row.project}</td>
+                <td>{row.detail}</td>
+                <td>{row.mode}</td>
+                <td className={styles.num}>{row.amount}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={5}>Total received</td>
+              <td className={styles.num}>{total}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </article>
+  );
+}
+
 export function CustomerNoteCard({
   title,
   customerName,

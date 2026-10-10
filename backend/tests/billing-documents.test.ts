@@ -125,4 +125,9 @@ test("installment agreement stores two guarantors and a received card updates th
   const people = await repository.listGuarantors();
   assert.equal(people.every((person) => person.customerName === "Sheikh Zain Ali"), true);
   assert.equal((await repository.listLedger())[0]?.customerName, "Sheikh Zain Ali");
+  const summary = await repository.summary();
+  assert.equal(summary.paymentCount, 1);
+  assert.equal(summary.receivedTotal, 141000);
+  assert.equal(summary.projectsInProcess, 0);
+  assert.equal(summary.recent[0]?.customerName, "Sheikh Zain Ali");
 });

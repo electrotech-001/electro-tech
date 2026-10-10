@@ -114,8 +114,9 @@ async function expectOk(response: Response, fallback: string): Promise<unknown> 
   return payload;
 }
 
-export function listAgreements(): Promise<AgreementRecord[]> {
-  return billingFetch("/api/billing/agreements").then((response) => expectOk(response, "Agreements could not be loaded.")).then((payload) => (payload as { agreements: AgreementRecord[] }).agreements);
+export function listAgreements(options?: { photos?: boolean }): Promise<AgreementRecord[]> {
+  const query = options?.photos === false ? "?photos=0" : "";
+  return billingFetch(`/api/billing/agreements${query}`).then((response) => expectOk(response, "Agreements could not be loaded.")).then((payload) => (payload as { agreements: AgreementRecord[] }).agreements);
 }
 
 export function listGuarantors(): Promise<GuarantorRecord[]> {
@@ -154,6 +155,20 @@ export type CustomerProfileUpdate = {
 
 export function listLedger(): Promise<LedgerEntry[]> {
   return billingFetch("/api/billing/ledger").then((response) => expectOk(response, "The payment ledger could not be loaded.")).then((payload) => (payload as { entries: LedgerEntry[] }).entries);
+}
+
+export type BillingSummary = {
+  quotations: number;
+  projectsInProcess: number;
+  openInvoices: number;
+  overdueInstallments: number;
+  receivedTotal: number;
+  paymentCount: number;
+  recent: LedgerEntry[];
+};
+
+export function listSummary(): Promise<BillingSummary> {
+  return billingFetch("/api/billing/summary").then((response) => expectOk(response, "The dashboard could not be loaded.")).then((payload) => payload as BillingSummary);
 }
 
 export type TemplateKind = "reminder" | "thank_you" | "feedback" | "custom";

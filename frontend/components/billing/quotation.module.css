@@ -783,6 +783,113 @@
   font-size: 0.82rem;
 }
 
+.ledgerActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ledgerHero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.ledgerHero h2 {
+  margin: 0;
+  color: #1f6b45;
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  letter-spacing: -0.04em;
+}
+
+.ledgerHero p {
+  margin: 4px 0 0;
+  color: #667066;
+}
+
+.ledgerEyebrow {
+  margin: 0 0 4px;
+  color: #1f6b45;
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.filters,
+.dateFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.dateFilters .field {
+  width: 180px;
+}
+
+.chip,
+.chipOn {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chip {
+  border: 1px solid rgba(16, 20, 16, 0.14);
+  background: #fff;
+  color: #101410;
+}
+
+.chipOn {
+  border: 0;
+  background: #101410;
+  color: #f5c400;
+}
+
+.recordTable .ledgerTotal td {
+  background: #f5c400;
+  color: #101410;
+  font-weight: 800;
+  font-size: 1.05rem;
+  border-bottom: 0;
+}
+
+.ledgerPrint {
+  position: fixed;
+  left: -12000px;
+  top: 0;
+  width: 794px;
+  background: #fff;
+}
+
+.ledgerPeriod {
+  margin: 18px 0 8px;
+  color: #1f6b45;
+  font-weight: 750;
+}
+
+.ledgerSheet thead th {
+  background: #1f6b45;
+  color: #f4f1ea;
+}
+
+.ledgerSheet tfoot td {
+  background: #f5c400;
+  color: #101410;
+  font-weight: 800;
+}
+
+.ledgerSheet .docTitle {
+  color: #1f6b45;
+}
+
 @media (max-width: 800px) {
   .formGrid,
   .summaryRow,

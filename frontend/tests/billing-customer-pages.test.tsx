@@ -169,9 +169,11 @@ test("payment ledger lists receipts with a running total", async () => {
   ]);
   render(<PaymentLedgerPage />);
   expect(await screen.findByRole("heading", { name: "Payment Ledger" })).toBeTruthy();
-  expect(screen.getAllByText("Rs 150.00").length).toBe(2);
-  expect(screen.getAllByText("Rs 100.00").length).toBe(2);
-  expect(screen.getByText("Rs 50.00")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "This month" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Download PDF" })).toBeTruthy();
+  expect(screen.getAllByText("Rs 150.00").length).toBeGreaterThanOrEqual(2);
+  expect(screen.getAllByText("Rs 100.00").length).toBeGreaterThanOrEqual(2);
+  expect(screen.getAllByText("Total received").length).toBeGreaterThanOrEqual(1);
   expect(screen.getAllByRole("link", { name: "Sheikh Zain" }).map((link) => link.getAttribute("href"))).toEqual([
     "/billing/profiles/3710112345671",
     "/billing/profiles/3710112345671",

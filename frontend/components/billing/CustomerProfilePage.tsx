@@ -62,7 +62,7 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
       listProjects(),
       listInvoices(),
       listLedger(),
-      listAgreements(),
+      listAgreements({ photos: false }),
     ]);
     if (requestKey.current !== key) return;
     const match = groupCustomers(quotations, projects).find((card) => card.key === key) ?? null;

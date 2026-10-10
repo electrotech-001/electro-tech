@@ -53,6 +53,17 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
   const quotations = () => dependencies.quotations ?? getQuotationRepository();
   router.use(auth);
 
+  router.get("/summary", async (_request, response, next) => {
+    try {
+      const [documents, quotationsCount] = await Promise.all([
+        repository().summary(),
+        quotations().countQuotations(),
+      ]);
+      response.status(200).json({ ...documents, quotations: quotationsCount });
+    } catch (error) {
+      sendFailure(error, response, next);
+    }
+  });
   router.get("/ledger", async (_request, response, next) => {
     try {
       response.status(200).json({ entries: await repository().listLedger() });
@@ -76,9 +87,9 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
       sendFailure(error, response, next);
     }
   });
-  router.get("/agreements", async (_request, response, next) => {
+  router.get("/agreements", async (request, response, next) => {
     try {
-      response.status(200).json({ agreements: await repository().listAgreements() });
+      response.status(200).json({ agreements: await repository().listAgreements(request.query.photos !== "0") });
     } catch (error) {
       sendFailure(error, response, next);
     }

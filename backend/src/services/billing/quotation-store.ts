@@ -41,6 +41,7 @@ export class QuotationServiceError extends Error {
 
 export type QuotationRepository = {
   listQuotations(): Promise<QuotationRecord[]>;
+  countQuotations(): Promise<number>;
   listProjects(): Promise<QuotationRecord[]>;
   nextSerial(): Promise<string>;
   create(draft: QuotationDraft): Promise<QuotationRecord>;
@@ -222,6 +223,9 @@ export function createMemoryQuotationRepository(): QuotationRepository {
     async listQuotations() {
       return quotations.map((row) => materialize(row, "quotation")).reverse();
     },
+    async countQuotations() {
+      return quotations.length;
+    },
     async listProjects() {
       return projects.map((row) => materialize(row, "project")).reverse();
     },
@@ -374,6 +378,11 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
         .order("serial_number", { ascending: false });
       if (error) throw storageFailure(error, "listed");
       return ((data ?? []) as QuotationRow[]).map((row) => toQuotationRecord(row, "quotation"));
+    },
+    async countQuotations() {
+      const { count, error } = await client.from("billing_quotations").select("id", { count: "exact", head: true });
+      if (error) throw storageFailure(error, "listed");
+      return count ?? 0;
     },
     async listProjects() {
       const { data, error } = await client
