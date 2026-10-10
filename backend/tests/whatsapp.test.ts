@@ -255,6 +255,7 @@ function appWith(
       connect: async () => ({ ...snapshot, status: "qr", qrDataUrl: "data:image/png;base64,qr" }),
       disconnect: async () => ({ ...snapshot, status: "disconnected", phone: null, pushName: null, qrDataUrl: null, savedSession: false, error: null }),
       send,
+      sendText: async () => ({ id: "MSG1" }),
     },
   }));
   return app;

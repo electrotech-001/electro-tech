@@ -62,7 +62,7 @@ export const letterhead = {
   person: "Muhammad Aqeel",
   address: "Near Camel poor floor Mil Fateh jang Road Dhoke Fateh Attack City",
   phone: "+92 310 5056394",
-  email: "aqeelawan2229@gmail.com",
+  email: "aqeel@electrotech-attock.com",
 };
 
 export function roundMoney(value: number): number {

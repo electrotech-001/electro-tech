@@ -392,6 +392,10 @@
   gap: 14px;
 }
 
+.cardWide {
+  grid-column: 1 / -1;
+}
+
 .card {
   display: grid;
   gap: 8px;
@@ -541,6 +545,275 @@
   font-size: 0.72rem;
 }
 
+.slipSheet {
+  border: 2px solid #101410;
+}
+
+.slipBody {
+  position: relative;
+  padding-bottom: 36px;
+}
+
+.slipAmount {
+  margin: 22px 0 18px;
+  padding: 16px 0;
+  border-top: 1px solid rgba(16, 20, 16, 0.12);
+  border-bottom: 1px solid rgba(16, 20, 16, 0.12);
+}
+
+.slipAmount p {
+  margin: 0;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.slipAmount strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 2rem;
+}
+
+.paidSeal {
+  position: absolute;
+  right: 0;
+  top: 104px;
+  width: 220px;
+  height: 220px;
+  color: #c4161c;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.sealRing,
+.sealRingInner {
+  position: absolute;
+  border: 6px solid #c4161c;
+  border-radius: 50%;
+  inset: 0;
+}
+
+.sealRingInner {
+  inset: 28px;
+  border-width: 2px;
+}
+
+.sealArc {
+  position: absolute;
+  inset: 0;
+}
+
+.sealArc span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.paidSeal strong {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 82px;
+  font-size: 44px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-align: center;
+}
+
+.paidSeal small {
+  position: absolute;
+  left: 40px;
+  right: 40px;
+  top: 134px;
+  display: grid;
+  gap: 3px;
+  color: #c4161c;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.paidSeal small span {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.slipFacts {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding-right: 236px;
+  font-size: 16px;
+}
+
+.slipFacts div {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.slipFacts dt,
+.slipFacts dd {
+  color: #101410;
+  font-weight: 800;
+}
+
+.slipFacts dd {
+  margin: 0;
+}
+
+.slipNote {
+  margin: 18px 0 0;
+  color: #3d463d;
+}
+
+.slipSheet .signature {
+  justify-items: start;
+  text-align: left;
+}
+
+.greeting {
+  width: min(100%, 640px);
+  margin: 0 auto;
+  padding: 42px 36px 36px;
+  text-align: center;
+  color: #101410;
+  border: 12px solid #101410;
+  outline: 3px solid #f5c400;
+  outline-offset: -20px;
+}
+
+.greetingThanks {
+  background:
+    radial-gradient(circle at top, rgba(245, 196, 0, 0.45), transparent 48%),
+    linear-gradient(180deg, #fffdf6 0%, #f6edd4 100%);
+}
+
+.greetingFeedback {
+  background:
+    radial-gradient(circle at top, rgba(31, 107, 69, 0.18), transparent 48%),
+    linear-gradient(180deg, #f7fbf8 0%, #e5f2ea 100%);
+}
+
+.greetingLogo {
+  width: 108px;
+  height: auto;
+  margin: 0 auto 8px;
+}
+
+.greetingBrand {
+  margin: 0;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.greeting h2 {
+  margin: 14px 0 8px;
+  font-family: Georgia, "Palatino Linotype", serif;
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.greetingName {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.greetingBody {
+  margin: 18px auto 0;
+  max-width: 440px;
+  font-size: 1.05rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.greetingClose {
+  margin: 22px 0 4px;
+  font-family: Georgia, "Palatino Linotype", serif;
+  font-style: italic;
+}
+
+.greeting small {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cnicPreview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cnicPreview figure {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.cnicPreview figure span {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cnicPreview img,
+.cnicEmpty {
+  width: 100%;
+  aspect-ratio: 1.58;
+  object-fit: contain;
+  border: 1px dashed rgba(16, 20, 16, 0.28);
+  border-radius: 8px;
+  background: #f7f6f2;
+}
+
+.cnicEmpty {
+  display: grid;
+  place-items: center;
+  color: rgba(16, 20, 16, 0.45);
+  font-size: 13px;
+}
+
+.signGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 22px;
+  margin-top: 28px;
+}
+
+.signBox {
+  display: grid;
+  align-content: end;
+  gap: 2px;
+  min-height: 92px;
+}
+
+.signLine {
+  display: block;
+  height: 46px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #101410;
+}
+
+.signBox small {
+  color: #3d463d;
+  font-size: 12px;
+}
+
 .cnicRow {
   display: flex;
   flex-wrap: wrap;
@@ -672,6 +945,25 @@
 .letterFoot {
   grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
   margin-top: 18px;
+}
+
+.paymentInstructions {
+  display: grid;
+  gap: 4px;
+  max-width: 280px;
+  padding: 12px 14px;
+  border: 1px solid rgba(16, 20, 16, 0.14);
+  border-radius: 12px;
+  color: #101410;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.paymentInstructions strong {
+  margin-bottom: 4px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .signOff {
@@ -1025,8 +1317,16 @@
     color: #1f6b45;
   }
 
-  :global(.print-host) .cnicRow img {
+  :global(.print-host) .cnicRow img,
+  :global(.print-host) .cnicPreview img {
     width: 42mm;
+    aspect-ratio: auto;
+  }
+
+  :global(.print-host) .signGrid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-top: 8mm;
   }
 }
 

@@ -23,7 +23,7 @@ const sendFieldsSchema = z.object({
   message: z.string().trim().min(1).max(1000),
 });
 
-type SessionGateway = Pick<WhatsAppSession, "snapshot" | "connect" | "disconnect" | "send">;
+type SessionGateway = Pick<WhatsAppSession, "snapshot" | "connect" | "disconnect" | "send" | "sendText">;
 
 export type BillingWhatsAppRouterDependencies = {
   authMiddleware?: RequestHandler;
@@ -96,7 +96,19 @@ export function createBillingWhatsAppRouter(dependencies: BillingWhatsAppRouterD
         return;
       }
       const file = request.file;
-      if (!file || !ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      if (!file) {
+        if (parsed.data.kind !== "card") {
+          response.status(400).json({
+            code: "invalid_file",
+            message: "Upload a PDF, JPG, PNG, or WebP of the quotation, invoice, agreement, or paid slip.",
+          });
+          return;
+        }
+        const result = await session().sendText({ phone: parsed.data.phone, message: parsed.data.message });
+        response.status(200).json({ ok: true, id: result.id });
+        return;
+      }
+      if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
         response.status(400).json({
           code: "invalid_file",
           message: "Upload a PDF, JPG, PNG, or WebP of the quotation, invoice, agreement, or paid slip.",

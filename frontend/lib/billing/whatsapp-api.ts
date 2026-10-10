@@ -75,13 +75,13 @@ export async function sendWhatsAppDocument(input: {
   phone: string;
   kind: WhatsAppDocumentKind;
   message: string;
-  file: File;
+  file?: File | null;
 }): Promise<void> {
   const body = new FormData();
   body.set("phone", input.phone);
   body.set("kind", input.kind);
   body.set("message", input.message);
-  body.set("document", input.file);
+  if (input.file) body.set("document", input.file);
   const response = await billingFetch("/api/billing/whatsapp/send", {
     method: "POST",
     body,

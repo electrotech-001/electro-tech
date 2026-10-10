@@ -19,6 +19,37 @@ function Letterhead({ title }: { title: string }) {
   );
 }
 
+function ArcLabel({ text, start, sweep, radius, flip = false }: { text: string; start: number; sweep: number; radius: number; flip?: boolean }) {
+  const chars = [...text];
+  return (
+    <span className={styles.sealArc} aria-hidden="true">
+      {chars.map((char, index) => {
+        const angle = chars.length === 1 ? start + sweep / 2 : start + (index / (chars.length - 1)) * sweep;
+        return (
+          <span key={`${char}-${index}`} style={{ transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(-${radius}px)${flip ? " rotate(180deg)" : ""}` }}>
+            {char === " " ? "\u00a0" : char}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+function PaidSeal({ date }: { date: string }) {
+  return (
+    <div className={styles.paidSeal} aria-label={`Paid ${date}`}>
+      <span className={styles.sealRing} />
+      <span className={styles.sealRingInner} />
+      <ArcLabel text="ELECTRO TECH" start={-62} sweep={124} radius={92} />
+      <strong>PAID</strong>
+      <small>
+        <span>DATE</span>
+        {date}
+      </small>
+    </div>
+  );
+}
+
 function modeLabel(mode: PaymentRecord["paymentMode"] | null): string {
   if (mode === "bank_transfer") return "Bank transfer";
   if (mode === "cash") return "Cash";
@@ -78,12 +109,29 @@ export function AgreementLetter({ agreement, paper = false }: { agreement: Agree
           <p className={styles.blockLabel}>Guarantor {guarantor.slot}</p>
           <p>{guarantor.fullName} accepts responsibility for the unpaid balance of this agreement.</p>
           <p>Designation: {guarantor.designation}. Occupation: {guarantor.occupation}. Sector: {guarantor.sector === "government" ? "Government" : "Private"}.</p>
+          <p>Contact: {guarantor.contactNo || "—"}. CNIC: {guarantor.cnic || "—"}.</p>
           <div className={styles.cnicRow}>
             <img src={guarantor.cnicFront} alt={`${guarantor.fullName} CNIC front`} />
             <img src={guarantor.cnicBack} alt={`${guarantor.fullName} CNIC back`} />
           </div>
         </section>
       )) : null}
+      <div className={styles.signGrid}>
+        <div className={styles.signBox}>
+          <span className={styles.signLine} />
+          <strong>{project.customerName}</strong>
+          <small>Customer signature</small>
+          <small>CNIC {project.cnic}</small>
+        </div>
+        {installments ? agreement.guarantors.map((guarantor) => (
+          <div className={styles.signBox} key={`${guarantor.id}-sign`}>
+            <span className={styles.signLine} />
+            <strong>{guarantor.fullName}</strong>
+            <small>Guarantor {guarantor.slot} signature</small>
+            <small>CNIC {guarantor.cnic || "—"}</small>
+          </div>
+        )) : null}
+      </div>
       <footer className={styles.signature}>
         <strong>For, ELECTRO TECH</strong>
         <img src="/logos/authorized-signature.png" alt="Authorized signature" decoding="sync" />
@@ -134,6 +182,25 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
           </tbody>
         </table>
       </div>
+      {invoice.schedule && invoice.schedule.length > 0 ? (
+        <div className={styles.tableWrap}>
+          <table>
+            <thead><tr><th>Installment</th><th>Due date</th><th>Amount</th><th>Status</th><th>Paid on</th><th>Mode</th></tr></thead>
+            <tbody>
+              {invoice.schedule.map((line) => (
+                <tr key={line.number}>
+                  <td>{line.number}</td>
+                  <td>{formatDisplayDate(line.dueDate)}</td>
+                  <td className={styles.num}>{formatRupees(line.amount)}</td>
+                  <td>{line.status === "paid" ? "Paid" : "Due"}</td>
+                  <td>{line.paidDate ? formatDisplayDate(line.paidDate) : ""}</td>
+                  <td>{modeLabel(line.paymentMode)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
       {invoice.payments.length > 0 ? (
         <div className={styles.tableWrap}>
           <table>
@@ -151,7 +218,12 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
         </div>
       ) : null}
       <div className={styles.letterFoot}>
-        <div />
+        <div className={styles.paymentInstructions}>
+          <strong>Payment Instructions</strong>
+          <span>Account Title : Electro Tech</span>
+          <span>Account Number : 57365002120531</span>
+          <span>Bank Name: Bank Alfalah.</span>
+        </div>
         <table className={styles.totals}>
           <tbody>
             <tr><th>Total amount</th><td>{formatRupees(invoice.grandTotal)}</td></tr>
@@ -193,41 +265,55 @@ export function PaymentSlip({
   paper?: boolean;
 }) {
   return (
-    <article className={`${styles.letter} quotation-letter ${paper ? styles.letterPaper : ""}`}>
+    <article className={`${styles.letter} ${styles.slipSheet} quotation-letter ${paper ? styles.letterPaper : ""}`}>
       <Letterhead title="PAID SLIP" />
-      <section className={styles.parties}>
-        <div>
-          <p className={styles.blockLabel}>Received from</p>
-          <strong>{project.customerName}</strong>
-          <span>{project.address}</span>
-          <span>{project.contactNo}</span>
+      <div className={styles.slipBody}>
+        <div className={styles.slipAmount}>
+          <p>Amount received</p>
+          <strong>{formatRupees(payment.paidAmount)}</strong>
         </div>
-        <dl className={styles.meta}>
+        <PaidSeal date={formatDisplayDate(payment.paymentDate)} />
+        <dl className={styles.slipFacts}>
+          <div><dt>Received from</dt><dd>{project.customerName}</dd></div>
+          <div><dt>Package</dt><dd>{project.customerPackage}</dd></div>
           <div><dt>Project</dt><dd>{project.serial}</dd></div>
           <div><dt>Payment date</dt><dd>{formatDisplayDate(payment.paymentDate)}</dd></div>
           <div><dt>Mode</dt><dd>{modeLabel(payment.paymentMode)}</dd></div>
           {payment.installmentNumber ? <div><dt>Installment</dt><dd>{payment.installmentNumber}</dd></div> : null}
+          <div><dt>Contact</dt><dd>{project.contactNo}</dd></div>
         </dl>
-      </section>
-      <div className={styles.letterFoot}>
-        <div />
-        <table className={styles.totals}>
-          <tbody>
-            <tr className={styles.grand}><th>Amount received</th><td>{formatRupees(payment.paidAmount)}</td></tr>
-          </tbody>
-        </table>
       </div>
-      <footer className={styles.signOff}>
-        <div className={styles.paidStamp}>
-          Paid
-          <small>{formatDisplayDate(payment.paymentDate)}</small>
-        </div>
-        <div className={styles.signature}>
-          <strong>For, ELECTRO TECH</strong>
-          <img src="/logos/authorized-signature.png" alt="Authorized signature" decoding="sync" />
-          <small>Authorized signature</small>
-        </div>
+      <p className={styles.slipNote}>This slip confirms that Electro Tech has received the payment shown above.</p>
+      <footer className={styles.signature}>
+        <strong>For, ELECTRO TECH</strong>
+        <img src="/logos/authorized-signature.png" alt="Authorized signature" decoding="sync" />
+        <small>Authorized signature</small>
       </footer>
+    </article>
+  );
+}
+
+export function GreetingCard({
+  variant,
+  customerName,
+  body,
+  paper = false,
+}: {
+  variant: "thanks" | "feedback";
+  customerName: string;
+  body: string;
+  paper?: boolean;
+}) {
+  const thanks = variant === "thanks";
+  return (
+    <article className={`${styles.greeting} ${thanks ? styles.greetingThanks : styles.greetingFeedback} quotation-letter ${paper ? styles.letterPaper : ""}`}>
+      <img className={styles.greetingLogo} src="/logos/logo-1.png" alt="Electro Tech" decoding="sync" />
+      <p className={styles.greetingBrand}>Electro Tech</p>
+      <h2>{thanks ? "Thank You" : "We Value Your Feedback"}</h2>
+      <p className={styles.greetingName}>{customerName || "Valued customer"}</p>
+      <p className={styles.greetingBody}>{body}</p>
+      <p className={styles.greetingClose}>{thanks ? "With gratitude" : "Your words help us serve you better"}</p>
+      <small>Electrical & Solar Solutions · Attock</small>
     </article>
   );
 }

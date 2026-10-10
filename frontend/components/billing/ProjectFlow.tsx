@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { defaultAgreementWording } from "@/lib/billing/agreement-wording";
-import { DocumentApiError, readImageFile, saveAgreement, updateAgreementWording, recordPayment, type AgreementRecord, type BankMode, type GuarantorInput, type InvoiceRecord } from "@/lib/billing/documents-api";
+import { DocumentApiError, readImageFile, saveAgreement, updateAgreementWording, recordPayment, type AgreementRecord, type BankMode, type GuarantorInput } from "@/lib/billing/documents-api";
 import { printFromControl } from "@/lib/billing/print-letter";
-import { formatRupees, todayIsoDate, type QuotationRecord } from "@/lib/billing/quotation-math";
+import { formatRupees, maskCnic, maskPhone, todayIsoDate, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { AgreementLetter } from "./BillingLetters";
 import { FancySelect, FilePicker } from "./FancyControls";
 import styles from "./quotation.module.css";
@@ -24,6 +24,8 @@ const emptyGuarantor = (): GuarantorInput => ({
   designation: "",
   occupation: "",
   sector: "private",
+  contactNo: "",
+  cnic: "",
   cnicFront: "",
   cnicBack: "",
 });
@@ -102,26 +104,30 @@ export function AgreementDialog({
               <label className={styles.field}><span>Name</span><input value={guarantor.fullName} onChange={(event) => updateGuarantor(index, { fullName: event.target.value })} /></label>
               <label className={styles.field}><span>Designation</span><input value={guarantor.designation} onChange={(event) => updateGuarantor(index, { designation: event.target.value })} /></label>
               <label className={styles.field}><span>Occupation</span><input value={guarantor.occupation} onChange={(event) => updateGuarantor(index, { occupation: event.target.value })} /></label>
+              <label className={styles.field}><span>Contact number</span><input inputMode="numeric" value={guarantor.contactNo} onChange={(event) => updateGuarantor(index, { contactNo: maskPhone(event.target.value) })} placeholder="0300-0000000" /></label>
+              <label className={styles.field}><span>CNIC number</span><input inputMode="numeric" value={guarantor.cnic} onChange={(event) => updateGuarantor(index, { cnic: maskCnic(event.target.value) })} placeholder="00000-0000000-0" /></label>
               <div className={styles.field}>
                 <span id={`guarantor-sector-${index}`}>Sector</span>
                 <FancySelect labelId={`guarantor-sector-${index}`} value={guarantor.sector} options={sectors} onChange={(sector) => updateGuarantor(index, { sector })} />
               </div>
-              <div className={styles.field}>
-                <span>CNIC front</span>
-                <FilePicker accept="image/png,image/jpeg" fileName={guarantor.cnicFront ? "Photo attached" : null} onFile={(file) => void onFile(index, "cnicFront", file)} />
+              <div className={styles.cnicPreview}>
+                <figure>
+                  <span>CNIC front</span>
+                  <FilePicker accept="image/png,image/jpeg" fileName={guarantor.cnicFront ? "Photo attached" : null} onFile={(file) => void onFile(index, "cnicFront", file)} />
+                  {guarantor.cnicFront ? <img src={guarantor.cnicFront} alt={`Guarantor ${index + 1} CNIC front preview`} /> : <div className={styles.cnicEmpty}>Front preview</div>}
+                </figure>
+                <figure>
+                  <span>CNIC back</span>
+                  <FilePicker accept="image/png,image/jpeg" fileName={guarantor.cnicBack ? "Photo attached" : null} onFile={(file) => void onFile(index, "cnicBack", file)} />
+                  {guarantor.cnicBack ? <img src={guarantor.cnicBack} alt={`Guarantor ${index + 1} CNIC back preview`} /> : <div className={styles.cnicEmpty}>Back preview</div>}
+                </figure>
               </div>
-              <div className={styles.field}>
-                <span>CNIC back</span>
-                <FilePicker accept="image/png,image/jpeg" fileName={guarantor.cnicBack ? "Photo attached" : null} onFile={(file) => void onFile(index, "cnicBack", file)} />
-              </div>
-              {guarantor.cnicFront ? <p className={styles.hint}>CNIC front attached.</p> : null}
-              {guarantor.cnicBack ? <p className={styles.hint}>CNIC back attached.</p> : null}
             </fieldset>
           )) : null}
           {error ? <p className={styles.error}>{error}</p> : null}
           <div className={styles.formActions}>
             <button className={styles.secondaryButton} type="button" onClick={onClose} disabled={saving}>Cancel</button>
-            <button className={styles.primaryButton} type="button" onClick={() => void onSubmit()} disabled={saving}>{saving ? "Saving…" : "Save agreement"}</button>
+            <button className={styles.primaryButton} type="button" onClick={() => void onSubmit()} disabled={saving}>{saving ? "Saving…" : installments ? "Create invoices" : "Save agreement"}</button>
           </div>
         </div>
       </div>
@@ -182,20 +188,22 @@ export function AgreementViewDialog({
 export function DirectPaymentDialog({
   project,
   balance,
+  firstPayment,
   onClose,
   onSaved,
 }: {
   project: QuotationRecord;
   balance: number;
+  firstPayment: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [paidAmount, setPaidAmount] = useState(balance > 0 && balance < project.grandTotal ? balance : 0);
+  const [paidAmount, setPaidAmount] = useState(0);
   const [paymentDate, setPaymentDate] = useState(todayIsoDate());
   const [paymentMode, setPaymentMode] = useState<BankMode>("cash");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const remaining = Math.max(0, balance - Number(paidAmount || 0));
+  const remaining = Math.max(0, Math.round((balance - Number(paidAmount || 0)) * 100) / 100);
 
   async function onSubmit() {
     setSaving(true);
@@ -204,7 +212,7 @@ export function DirectPaymentDialog({
       await recordPayment(project.id, { kind: "direct", paidAmount: Number(paidAmount), paymentDate, paymentMode });
       onSaved();
     } catch (caught) {
-      setError(caught instanceof DocumentApiError ? caught.message : "The invoice could not be saved.");
+      setError(caught instanceof DocumentApiError ? caught.message : "The payment could not be saved.");
     } finally {
       setSaving(false);
     }
@@ -213,9 +221,10 @@ export function DirectPaymentDialog({
   return (
     <div className={styles.modal} role="presentation" onClick={onClose}>
       <div className={styles.confirm} role="dialog" aria-modal="true" aria-labelledby="invoice-title" onClick={(event) => event.stopPropagation()}>
-        <h2 id="invoice-title">{balance < project.grandTotal ? "Record balance" : "Create invoice"} · {project.serial}</h2>
-        <p>Total {formatRupees(project.grandTotal)}. Remaining before this payment {formatRupees(balance)}. After this payment the balance will be {formatRupees(remaining)}.</p>
-        <label className={styles.field}><span>{balance < project.grandTotal ? "Balance paid" : "Advance paid"}</span><input type="number" min="0" step="0.01" value={paidAmount} onChange={(event) => setPaidAmount(Number(event.target.value))} /></label>
+        <h2 id="invoice-title">Receive payment · {project.serial}</h2>
+        <p>Total {formatRupees(project.grandTotal)}. The remaining balance invoice updates with this payment, its date, and its mode.</p>
+        <label className={styles.field}><span>{firstPayment ? "Advance payment" : "Paid amount"}</span><input type="number" min="0" step="0.01" value={paidAmount} onChange={(event) => setPaidAmount(Number(event.target.value))} /></label>
+        <label className={styles.field}><span>Remaining balance</span><input readOnly value={formatRupees(remaining)} /></label>
         <label className={styles.field}><span>Date of payment</span><input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label>
         <div className={styles.field}>
           <span id="invoice-payment-mode">Payment mode</span>
@@ -224,41 +233,7 @@ export function DirectPaymentDialog({
         {error ? <p className={styles.error}>{error}</p> : null}
         <div className={styles.formActions}>
           <button className={styles.secondaryButton} type="button" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className={styles.primaryButton} type="button" onClick={() => void onSubmit()} disabled={saving}>{saving ? "Saving…" : "Save invoice"}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function InstallmentInvoiceDialog({
-  invoices,
-  onClose,
-  onView,
-}: {
-  invoices: InvoiceRecord[];
-  onClose: () => void;
-  onView: (invoice: InvoiceRecord) => void;
-}) {
-  return (
-    <div className={styles.modal} role="presentation" onClick={onClose}>
-      <div className={styles.modalCard} role="dialog" aria-modal="true" aria-labelledby="installment-invoices-title" onClick={(event) => event.stopPropagation()}>
-        <div className={styles.modalBar}>
-          <h2 id="installment-invoices-title">Installment invoices</h2>
-          <button className={styles.secondaryButton} type="button" onClick={onClose}>Close</button>
-        </div>
-        <div className={styles.modalScroll}>
-          {invoices.length === 0 ? <p>Generate the agreement first. Each installment then gets an invoice with its due date.</p> : null}
-          <div className={styles.cards}>
-            {invoices.map((invoice) => (
-              <article className={styles.card} key={invoice.id}>
-                <strong>{invoice.serial}</strong>
-                <p>Installment {invoice.installmentNumber} · {invoice.status === "paid" ? "Paid" : invoice.dueDate ? `Due ${invoice.dueDate}` : "Due"}</p>
-                <p className={styles.total}>{formatRupees(invoice.grandTotal)}</p>
-                <button className={styles.secondaryButton} type="button" onClick={() => onView(invoice)}>View</button>
-              </article>
-            ))}
-          </div>
+          <button className={styles.primaryButton} type="button" onClick={() => void onSubmit()} disabled={saving}>{saving ? "Saving…" : "Receive payment"}</button>
         </div>
       </div>
     </div>

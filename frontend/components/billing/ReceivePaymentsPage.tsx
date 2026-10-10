@@ -9,6 +9,7 @@ import { printFromControl } from "@/lib/billing/print-letter";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import { PaymentSlip } from "./BillingLetters";
 import { FancySelect } from "./FancyControls";
+import { DirectPaymentDialog } from "./ProjectFlow";
 import shell from "./billing-shell.module.css";
 import styles from "./quotation.module.css";
 import "./quotation-print.css";
@@ -54,6 +55,7 @@ export function ReceivePaymentsPage() {
   const [paymentMode, setPaymentMode] = useState<BankMode>("cash");
   const [editing, setEditing] = useState<PaymentRecord | null>(null);
   const [slip, setSlip] = useState<PaymentRecord | null>(null);
+  const [receiving, setReceiving] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [capture, setCapture] = useState<PaymentRecord | null>(null);
@@ -86,23 +88,6 @@ export function ReceivePaymentsPage() {
   }, []);
 
   const current = projects.find((row) => row.project.id === projectId) ?? null;
-
-  async function saveDirect() {
-    if (!current) return;
-    setSaving(true);
-    setBanner(null);
-    try {
-      const saved = await recordPayment(current.project.id, { kind: "direct", paidAmount, paymentDate, paymentMode });
-      const newest = saved.payments[saved.payments.length - 1] ?? null;
-      await refresh(current.project.id);
-      setSlip(newest);
-      setBanner({ tone: "ok", text: "Payment saved. The paid slip is ready." });
-    } catch (error) {
-      setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The payment could not be saved." });
-    } finally {
-      setSaving(false);
-    }
-  }
 
   async function saveInstallment(installmentNumber: number, amount: number) {
     if (!current) return;
@@ -199,12 +184,10 @@ export function ReceivePaymentsPage() {
             <div className={styles.form}>
               <p>Total {formatRupees(current.project.grandTotal)} · Received {formatRupees(current.paidTotal)} · Balance {formatRupees(current.balance)}</p>
               {current.project.paymentMode === "direct" ? (
-                <>
-                  <PaymentFields paidAmount={paidAmount} paymentDate={paymentDate} paymentMode={paymentMode} onAmount={setPaidAmount} onDate={setPaymentDate} onMode={setPaymentMode} />
-                  <div className={styles.formActions}>
-                    <button className={styles.primaryButton} type="button" onClick={() => void saveDirect()} disabled={saving || current.balance <= 0}>Save payment</button>
-                  </div>
-                </>
+                <div className={styles.formActions}>
+                  {current.invoices.length === 0 ? <p className={styles.hint}>Create the invoice from Projects in Process before receiving a payment.</p> : null}
+                  <button className={styles.primaryButton} type="button" onClick={() => setReceiving(true)} disabled={saving || current.balance <= 0 || current.invoices.length === 0}>Receive payment</button>
+                </div>
               ) : current.agreement ? (
                 <>
                   <PaymentFields paidAmount={paidAmount} paymentDate={paymentDate} paymentMode={paymentMode} onAmount={setPaidAmount} onDate={setPaymentDate} onMode={setPaymentMode} />
@@ -276,6 +259,20 @@ export function ReceivePaymentsPage() {
             </div>
           ) : null}
         </section>
+      ) : null}
+      {receiving && current?.project.paymentMode === "direct" ? (
+        <DirectPaymentDialog
+          project={current.project}
+          balance={current.balance}
+          firstPayment={current.paidTotal <= 0}
+          onClose={() => setReceiving(false)}
+          onSaved={() => {
+            const id = current.project.id;
+            setReceiving(false);
+            setBanner({ tone: "ok", text: "Payment received. The remaining balance invoice is updated." });
+            void refresh(id);
+          }}
+        />
       ) : null}
       {slip && current ? (
         <div className={styles.modal} role="presentation" onClick={() => setSlip(null)}>

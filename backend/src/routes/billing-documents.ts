@@ -40,6 +40,8 @@ function guarantors(value: unknown): GuarantorInput[] {
       designation: text(row.designation),
       occupation: text(row.occupation),
       sector: row.sector === "government" ? "government" : "private",
+      contactNo: text(row.contactNo),
+      cnic: text(row.cnic),
       cnicFront: text(row.cnicFront),
       cnicBack: text(row.cnicBack),
     };
@@ -101,6 +103,13 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
       sendFailure(error, response, next);
     }
   });
+  router.delete("/invoices/:id", async (request, response, next) => {
+    try {
+      response.status(200).json({ project: await repository().deleteInvoice(request.params.id ?? "") });
+    } catch (error) {
+      sendFailure(error, response, next);
+    }
+  });
   router.get("/invoices", async (_request, response, next) => {
     try {
       response.status(200).json({ invoices: await repository().listInvoices() });
@@ -155,6 +164,13 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
       const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
       const agreement = await repository().updateAgreementWording(request.params.id ?? "", text(body.body));
       response.status(200).json({ agreement });
+    } catch (error) {
+      sendFailure(error, response, next);
+    }
+  });
+  router.post("/projects/:id/invoice", async (request, response, next) => {
+    try {
+      response.status(201).json({ project: await repository().issueInvoice(request.params.id ?? "") });
     } catch (error) {
       sendFailure(error, response, next);
     }

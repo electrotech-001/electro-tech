@@ -4,6 +4,8 @@ import {
   DocumentError,
   changeDueDate,
   createAgreement,
+  deleteInvoice,
+  issueDirectInvoice,
   setAgreementBody,
   editPayment,
   paidTotal,
@@ -33,6 +35,8 @@ export type DocumentsRepository = {
   workspace(projectId: string): Promise<ReceiveProject>;
   saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string }): Promise<AgreementRecord>;
   updateAgreementWording(agreementId: string, body: string): Promise<AgreementRecord>;
+  issueInvoice(projectId: string): Promise<ReceiveProject>;
+  deleteInvoice(invoiceId: string): Promise<ReceiveProject>;
   recordPayment(projectId: string, input: DirectPayment | InstallmentPayment): Promise<ReceiveProject>;
   updatePayment(paymentId: string, input: { paidAmount: number; paymentDate: string; paymentMode: BankMode }): Promise<ReceiveProject>;
   updateDueDate(projectId: string, installmentNumber: number, dueDate: string): Promise<ReceiveProject>;
@@ -170,6 +174,14 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
       if (!saved.agreement) throw new DocumentError("The agreement could not be saved.");
       return saved.agreement;
     },
+    async issueInvoice(projectId) {
+      return remember(issueDirectInvoice(requireWorkspace(projectId), maxSerial([...workspaces.values()]), todayIso()));
+    },
+    async deleteInvoice(invoiceId) {
+      const current = [...workspaces.values()].find((workspace) => workspace.invoices.some((invoice) => invoice.id === invoiceId));
+      if (!current) throw new DocumentError("Invoice was not found.", 404, "not_found");
+      return remember(deleteInvoice(current, invoiceId));
+    },
     async updateAgreementWording(agreementId, body) {
       const current = [...workspaces.values()].find((workspace) => workspace.agreement?.id === agreementId);
       if (!current) throw new DocumentError("Agreement was not found.", 404, "not_found");
@@ -253,6 +265,8 @@ type GuarantorRow = {
   designation: string;
   occupation: string;
   sector: "private" | "government";
+  contact_no?: string | null;
+  cnic?: string | null;
   cnic_front?: string | null;
   cnic_back?: string | null;
 };
@@ -300,6 +314,8 @@ function guarantorFrom(row: GuarantorRow): GuarantorRecord {
     designation: row.designation,
     occupation: row.occupation,
     sector: row.sector,
+    contactNo: row.contact_no ?? "",
+    cnic: row.cnic ?? "",
     cnicFront: row.cnic_front ?? "",
     cnicBack: row.cnic_back ?? "",
   };
@@ -354,9 +370,11 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       balanceDue: asNumber(row.balance_due),
       grandTotal: asNumber(row.grand_total),
       installmentNumber: row.installment_number,
-      payments: payments.filter((payment) => payment.installmentNumber != null
-        ? payment.installmentNumber === row.installment_number
-        : payment.invoiceId === row.id),
+      payments: payments.filter((payment) => {
+        if (payment.installmentNumber != null) return payment.installmentNumber === row.installment_number;
+        if (payment.invoiceId) return payment.invoiceId === row.id;
+        return row.kind !== "installment";
+      }),
       project,
     }));
     const guarantors = guarantorRows.map(guarantorFrom);
@@ -371,14 +389,21 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       createdAt: agreementRow.created_at,
       project,
     } : null;
-    return { project, agreement, invoices, payments };
+    return {
+      project,
+      agreement,
+      invoices: invoices.map((invoice) => invoice.kind === "installment" && agreement
+        ? { ...invoice, schedule: agreement.schedule, dueDate: agreement.schedule.find((line) => line.number === invoice.installmentNumber)?.dueDate ?? invoice.dueDate }
+        : invoice),
+      payments,
+    };
   }
 
   async function loadWorkspace(projectId: string): Promise<Workspace> {
     const project = await loadProject(projectId);
     const [agreementResult, guarantorResult, invoiceResult, paymentResult] = await Promise.all([
       client.from("billing_agreements").select(AGREEMENT_COLUMNS).eq("project_id", projectId).maybeSingle(),
-      client.from("billing_guarantors").select("id, agreement_id, project_id, customer_name, slot, full_name, designation, occupation, sector, cnic_front, cnic_back").eq("project_id", projectId).order("slot"),
+      client.from("billing_guarantors").select("id, agreement_id, project_id, customer_name, slot, full_name, designation, occupation, sector, contact_no, cnic, cnic_front, cnic_back").eq("project_id", projectId).order("slot"),
       client.from("billing_invoices").select("id, project_id, serial, serial_number, kind, status, invoice_date, due_date, payment_date, payment_mode, advance_paid, balance_due, grand_total, installment_number").eq("project_id", projectId),
       client.from("billing_payments").select("id, project_id, invoice_id, installment_number, expected_amount, paid_amount, payment_date, payment_mode").eq("project_id", projectId),
     ]);
@@ -424,6 +449,8 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
           designation: guarantor.designation,
           occupation: guarantor.occupation,
           sector: guarantor.sector,
+          contact_no: guarantor.contactNo,
+          cnic: guarantor.cnic,
           cnic_front: guarantor.cnicFront,
           cnic_back: guarantor.cnicBack,
         })));
@@ -503,8 +530,8 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       guarantorsMode === "none"
         ? Promise.resolve({ data: [] as GuarantorRow[], error: null })
         : client.from("billing_guarantors").select(guarantorsMode === "full"
-          ? "id, agreement_id, project_id, customer_name, slot, full_name, designation, occupation, sector, cnic_front, cnic_back"
-          : "id, agreement_id, project_id, customer_name, slot, full_name, designation, occupation, sector").in("project_id", ids).order("slot"),
+          ? "id, agreement_id, project_id, customer_name, slot, full_name, designation, occupation, sector, contact_no, cnic, cnic_front, cnic_back"
+          : "id, agreement_id, project_id, customer_name, slot, full_name, designation, occupation, sector, contact_no, cnic").in("project_id", ids).order("slot"),
       client.from("billing_invoices").select("id, project_id, serial, serial_number, kind, status, invoice_date, due_date, payment_date, payment_mode, advance_paid, balance_due, grand_total, installment_number").in("project_id", ids),
       client.from("billing_payments").select("id, project_id, invoice_id, installment_number, expected_amount, paid_amount, payment_date, payment_mode").in("project_id", ids),
     ]);
@@ -595,6 +622,22 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       await persist(current, next, true);
       if (!next.agreement) throw new DocumentError("The agreement could not be saved.");
       return next.agreement;
+    },
+    async issueInvoice(projectId) {
+      const current = await loadWorkspace(projectId);
+      const next = issueDirectInvoice(current, await reservedSerial(), todayIso());
+      await persist(current, next, false);
+      return present(next);
+    },
+    async deleteInvoice(invoiceId) {
+      const found = await client.from("billing_invoices").select("project_id").eq("id", invoiceId).maybeSingle();
+      if (found.error) throw storageFailure(found.error, "read");
+      const projectId = found.data?.project_id;
+      if (typeof projectId !== "string") throw new DocumentError("Invoice was not found.", 404, "not_found");
+      const current = await loadWorkspace(projectId);
+      const next = deleteInvoice(current, invoiceId);
+      await persist(current, next, false);
+      return present(next);
     },
     async updateAgreementWording(agreementId, body) {
       const found = await client.from("billing_agreements").select("project_id").eq("id", agreementId).maybeSingle();

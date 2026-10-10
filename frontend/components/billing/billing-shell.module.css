@@ -505,6 +505,15 @@
   text-underline-offset: 3px;
 }
 
+.capture {
+  position: fixed;
+  left: -12000px;
+  top: 0;
+  width: 794px;
+  background: #fff;
+  pointer-events: none;
+}
+
 .waLayout {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);

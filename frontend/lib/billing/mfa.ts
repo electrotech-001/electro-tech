@@ -1,8 +1,8 @@
 import type { AuthError, Session } from "@supabase/supabase-js";
 import { billingSupabase } from "./supabase";
 
-/** Billing sign-in requires an authenticator app after the password. */
-export const billingMfaEnabled = true;
+/** Authenticator setup stays available, but billing sign-in does not ask for it yet. */
+export const billingMfaEnabled = false;
 
 export type SecondFactor =
   | {

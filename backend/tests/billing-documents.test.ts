@@ -51,6 +51,8 @@ function guarantor(name: string) {
     designation: "Officer",
     occupation: "Teacher",
     sector: "government" as const,
+    contactNo: "0300-5607350",
+    cnic: "37101-1234567-1",
     cnicFront: image,
     cnicBack: image,
   };
@@ -65,6 +67,12 @@ test("direct agreement has no guarantors and the balance invoice closes at zero"
   const revised = await repository.updateAgreementWording(agreement.id, "The customer will pay the agreed amount in one transfer.");
   assert.equal(revised.body, "The customer will pay the agreed amount in one transfer.");
 
+  const issued = await repository.issueInvoice("project-1");
+  assert.equal(issued.invoices.length, 1);
+  assert.equal(issued.invoices[0]?.status, "due");
+  assert.equal(issued.invoices[0]?.balanceDue, 673000);
+  await assert.rejects(() => repository.issueInvoice("project-1"), /already created/);
+
   const partial = await repository.recordPayment("project-1", {
     kind: "direct",
     paidAmount: 250000,
@@ -72,7 +80,10 @@ test("direct agreement has no guarantors and the balance invoice closes at zero"
     paymentMode: "cash",
   });
   assert.equal(partial.balance, 423000);
+  assert.equal(partial.invoices.length, 1);
   assert.equal(partial.invoices[0]?.status, "partial");
+  assert.equal(partial.invoices[0]?.balanceDue, 423000);
+  assert.equal(partial.invoices[0]?.payments.length, 1);
 
   const settled = await repository.recordPayment("project-1", {
     kind: "direct",
@@ -80,11 +91,20 @@ test("direct agreement has no guarantors and the balance invoice closes at zero"
     paymentDate: "2026-11-01",
     paymentMode: "bank_transfer",
   });
-  const closing = settled.invoices.find((invoice) => invoice.kind === "settlement");
+  assert.equal(settled.invoices.length, 1);
+  const closing = settled.invoices[0];
   assert.equal(closing?.balanceDue, 0);
   assert.equal(closing?.status, "paid");
   assert.equal(closing?.payments.length, 2);
-  assert.equal(settled.invoices.some((invoice) => invoice.status === "partial"), true);
+  assert.equal(closing?.payments[0]?.paymentMode, "cash");
+  assert.equal(closing?.payments[1]?.paymentDate, "2026-11-01");
+
+  const removed = await repository.deleteInvoice(closing?.id ?? "");
+  assert.equal(removed.invoices.length, 0);
+  assert.equal(removed.payments.length, 0);
+  const reissued = await repository.issueInvoice("project-1");
+  assert.equal(reissued.invoices.length, 1);
+  assert.equal(reissued.invoices[0]?.status, "due");
 });
 
 test("installment agreement stores two guarantors and a received card updates the rest", async () => {
@@ -112,8 +132,16 @@ test("installment agreement stores two guarantors and a received card updates th
   const first = received.agreement?.schedule.find((line) => line.number === 1);
   assert.equal(first?.status, "paid");
   assert.equal(received.invoices.find((invoice) => invoice.installmentNumber === 1)?.status, "paid");
+  assert.equal(received.invoices.every((invoice) => invoice.schedule?.find((line) => line.number === 1)?.status === "paid"), true);
+  assert.equal(received.invoices.every((invoice) => invoice.schedule?.find((line) => line.number === 1)?.paidDate === "2026-11-01"), true);
   const unpaid = received.agreement?.schedule.filter((line) => line.status === "due") ?? [];
   assert.equal(unpaid.reduce((sum, line) => sum + line.amount, 0), 282000);
+
+  const third = received.invoices.find((invoice) => invoice.installmentNumber === 3);
+  const afterDelete = await repository.deleteInvoice(third?.id ?? "");
+  assert.equal(afterDelete.invoices.some((invoice) => invoice.installmentNumber === 3), false);
+  assert.equal(afterDelete.invoices.find((invoice) => invoice.installmentNumber === 1)?.status, "paid");
+  assert.equal(afterDelete.agreement?.schedule.length, 2);
 
   const edited = await repository.updateDueDate("project-1", 2, "2026-12-15");
   assert.equal(edited.agreement?.schedule.find((line) => line.number === 2)?.dueDate, "2026-12-15");

@@ -58,9 +58,16 @@ export function GuarantorsPage() {
                 </div>
                 <h2>{guarantor.fullName}</h2>
                 <p>{guarantor.designation} · {guarantor.occupation}</p>
-                <div className={styles.cnicRow}>
-                  <img src={guarantor.cnicFront} alt={`${guarantor.fullName} CNIC front`} />
-                  <img src={guarantor.cnicBack} alt={`${guarantor.fullName} CNIC back`} />
+                <p>Contact {guarantor.contactNo || "—"} · CNIC {guarantor.cnic || "—"}</p>
+                <div className={styles.cnicPreview}>
+                  <figure>
+                    <span>CNIC front</span>
+                    {guarantor.cnicFront ? <img src={guarantor.cnicFront} alt={`${guarantor.fullName} CNIC front`} /> : <div className={styles.cnicEmpty}>No front photo</div>}
+                  </figure>
+                  <figure>
+                    <span>CNIC back</span>
+                    {guarantor.cnicBack ? <img src={guarantor.cnicBack} alt={`${guarantor.fullName} CNIC back`} /> : <div className={styles.cnicEmpty}>No back photo</div>}
+                  </figure>
                 </div>
               </article>
             ))}

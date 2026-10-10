@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import {
   connectWhatsApp,
   disconnectWhatsApp,
@@ -10,8 +11,17 @@ import {
   type WhatsAppDocumentKind,
   type WhatsAppStatus,
 } from "@/lib/billing/whatsapp-api";
+import { GreetingCard } from "./BillingLetters";
 import { FancySelect, FilePicker } from "./FancyControls";
 import styles from "./billing-shell.module.css";
+import "./quotation-print.css";
+
+type SendMode = "document" | "message" | "thanks" | "feedback";
+
+const cardCopy = {
+  thanks: "Thank you for trusting Electro Tech. We are grateful for your confidence in our work.",
+  feedback: "We hope your Electro Tech installation is serving you well. Kindly share your feedback when you have a moment.",
+};
 
 const emptyStatus: WhatsAppStatus = {
   status: "disconnected",
@@ -55,10 +65,14 @@ export function WhatsAppConnectPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [busy, setBusy] = useState<"connect" | "disconnect" | "send" | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [mode, setMode] = useState<SendMode>("document");
   const [kind, setKind] = useState<WhatsAppDocumentKind>("quotation");
   const [phone, setPhone] = useState("");
+  const [cardName, setCardName] = useState("");
   const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [captureCard, setCaptureCard] = useState<"thanks" | "feedback" | null>(null);
+  const captureRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,13 +131,20 @@ export function WhatsAppConnectPage() {
     }
   }
 
+  function chooseMode(next: SendMode) {
+    setMode(next);
+    setFile(null);
+    if (next === "thanks" || next === "feedback") setMessage(cardCopy[next]);
+    if (next === "message") setMessage("");
+  }
+
   async function onSend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!file) {
+    if (mode === "document" && !file) {
       setBanner("Choose the quotation, invoice, agreement, or paid slip file.");
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
+    if (file && file.size > 10 * 1024 * 1024) {
       setBanner("The document must be 10 MB or smaller.");
       return;
     }
@@ -132,14 +153,33 @@ export function WhatsAppConnectPage() {
     setBanner(null);
     setSuccess(null);
     try {
-      await sendWhatsAppDocument({ phone, kind, message, file });
-      setSuccess(`${kindLabels[kind]} sent to ${phone.trim()}.`);
-      setMessage("");
+      if (mode === "thanks" || mode === "feedback") {
+        setCaptureCard(mode);
+        await new Promise((resolve) => window.setTimeout(resolve, 80));
+        const node = captureRef.current?.querySelector("article");
+        if (!(node instanceof HTMLElement)) throw new WhatsAppApiError("The card could not be prepared.");
+        const cardFile = await quotationToPdf(node, mode === "thanks" ? "thank-you" : "feedback");
+        await sendWhatsAppDocument({
+          phone,
+          kind: mode === "thanks" ? "thanks" : "feedback",
+          message,
+          file: cardFile,
+        });
+        setSuccess(`${mode === "thanks" ? "Thank you card" : "Feedback card"} sent to ${phone.trim()}.`);
+      } else if (mode === "message") {
+        await sendWhatsAppDocument({ phone, kind: "card", message, file });
+        setSuccess(`Message sent to ${phone.trim()}.`);
+      } else {
+        await sendWhatsAppDocument({ phone, kind, message, file: file ?? undefined });
+        setSuccess(`${kindLabels[kind]} sent to ${phone.trim()}.`);
+      }
+      if (mode !== "thanks" && mode !== "feedback") setMessage("");
       setFile(null);
       form.reset();
     } catch (error) {
-      setBanner(error instanceof WhatsAppApiError ? error.message : "The document was not sent.");
+      setBanner(error instanceof WhatsAppApiError ? error.message : "The message was not sent.");
     } finally {
+      setCaptureCard(null);
       setBusy(null);
     }
   }
@@ -214,25 +254,41 @@ export function WhatsAppConnectPage() {
           </div>
         </section>
         <section className={styles.panel} aria-labelledby="whatsapp-send-title">
-          <h2 id="whatsapp-send-title">Send a document</h2>
-          <p>Send a quotation, invoice, agreement, or paid slip from the connected official number.</p>
+          <h2 id="whatsapp-send-title">Send</h2>
+          <p>Send a document, a custom message, or a greeting card from the connected official number.</p>
           {success ? <p className={styles.waSuccess}>{success}</p> : null}
           <form className={styles.waForm} onSubmit={(event) => void onSend(event)}>
             <fieldset className={styles.waForm} disabled={!connected || busy === "send"}>
               <div className={styles.field}>
-                <span id="whatsapp-document-kind">Document</span>
+                <span id="whatsapp-send-mode">What to send</span>
                 <FancySelect
-                  labelId="whatsapp-document-kind"
-                  value={kind}
+                  labelId="whatsapp-send-mode"
+                  value={mode}
                   options={[
-                    { value: "quotation", label: "Quotation" },
-                    { value: "invoice", label: "Invoice" },
-                    { value: "agreement", label: "Agreement" },
-                    { value: "slip", label: "Paid slip" },
+                    { value: "document", label: "Document" },
+                    { value: "message", label: "Custom message" },
+                    { value: "thanks", label: "Thank you card" },
+                    { value: "feedback", label: "Feedback card" },
                   ]}
-                  onChange={setKind}
+                  onChange={chooseMode}
                 />
               </div>
+              {mode === "document" ? (
+                <div className={styles.field}>
+                  <span id="whatsapp-document-kind">Document</span>
+                  <FancySelect
+                    labelId="whatsapp-document-kind"
+                    value={kind}
+                    options={[
+                      { value: "quotation", label: "Quotation" },
+                      { value: "invoice", label: "Invoice" },
+                      { value: "agreement", label: "Agreement" },
+                      { value: "slip", label: "Paid slip" },
+                    ]}
+                    onChange={setKind}
+                  />
+                </div>
+              ) : null}
               <label className={styles.field}>
                 <span>Customer WhatsApp</span>
                 <input
@@ -244,31 +300,44 @@ export function WhatsAppConnectPage() {
                   required
                 />
               </label>
+              {mode === "thanks" || mode === "feedback" ? (
+                <label className={styles.field}>
+                  <span>Name on the card</span>
+                  <input value={cardName} onChange={(event) => setCardName(event.target.value)} placeholder="Customer name" />
+                </label>
+              ) : null}
               <label className={styles.field}>
                 <span>Message</span>
                 <textarea
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
                   maxLength={1000}
-                  placeholder="Short note to send with the document."
+                  placeholder={mode === "message" ? "Write the WhatsApp message." : "Short note to send with the document."}
                   required
                 />
               </label>
-              <div className={styles.field}>
-                <span>File</span>
-                <FilePicker
-                  accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp"
-                  fileName={file?.name ?? null}
-                  onFile={(next) => setFile(next ?? null)}
-                />
-              </div>
+              {mode === "document" || mode === "message" ? (
+                <div className={styles.field}>
+                  <span>{mode === "message" ? "File, if you want to attach one" : "File"}</span>
+                  <FilePicker
+                    accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp"
+                    fileName={file?.name ?? null}
+                    onFile={(next) => setFile(next ?? null)}
+                  />
+                </div>
+              ) : null}
               <button className={styles.primaryButton} type="submit">
-                {busy === "send" ? "Sending…" : `Send ${kindLabels[kind].toLowerCase()}`}
+                {busy === "send" ? "Sending…" : mode === "message" ? "Send message" : mode === "thanks" ? "Send thank you card" : mode === "feedback" ? "Send feedback card" : `Send ${kindLabels[kind].toLowerCase()}`}
               </button>
             </fieldset>
           </form>
         </section>
       </div>
+      {captureCard ? (
+        <div className={styles.capture} ref={captureRef}>
+          <GreetingCard variant={captureCard} customerName={cardName || "Valued customer"} body={message} paper />
+        </div>
+      ) : null}
     </>
   );
 }

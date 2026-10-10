@@ -10,6 +10,8 @@ export type GuarantorInput = {
   designation: string;
   occupation: string;
   sector: GuarantorSector;
+  contactNo: string;
+  cnic: string;
   cnicFront: string;
   cnicBack: string;
 };
@@ -59,6 +61,7 @@ export type InvoiceRecord = {
   grandTotal: number;
   installmentNumber: number | null;
   payments: PaymentRecord[];
+  schedule?: ScheduleLine[];
   project: QuotationRecord;
 };
 
@@ -218,6 +221,18 @@ export function updateAgreementWording(agreementId: string, body: string): Promi
   return billingFetch(`/api/billing/agreements/${agreementId}`, { method: "PATCH", body: JSON.stringify({ body }) })
     .then((response) => expectOk(response, "The agreement wording could not be saved."))
     .then((payload) => (payload as { agreement: AgreementRecord }).agreement);
+}
+
+export function issueDirectInvoice(projectId: string): Promise<ReceiveProject> {
+  return billingFetch(`/api/billing/projects/${projectId}/invoice`, { method: "POST", body: "{}" })
+    .then((response) => expectOk(response, "The invoice could not be created."))
+    .then((payload) => (payload as { project: ReceiveProject }).project);
+}
+
+export function deleteInvoice(invoiceId: string): Promise<void> {
+  return billingFetch(`/api/billing/invoices/${invoiceId}`, { method: "DELETE" })
+    .then((response) => expectOk(response, "The invoice could not be deleted."))
+    .then(() => undefined);
 }
 
 export function recordPayment(projectId: string, input: { kind: "direct"; paidAmount: number; paymentDate: string; paymentMode: BankMode } | { kind: "installment"; installmentNumber: number; paidAmount: number; paymentDate: string; paymentMode: BankMode }): Promise<ReceiveProject> {

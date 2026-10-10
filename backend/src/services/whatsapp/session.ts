@@ -51,7 +51,7 @@ export type WhatsAppSocket = {
   onWhatsApp(...phones: string[]): Promise<Array<{ jid: string; exists: boolean }> | undefined>;
   sendMessage(
     jid: string,
-    content: { document: Buffer; mimetype: string; fileName?: string; caption?: string },
+    content: { document: Buffer; mimetype: string; fileName?: string; caption?: string } | { text: string },
   ): Promise<{ key?: { id?: string | null } } | undefined>;
 };
 
@@ -198,40 +198,51 @@ export class WhatsAppSession {
 
   send(input: WhatsAppOutgoingDocument): Promise<{ id: string }> {
     return this.enqueue(async () => {
-      if (this.status !== "connected" || !this.socket) {
-        throw new WhatsAppServiceError(
-          "Connect the official WhatsApp before sending a document.",
-          409,
-          "not_connected",
-        );
-      }
-      const phone = normalizeCustomerPhone(input.phone);
-      const jid = customerJid(phone);
-      const matches = await this.socket.onWhatsApp(jid);
-      const match = matches?.find((item) => item.exists);
-      if (!match) {
-        throw new WhatsAppServiceError(
-          "That number is not registered on WhatsApp.",
-          422,
-          "not_on_whatsapp",
-        );
-      }
-      const sent = await this.socket.sendMessage(match.jid, {
+      const jid = await this.recipient(input.phone);
+      const sent = await this.socket?.sendMessage(jid, {
         document: input.file,
         mimetype: input.mimeType,
         fileName: documentFileName(input.kind, input.fileName, input.mimeType),
         caption: documentCaption(input.kind, input.message),
       });
-      const id = sent?.key?.id;
-      if (!id) {
-        throw new WhatsAppServiceError(
-          "WhatsApp did not accept the document. Try again in a moment.",
-          502,
-          "send_failed",
-        );
-      }
-      return { id };
+      return { id: this.sentId(sent, "WhatsApp did not accept the document. Try again in a moment.") };
     });
+  }
+
+  sendText(input: { phone: string; message: string }): Promise<{ id: string }> {
+    return this.enqueue(async () => {
+      const jid = await this.recipient(input.phone);
+      const sent = await this.socket?.sendMessage(jid, { text: input.message.trim() });
+      return { id: this.sentId(sent, "WhatsApp did not accept the message. Try again in a moment.") };
+    });
+  }
+
+  private async recipient(phone: string): Promise<string> {
+    const socket = this.socket;
+    if (this.status !== "connected" || !socket) {
+      throw new WhatsAppServiceError(
+        "Connect the official WhatsApp before sending a message.",
+        409,
+        "not_connected",
+      );
+    }
+    const jid = customerJid(normalizeCustomerPhone(phone));
+    const matches = await socket.onWhatsApp(jid);
+    const match = matches?.find((item) => item.exists);
+    if (!match) {
+      throw new WhatsAppServiceError(
+        "That number is not registered on WhatsApp.",
+        422,
+        "not_on_whatsapp",
+      );
+    }
+    return match.jid;
+  }
+
+  private sentId(sent: { key?: { id?: string | null } } | undefined, failure: string): string {
+    const id = sent?.key?.id;
+    if (!id) throw new WhatsAppServiceError(failure, 502, "send_failed");
+    return id;
   }
 
   private enqueue<T>(task: () => Promise<T>): Promise<T> {

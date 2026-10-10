@@ -21,7 +21,7 @@ import {
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { listProjects, listQuotations, QuotationApiError } from "@/lib/billing/quotations-api";
 import { sendWhatsAppDocument, WhatsAppApiError, type WhatsAppDocumentKind } from "@/lib/billing/whatsapp-api";
-import { CustomerNoteCard } from "./BillingLetters";
+import { CustomerNoteCard, GreetingCard } from "./BillingLetters";
 import { FancySelect } from "./FancyControls";
 import shell from "./billing-shell.module.css";
 import styles from "./quotation.module.css";
@@ -198,17 +198,29 @@ export function TemplatesPage() {
             <button className={styles.secondaryButton} type="button" onClick={() => setEditing(null)} disabled={saving}>Cancel</button>
             <button className={styles.primaryButton} type="button" onClick={() => void onSave()} disabled={saving}>{saving ? "Saving…" : "Save template"}</button>
           </div>
+          {editing !== "new" && editing && templateSendsCard(editing.kind) ? (
+            <GreetingCard
+              variant={editing.kind === "feedback" ? "feedback" : "thanks"}
+              customerName="Customer"
+              body={fillTemplate(body, { name: "Customer", project: "Project", packageName: "your package", phone: "" })}
+            />
+          ) : null}
         </section>
       ) : null}
       <div className={styles.cards}>
         {templates.map((template) => (
-          <article className={styles.card} key={template.id}>
+          <article className={`${styles.card} ${templateSendsCard(template.kind) ? styles.cardWide : ""}`} key={template.id}>
             <div className={styles.cardTop}>
               <span className={styles.badge}>{templateKindLabel(template.kind)}</span>
             </div>
             <h2>{template.name}</h2>
-            <p>{template.body}</p>
-            {templateSendsCard(template.kind) ? <p>This one is sent as a letter card.</p> : null}
+            {templateSendsCard(template.kind) ? (
+              <GreetingCard
+                variant={template.kind === "feedback" ? "feedback" : "thanks"}
+                customerName="Customer"
+                body={fillTemplate(template.body, { name: "Customer", project: "Project", packageName: "your package", phone: "" })}
+              />
+            ) : <p>{template.body}</p>}
             <div className={styles.cardActions}>
               <button type="button" onClick={() => startEdit(template)}><Pencil size={15} /> Edit</button>
               <button type="button" onClick={() => setSending(template)}><MessageCircle size={15} /> {templateSendsCard(template.kind) ? "Send card" : "WhatsApp"}</button>
@@ -242,7 +254,14 @@ export function TemplatesPage() {
                   />
                 </div>
               )}
-              {selectedCustomer ? (
+              {selectedCustomer && templateSendsCard(sending.kind) ? (
+                <GreetingCard
+                  variant={sending.kind === "feedback" ? "feedback" : "thanks"}
+                  customerName={selectedCustomer.customerName}
+                  body={filled}
+                />
+              ) : null}
+              {selectedCustomer && !templateSendsCard(sending.kind) ? (
                 <CustomerNoteCard
                   title={templateCardTitle(sending.kind)}
                   customerName={selectedCustomer.customerName}
@@ -268,13 +287,22 @@ export function TemplatesPage() {
       ) : null}
       {capture ? (
         <div className={styles.capture} ref={captureRef}>
-          <CustomerNoteCard
-            title={templateCardTitle(capture.template.kind)}
-            customerName={capture.customer.customerName}
-            projectSerial={capture.customer.jobs[0]?.serial ?? ""}
-            body={capture.message}
-            paper
-          />
+          {templateSendsCard(capture.template.kind) ? (
+            <GreetingCard
+              variant={capture.template.kind === "feedback" ? "feedback" : "thanks"}
+              customerName={capture.customer.customerName}
+              body={capture.message}
+              paper
+            />
+          ) : (
+            <CustomerNoteCard
+              title={templateCardTitle(capture.template.kind)}
+              customerName={capture.customer.customerName}
+              projectSerial={capture.customer.jobs[0]?.serial ?? ""}
+              body={capture.message}
+              paper
+            />
+          )}
         </div>
       ) : null}
     </>

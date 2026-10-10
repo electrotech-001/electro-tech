@@ -9,6 +9,8 @@ export type GuarantorInput = {
   designation: string;
   occupation: string;
   sector: GuarantorSector;
+  contactNo: string;
+  cnic: string;
   cnicFront: string;
   cnicBack: string;
 };
@@ -60,6 +62,7 @@ export type InvoiceRecord = {
   grandTotal: number;
   installmentNumber: number | null;
   payments: PaymentRecord[];
+  schedule?: ScheduleLine[];
   project: QuotationRecord;
 };
 
@@ -84,6 +87,8 @@ export type Workspace = {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const IMAGE = /^data:image\/(png|jpeg|jpg|webp);base64,/i;
+const CNIC = /^\d{5}-\d{7}-\d$/;
+const PHONE = /^\d{4}-\d{7}$/;
 
 export class DocumentError extends Error {
   readonly status: number;
@@ -120,12 +125,16 @@ export function assertGuarantor(input: GuarantorInput, slot: number): GuarantorI
     designation: input.designation.trim(),
     occupation: input.occupation.trim(),
     sector: input.sector,
+    contactNo: input.contactNo.trim(),
+    cnic: input.cnic.trim(),
     cnicFront: input.cnicFront,
     cnicBack: input.cnicBack,
   };
   if (!clean.fullName) throw new DocumentError(`Enter guarantor ${slot} name.`);
   if (!clean.designation) throw new DocumentError(`Enter guarantor ${slot} designation.`);
   if (!clean.occupation) throw new DocumentError(`Enter guarantor ${slot} occupation.`);
+  if (!PHONE.test(clean.contactNo)) throw new DocumentError(`Enter guarantor ${slot} contact number as 0300-0000000.`);
+  if (!CNIC.test(clean.cnic)) throw new DocumentError(`Enter guarantor ${slot} CNIC as 00000-0000000-0.`);
   if (clean.sector !== "private" && clean.sector !== "government") {
     throw new DocumentError(`Choose private or government for guarantor ${slot}.`);
   }
@@ -202,82 +211,75 @@ function nextSerial(invoices: InvoiceRecord[], reserved: number): number {
   return Math.max(reserved, ...invoices.map((invoice) => invoice.serialNumber), 0) + 1;
 }
 
+export function issueDirectInvoice(workspace: Workspace, reservedSerial: number, invoiceDate: string): Workspace {
+  if (workspace.project.paymentMode !== "direct") {
+    throw new DocumentError("Installment invoices are created from the installment details.");
+  }
+  if (workspace.project.status === "completed") throw new DocumentError("This project is already completed.", 409, "completed");
+  if (workspace.invoices.length > 0) throw new DocumentError("An invoice is already created for this project.", 409, "already_invoiced");
+  assertDate(invoiceDate, "invoice date");
+  const created = blankInvoice(workspace.project, nextSerial([], reservedSerial), "advance");
+  return {
+    ...workspace,
+    invoices: [{
+      ...created,
+      invoiceDate,
+      status: "due",
+      advancePaid: 0,
+      balanceDue: workspace.project.grandTotal,
+      grandTotal: workspace.project.grandTotal,
+    }],
+  };
+}
+
 export function rebuildDirectInvoices(workspace: Workspace, reservedSerial: number): Workspace {
   const payments = [...workspace.payments].sort((a, b) => a.paymentDate.localeCompare(b.paymentDate) || a.id.localeCompare(b.id));
   const total = paidTotal(payments);
   const balance = roundMoney(Math.max(0, workspace.project.grandTotal - total));
-  const previous = workspace.invoices;
-  const next: InvoiceRecord[] = [];
-  let serialCursor = reservedSerial;
-
-  function take(kind: InvoiceKind): InvoiceRecord {
-    const found = previous.find((invoice) => invoice.kind === kind && invoice.projectId === workspace.project.id);
-    if (found) return found;
-    const created = blankInvoice(workspace.project, nextSerial(next, serialCursor), kind);
-    serialCursor = created.serialNumber;
-    return created;
-  }
-
-  if (total <= 0) return { ...workspace, invoices: [], payments };
-  if (balance > 0) {
-    const advance = take("advance");
-    const latest = payments[payments.length - 1];
-    next.push({
-      ...advance,
+  const existing = workspace.invoices.find((invoice) => invoice.kind !== "installment");
+  if (!existing && total <= 0) return { ...workspace, invoices: [], payments };
+  const invoice = existing ?? blankInvoice(workspace.project, nextSerial([], reservedSerial), "advance");
+  const latest = payments[payments.length - 1];
+  const linked = payments.map((payment) => ({ ...payment, invoiceId: invoice.id }));
+  return {
+    ...workspace,
+    payments: linked,
+    invoices: [{
+      ...invoice,
       project: workspace.project,
-      status: "partial",
+      kind: "advance",
+      status: total <= 0 ? "due" : balance <= 0 ? "paid" : "partial",
       advancePaid: total,
       balanceDue: balance,
       grandTotal: workspace.project.grandTotal,
       paymentDate: latest?.paymentDate ?? null,
       paymentMode: latest?.paymentMode ?? null,
+      payments: linked,
+    }],
+  };
+}
+
+export function deleteInvoice(workspace: Workspace, invoiceId: string): Workspace {
+  const invoice = workspace.invoices.find((entry) => entry.id === invoiceId);
+  if (!invoice) throw new DocumentError("Invoice was not found.", 404, "not_found");
+  if (invoice.kind === "installment" && workspace.agreement && invoice.installmentNumber != null) {
+    const number = invoice.installmentNumber;
+    const payments = workspace.payments.filter((payment) => payment.installmentNumber !== number && payment.invoiceId !== invoiceId);
+    const schedule = redistribute(workspace.project, workspace.agreement.schedule.filter((line) => line.number !== number));
+    const next: Workspace = {
+      ...workspace,
       payments,
-    });
-  } else if (payments.length === 1) {
-    const only = payments[0];
-    const settlement = take("settlement");
-    next.push({
-      ...settlement,
-      project: workspace.project,
-      status: "paid",
-      advancePaid: total,
-      balanceDue: 0,
-      grandTotal: workspace.project.grandTotal,
-      paymentDate: only?.paymentDate ?? null,
-      paymentMode: only?.paymentMode ?? null,
-      payments,
-    });
-  } else {
-    const earlier = payments.slice(0, -1);
-    const advance = take("advance");
-    const first = earlier[0];
-    const earlierPaid = paidTotal(earlier);
-    next.push({
-      ...advance,
-      project: workspace.project,
-      status: "partial",
-      advancePaid: earlierPaid,
-      balanceDue: roundMoney(workspace.project.grandTotal - earlierPaid),
-      grandTotal: workspace.project.grandTotal,
-      paymentDate: first?.paymentDate ?? null,
-      paymentMode: first?.paymentMode ?? null,
-      payments: earlier,
-    });
-    const settlement = take("settlement");
-    const last = payments[payments.length - 1];
-    next.push({
-      ...settlement,
-      project: workspace.project,
-      status: "paid",
-      advancePaid: total,
-      balanceDue: 0,
-      grandTotal: workspace.project.grandTotal,
-      paymentDate: last?.paymentDate ?? null,
-      paymentMode: last?.paymentMode ?? null,
-      payments,
-    });
+      agreement: { ...workspace.agreement, schedule },
+    };
+    return { ...next, invoices: syncInstallmentInvoices(next, schedule, 0) };
   }
-  return { ...workspace, invoices: next, payments };
+  return {
+    ...workspace,
+    invoices: workspace.invoices.filter((entry) => entry.id !== invoiceId),
+    payments: invoice.kind === "installment"
+      ? workspace.payments.filter((payment) => payment.invoiceId !== invoiceId && payment.installmentNumber !== invoice.installmentNumber)
+      : [],
+  };
 }
 
 export function recordDirectPayment(
@@ -327,6 +329,7 @@ export function syncInstallmentInvoices(workspace: Workspace, schedule: Schedule
       grandTotal: line.amount,
       installmentNumber: line.number,
       payments: linePayments,
+      schedule,
     };
   });
 }
