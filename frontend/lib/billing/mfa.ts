@@ -1,11 +1,8 @@
 import type { AuthError, Session } from "@supabase/supabase-js";
 import { billingSupabase } from "./supabase";
 
-/**
- * Authenticator setup stays in this module, but it is off while Billing CMS is still being built.
- * Set this to true when development is complete so the login page requires the QR code and 6-digit code.
- */
-export const billingMfaEnabled = false;
+/** Billing sign-in requires an authenticator app after the password. */
+export const billingMfaEnabled = true;
 
 export type SecondFactor =
   | {
@@ -18,7 +15,6 @@ export type SecondFactor =
       factorId: string;
       challengeId: string;
       qrCode: string;
-      secret: string;
     };
 
 export class BillingAuthError extends Error {
@@ -105,7 +101,6 @@ export async function startSecondFactor(): Promise<SecondFactor> {
     factorId: enrolled.data.id,
     challengeId: challenge.data.id,
     qrCode: authenticatorQrSrc(enrolled.data.totp.qr_code),
-    secret: enrolled.data.totp.secret,
   };
 }
 

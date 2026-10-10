@@ -210,9 +210,8 @@ export function BillingLoginPage() {
                 <>
                   <img className={styles.qr} src={factor.qrCode} alt="Authenticator setup QR code" />
                   <p className={styles.help}>
-                    Use Google Authenticator, Microsoft Authenticator, or Authy. If you cannot scan, enter this key manually.
+                    Scan this code with your authenticator app, then enter the 6-digit code. The setup key is not shown.
                   </p>
-                  <p className={styles.secret}>{factor.secret}</p>
                 </>
               ) : null}
               <div className={styles.field}>
