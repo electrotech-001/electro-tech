@@ -63,7 +63,8 @@ export async function startSecondFactor(): Promise<SecondFactor> {
     throw new BillingAuthError(authMessage(listed.error, "Could not check authenticator setup."));
   }
 
-  const stale = listed.data.totp.filter((factor) => factor.status !== "verified");
+  const totp = listed.data.all.filter((factor) => factor.factor_type === "totp");
+  const stale = totp.filter((factor) => factor.status !== "verified");
   for (const factor of stale) {
     const removed = await billingSupabase.auth.mfa.unenroll({ factorId: factor.id });
     if (removed.error) {
@@ -71,7 +72,7 @@ export async function startSecondFactor(): Promise<SecondFactor> {
     }
   }
 
-  const verified = listed.data.totp.find((factor) => factor.status === "verified");
+  const verified = totp.find((factor) => factor.status === "verified");
   if (verified) {
     const challenge = await billingSupabase.auth.mfa.challenge({ factorId: verified.id });
     if (challenge.error || !challenge.data) {
@@ -86,8 +87,11 @@ export async function startSecondFactor(): Promise<SecondFactor> {
     issuer: "Electro Tech",
   });
   if (enrolled.error || !enrolled.data) {
+    const raw = enrolled.error?.message ?? "";
     throw new BillingAuthError(
-      authMessage(enrolled.error, "Could not start authenticator setup. Two-factor authentication may be disabled for this project."),
+      /already exists/i.test(raw)
+        ? "An unfinished authenticator setup is already saved. Sign in again to scan a new code."
+        : authMessage(enrolled.error, "Could not start authenticator setup. Two-factor authentication may be disabled for this project."),
     );
   }
 
