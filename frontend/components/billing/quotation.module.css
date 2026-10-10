@@ -685,7 +685,7 @@
 .greeting {
   width: min(100%, 640px);
   margin: 0 auto;
-  padding: 42px 36px 36px;
+  padding: 48px 52px 40px;
   text-align: center;
   color: #101410;
   border: 12px solid #101410;
@@ -706,49 +706,65 @@
 }
 
 .greetingLogo {
+  display: block;
   width: 108px;
   height: auto;
   margin: 0 auto 8px;
 }
 
-.greetingBrand {
+.greeting .greetingBrand {
   margin: 0;
+  color: #101410;
   letter-spacing: 0.16em;
+  text-align: center;
   text-transform: uppercase;
   font-size: 12px;
   font-weight: 800;
 }
 
 .greeting h2 {
-  margin: 14px 0 8px;
+  margin: 16px 0 8px;
+  color: #101410;
   font-family: Georgia, "Palatino Linotype", serif;
   font-size: 2.4rem;
   font-weight: 700;
-  line-height: 1.1;
+  letter-spacing: 0;
+  line-height: 1.15;
+  text-align: center;
 }
 
-.greetingName {
+.greeting .greetingName {
   margin: 0;
+  color: #101410;
   font-size: 1.15rem;
   font-weight: 800;
+  text-align: center;
 }
 
-.greetingBody {
-  margin: 18px auto 0;
-  max-width: 440px;
+.greeting .greetingBody {
+  margin: 20px 0 0;
+  color: #101410;
   font-size: 1.05rem;
-  line-height: 1.55;
+  font-weight: 500;
+  line-height: 1.7;
+  text-align: justify;
+  text-align-last: center;
   white-space: pre-wrap;
 }
 
-.greetingClose {
+.greeting .greetingClose {
   margin: 22px 0 4px;
+  color: #101410;
   font-family: Georgia, "Palatino Linotype", serif;
   font-style: italic;
+  text-align: center;
 }
 
 .greeting small {
+  display: block;
+  color: #101410;
   letter-spacing: 0.06em;
+  text-align: center;
   text-transform: uppercase;
 }
 
