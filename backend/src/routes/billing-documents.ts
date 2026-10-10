@@ -3,14 +3,16 @@ import { createAuthenticateBilling } from "../middleware/authenticate-billing.js
 import { DocumentError } from "../services/billing/documents-math.js";
 import { getDocumentsRepository, type DocumentsRepository } from "../services/billing/documents-store.js";
 import type { BankMode, GuarantorInput } from "../services/billing/documents-math.js";
+import { getQuotationRepository, QuotationServiceError, type QuotationRepository } from "../services/billing/quotation-store.js";
 
 type Dependencies = {
   authMiddleware?: RequestHandler;
   repository?: DocumentsRepository;
+  quotations?: QuotationRepository;
 };
 
 function sendFailure(error: unknown, response: Response, next: NextFunction): void {
-  if (error instanceof DocumentError) {
+  if (error instanceof DocumentError || error instanceof QuotationServiceError) {
     response.status(error.status).json({ code: error.code, message: error.message });
     return;
   }
@@ -48,8 +50,32 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
   const router = Router();
   const auth = dependencies.authMiddleware ?? createAuthenticateBilling();
   const repository = () => dependencies.repository ?? getDocumentsRepository();
+  const quotations = () => dependencies.quotations ?? getQuotationRepository();
   router.use(auth);
 
+  router.get("/ledger", async (_request, response, next) => {
+    try {
+      response.status(200).json({ entries: await repository().listLedger() });
+    } catch (error) {
+      sendFailure(error, response, next);
+    }
+  });
+  router.put("/customers", async (request, response, next) => {
+    try {
+      const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+      const saved = await quotations().updateCustomer(text(body.cnic), {
+        customerName: text(body.customerName),
+        cnic: text(body.nextCnic),
+        address: text(body.address),
+        contactNo: text(body.contactNo),
+        whatsappNo: text(body.whatsappNo),
+      });
+      await repository().renameCustomer(saved.projectIds, text(body.customerName));
+      response.status(200).json({ cnic: saved.cnic });
+    } catch (error) {
+      sendFailure(error, response, next);
+    }
+  });
   router.get("/agreements", async (_request, response, next) => {
     try {
       response.status(200).json({ agreements: await repository().listAgreements() });

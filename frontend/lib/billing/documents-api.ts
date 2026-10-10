@@ -130,6 +130,38 @@ export function listReceiveProjects(): Promise<ReceiveProject[]> {
   return billingFetch("/api/billing/receive-payments").then((response) => expectOk(response, "Projects could not be loaded.")).then((payload) => (payload as { projects: ReceiveProject[] }).projects);
 }
 
+export type LedgerEntry = {
+  id: string;
+  paymentDate: string;
+  paidAmount: number;
+  paymentMode: BankMode;
+  installmentNumber: number | null;
+  customerName: string;
+  cnic: string;
+  projectId: string;
+  projectSerial: string;
+  invoiceSerial: string | null;
+};
+
+export type CustomerProfileUpdate = {
+  cnic: string;
+  nextCnic: string;
+  customerName: string;
+  address: string;
+  contactNo: string;
+  whatsappNo: string;
+};
+
+export function listLedger(): Promise<LedgerEntry[]> {
+  return billingFetch("/api/billing/ledger").then((response) => expectOk(response, "The payment ledger could not be loaded.")).then((payload) => (payload as { entries: LedgerEntry[] }).entries);
+}
+
+export function updateCustomerProfile(input: CustomerProfileUpdate): Promise<{ cnic: string }> {
+  return billingFetch("/api/billing/customers", { method: "PUT", body: JSON.stringify(input) })
+    .then((response) => expectOk(response, "The customer profile could not be saved."))
+    .then((payload) => payload as { cnic: string });
+}
+
 export function saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[] }): Promise<AgreementRecord> {
   return billingFetch(`/api/billing/projects/${projectId}/agreement`, { method: "POST", body: JSON.stringify(input) })
     .then((response) => expectOk(response, "The agreement could not be saved."))

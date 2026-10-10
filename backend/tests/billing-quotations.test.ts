@@ -113,6 +113,45 @@ function listen(repository: QuotationRepository): Promise<string> {
   });
 }
 
+test("customer profile updates every quotation and project that shares the CNIC", async () => {
+  const repository = createMemoryQuotationRepository();
+  const first = await repository.create(sample());
+  await repository.create(sample({
+    customerName: "Ayesha Khan",
+    cnic: "37101-9999999-1",
+    paymentMode: "direct",
+    downPayment: null,
+    installmentCount: null,
+  }));
+  await repository.approve(first.id);
+  const saved = await repository.updateCustomer("37101-1234567-1", {
+    customerName: "Sheikh Zain Ali",
+    cnic: "37101-1234567-2",
+    address: "New address Attock",
+    contactNo: "0301-1111111",
+    whatsappNo: "0301-1111111",
+  });
+  assert.equal(saved.cnic, "37101-1234567-2");
+  assert.equal(saved.projectIds.length, 1);
+  const quotations = await repository.listQuotations();
+  assert.equal(quotations.find((entry) => entry.serial === "QT-001")?.customerName, "Sheikh Zain Ali");
+  assert.equal(quotations.find((entry) => entry.serial === "QT-001")?.cnic, "37101-1234567-2");
+  assert.equal(quotations.find((entry) => entry.serial === "QT-002")?.customerName, "Ayesha Khan");
+  const projects = await repository.listProjects();
+  assert.equal(projects[0]?.address, "New address Attock");
+  assert.equal(projects[0]?.contactNo, "0301-1111111");
+  await assert.rejects(
+    () => repository.updateCustomer("37101-0000000-0", {
+      customerName: "Missing Person",
+      cnic: "37101-0000000-0",
+      address: "Attock",
+      contactNo: "0300-0000000",
+      whatsappNo: "0300-0000000",
+    }),
+    /not found/i,
+  );
+});
+
 test("quotation routes require billing login and reject an incomplete CNIC", async () => {
   const baseUrl = await listen(createMemoryQuotationRepository());
   const missing = await fetch(`${baseUrl}/api/billing/quotations`);

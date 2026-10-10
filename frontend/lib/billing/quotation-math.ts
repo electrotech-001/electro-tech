@@ -34,6 +34,14 @@ export type QuotationDraft = {
   items: QuotationItemInput[];
 };
 
+export type CustomerProfileInput = {
+  customerName: string;
+  cnic: string;
+  address: string;
+  contactNo: string;
+  whatsappNo: string;
+};
+
 export type QuotationRecord = Omit<QuotationDraft, "items"> & {
   id: string;
   serial: string;
@@ -150,6 +158,20 @@ export function quotationIssues(draft: QuotationDraft): string[] {
       issues.push("Enter the number of installments.");
     }
   }
+  return issues;
+}
+
+export function customerProfileIssues(profile: CustomerProfileInput): string[] {
+  const issues: string[] = [];
+  const name = profile.customerName.trim();
+  const address = profile.address.trim();
+  if (!name) issues.push("Enter the customer name.");
+  else if (name.length > 120) issues.push("Customer name must be 120 characters or fewer.");
+  if (!CNIC.test(profile.cnic.trim())) issues.push("Enter the CNIC as 00000-0000000-0.");
+  if (!address) issues.push("Enter the address.");
+  else if (address.length > 400) issues.push("Address must be 400 characters or fewer.");
+  if (!PHONE.test(profile.contactNo.trim())) issues.push("Enter the contact number as 0300-0000000.");
+  if (!PHONE.test(profile.whatsappNo.trim())) issues.push("Enter the WhatsApp number as 0300-0000000.");
   return issues;
 }
 

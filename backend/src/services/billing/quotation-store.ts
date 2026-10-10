@@ -2,8 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseClient } from "../supabase.js";
 import {
   computeTotals,
+  customerProfileIssues,
   formatSerial,
   quotationIssues,
+  type CustomerProfileInput,
   type InstallmentLine,
   type PaymentMode,
   type QuotationDraft,
@@ -47,6 +49,7 @@ export type QuotationRepository = {
   disapprove(id: string): Promise<QuotationRecord>;
   disapproveProject(projectId: string): Promise<QuotationRecord>;
   remove(id: string): Promise<void>;
+  updateCustomer(currentCnic: string, profile: CustomerProfileInput): Promise<{ cnic: string; projectIds: string[] }>;
 };
 
 type ItemRow = {
@@ -125,6 +128,29 @@ export function toQuotationRecord(
     kind,
     ...(kind === "project" ? { status: row.status === "completed" ? "completed" as const : "in_process" as const } : {}),
   };
+}
+
+function assertProfile(profile: CustomerProfileInput): CustomerProfileInput {
+  const clean: CustomerProfileInput = {
+    customerName: profile.customerName.trim(),
+    cnic: profile.cnic.trim(),
+    address: profile.address.trim(),
+    contactNo: profile.contactNo.trim(),
+    whatsappNo: profile.whatsappNo.trim(),
+  };
+  const issues = customerProfileIssues(clean);
+  if (issues.length > 0) {
+    throw new QuotationServiceError(issues[0] ?? "Check the customer profile and try again.", 400, "invalid_customer");
+  }
+  return clean;
+}
+
+function applyProfile(row: QuotationRow, profile: CustomerProfileInput): void {
+  row.customer_name = profile.customerName;
+  row.cnic = profile.cnic;
+  row.address = profile.address;
+  row.contact_no = profile.contactNo;
+  row.whatsapp_no = profile.whatsappNo;
 }
 
 function assertDraft(draft: QuotationDraft): QuotationDraft {
@@ -295,6 +321,16 @@ export function createMemoryQuotationRepository(): QuotationRepository {
         if (projects[projectIndex]?.source_quotation_id === id) projects.splice(projectIndex, 1);
       }
       quotations.splice(index, 1);
+    },
+    async updateCustomer(currentCnic, profile) {
+      const clean = assertProfile(profile);
+      const quotationHits = quotations.filter((row) => row.cnic === currentCnic);
+      const projectHits = projects.filter((row) => row.cnic === currentCnic);
+      if (quotationHits.length + projectHits.length === 0) {
+        throw new QuotationServiceError("Customer was not found.", 404, "not_found");
+      }
+      for (const row of [...quotationHits, ...projectHits]) applyProfile(row, clean);
+      return { cnic: clean.cnic, projectIds: projectHits.map((row) => row.id) };
     },
   };
 }
@@ -477,6 +513,29 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
       if (removedProject.error) throw storageFailure(removedProject.error, "deleted");
       const removed = await client.from("billing_quotations").delete().eq("id", id);
       if (removed.error) throw storageFailure(removed.error, "deleted");
+    },
+    async updateCustomer(currentCnic, profile) {
+      const clean = assertProfile(profile);
+      const patch = {
+        customer_name: clean.customerName,
+        cnic: clean.cnic,
+        address: clean.address,
+        contact_no: clean.contactNo,
+        whatsapp_no: clean.whatsappNo,
+      };
+      const quotationUpdate = await client
+        .from("billing_quotations")
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq("cnic", currentCnic)
+        .select("id");
+      if (quotationUpdate.error) throw storageFailure(quotationUpdate.error, "updated");
+      const projectUpdate = await client.from("billing_projects").update(patch).eq("cnic", currentCnic).select("id");
+      if (projectUpdate.error) throw storageFailure(projectUpdate.error, "updated");
+      const projectRows = (projectUpdate.data ?? []) as { id: string }[];
+      if ((quotationUpdate.data?.length ?? 0) + projectRows.length === 0) {
+        throw new QuotationServiceError("Customer was not found.", 404, "not_found");
+      }
+      return { cnic: clean.cnic, projectIds: projectRows.map((row) => row.id) };
     },
   };
 }

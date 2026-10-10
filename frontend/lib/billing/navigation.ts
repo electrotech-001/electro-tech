@@ -1,12 +1,15 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  BookOpen,
   FileSignature,
   FileText,
+  IdCard,
   LayoutDashboard,
   MessageCircle,
   Receipt,
   Smartphone,
   SunMedium,
+  UserRound,
   Users,
   Wallet,
 } from "lucide-react";
@@ -30,6 +33,14 @@ export const billingNav: BillingNavGroup[] = [
       { href: "/billing", label: "Dashboard", icon: LayoutDashboard, exact: true },
       { href: "/billing/quotations", label: "Quotations", icon: FileText },
       { href: "/billing/projects", label: "Projects in Process", icon: SunMedium },
+    ],
+  },
+  {
+    label: "Customers",
+    items: [
+      { href: "/billing/customers", label: "Quoted & In Process", icon: UserRound },
+      { href: "/billing/profiles", label: "Customer Profiles", icon: IdCard },
+      { href: "/billing/ledger", label: "Payment Ledger", icon: BookOpen },
     ],
   },
   {

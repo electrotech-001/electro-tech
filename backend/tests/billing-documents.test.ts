@@ -116,4 +116,13 @@ test("installment agreement stores two guarantors and a received card updates th
   assert.equal(edited.agreement?.schedule.find((line) => line.number === 2)?.dueDate, "2026-12-15");
   await repository.completeProject("project-1");
   assert.equal((await repository.listReceiveProjects()).length, 0);
+  const ledger = await repository.listLedger();
+  assert.equal(ledger.length, 1);
+  assert.equal(ledger[0]?.customerName, "Sheikh Zain");
+  assert.equal(ledger[0]?.paidAmount, 141000);
+  assert.equal(ledger[0]?.projectSerial, "QT-001");
+  await repository.renameCustomer(["project-1"], "Sheikh Zain Ali");
+  const people = await repository.listGuarantors();
+  assert.equal(people.every((person) => person.customerName === "Sheikh Zain Ali"), true);
+  assert.equal((await repository.listLedger())[0]?.customerName, "Sheikh Zain Ali");
 });

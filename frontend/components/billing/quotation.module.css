@@ -1,6 +1,7 @@
 .primaryButton,
 .secondaryButton,
 .cardActions button,
+.cardActions a,
 .iconButton {
   display: inline-flex;
   align-items: center;
@@ -22,6 +23,7 @@
 
 .secondaryButton,
 .cardActions button,
+.cardActions a,
 .iconButton {
   min-height: 38px;
   padding: 0 12px;
@@ -695,6 +697,73 @@
   width: 794px;
   background: #fff;
   pointer-events: none;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.toolbar .field {
+  width: min(360px, 100%);
+}
+
+.cardActions a {
+  text-decoration: none;
+}
+
+.recordTable {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.recordTable th,
+.recordTable td {
+  padding: 12px 10px;
+  border-bottom: 1px solid rgba(16, 20, 16, 0.08);
+  text-align: left;
+  vertical-align: top;
+}
+
+.recordTable th {
+  color: #667066;
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.recordTable .amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.recordTable tfoot td {
+  font-weight: 750;
+  color: #101410;
+}
+
+.stack {
+  display: grid;
+  gap: 14px;
+}
+
+.formGap {
+  margin-top: 16px;
+}
+
+.moneyStat {
+  font-size: 1.35rem;
+  line-height: 1.15;
+}
+
+.subLine {
+  display: block;
+  color: #667066;
+  font-size: 0.82rem;
 }
 
 @media (max-width: 800px) {

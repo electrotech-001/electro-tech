@@ -36,7 +36,48 @@ export type DocumentsRepository = {
   updateDueDate(projectId: string, installmentNumber: number, dueDate: string): Promise<ReceiveProject>;
   completeProject(projectId: string): Promise<void>;
   projectHasDocuments(projectId: string): Promise<boolean>;
+  listLedger(): Promise<LedgerEntry[]>;
+  renameCustomer(projectIds: string[], customerName: string): Promise<void>;
 };
+
+export type LedgerEntry = {
+  id: string;
+  paymentDate: string;
+  paidAmount: number;
+  paymentMode: BankMode;
+  installmentNumber: number | null;
+  customerName: string;
+  cnic: string;
+  projectId: string;
+  projectSerial: string;
+  invoiceSerial: string | null;
+};
+
+export function toLedger(workspaces: Workspace[]): LedgerEntry[] {
+  const entries: LedgerEntry[] = [];
+  for (const workspace of workspaces) {
+    for (const payment of workspace.payments) {
+      const invoice = workspace.invoices.find((entry) => (
+        payment.invoiceId
+          ? entry.id === payment.invoiceId
+          : payment.installmentNumber != null && entry.installmentNumber === payment.installmentNumber
+      ));
+      entries.push({
+        id: payment.id,
+        paymentDate: payment.paymentDate,
+        paidAmount: payment.paidAmount,
+        paymentMode: payment.paymentMode,
+        installmentNumber: payment.installmentNumber,
+        customerName: workspace.project.customerName,
+        cnic: workspace.project.cnic,
+        projectId: workspace.project.id,
+        projectSerial: workspace.project.serial,
+        invoiceSerial: invoice?.serial ?? null,
+      });
+    }
+  }
+  return entries.sort((left, right) => left.paymentDate.localeCompare(right.paymentDate) || left.id.localeCompare(right.id));
+}
 
 type DirectPayment = { kind: "direct"; paidAmount: number; paymentDate: string; paymentMode: BankMode };
 type InstallmentPayment = { kind: "installment"; installmentNumber: number; paidAmount: number; paymentDate: string; paymentMode: BankMode };
@@ -114,6 +155,29 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
     async projectHasDocuments(projectId) {
       const workspace = workspaces.get(projectId);
       return Boolean(workspace && (workspace.agreement || workspace.payments.length > 0 || workspace.invoices.length > 0));
+    },
+    async listLedger() {
+      return toLedger([...workspaces.values()]);
+    },
+    async renameCustomer(projectIds, customerName) {
+      const name = customerName.trim();
+      if (!name) return;
+      const ids = new Set(projectIds);
+      for (const workspace of workspaces.values()) {
+        if (!ids.has(workspace.project.id)) continue;
+        workspace.project = { ...workspace.project, customerName: name };
+        if (workspace.agreement) {
+          workspace.agreement = {
+            ...workspace.agreement,
+            project: { ...workspace.agreement.project, customerName: name },
+            guarantors: workspace.agreement.guarantors.map((guarantor) => ({ ...guarantor, customerName: name })),
+          };
+        }
+        workspace.invoices = workspace.invoices.map((invoice) => ({
+          ...invoice,
+          project: { ...invoice.project, customerName: name },
+        }));
+      }
     },
   };
 }
@@ -415,6 +479,15 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       if (agreements.error) throw storageFailure(agreements.error, "read");
       if (payments.error) throw storageFailure(payments.error, "read");
       return (agreements.data?.length ?? 0) > 0 || (payments.data?.length ?? 0) > 0;
+    },
+    async listLedger() {
+      return toLedger(await listedWorkspaces());
+    },
+    async renameCustomer(projectIds, customerName) {
+      const name = customerName.trim();
+      if (!name || projectIds.length === 0) return;
+      const updated = await client.from("billing_guarantors").update({ customer_name: name }).in("project_id", projectIds);
+      if (updated.error) throw storageFailure(updated.error, "updated");
     },
   };
 }
