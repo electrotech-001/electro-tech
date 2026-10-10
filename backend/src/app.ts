@@ -1,4 +1,5 @@
 import { createBillingDocumentsRouter } from "./routes/billing-documents.js";
+import { createBillingTemplatesRouter } from "./routes/billing-templates.js";
 import { createBillingProjectsRouter, createBillingQuotationsRouter } from "./routes/billing-quotations.js";
 import { createBillingWhatsAppRouter } from "./routes/billing-whatsapp.js";
 import { createAdminReviewsRouter } from "./routes/project-reviews.js";
@@ -37,6 +38,7 @@ type AppDependencies = {
   billingQuotationsRouter?: express.Router;
   billingProjectsRouter?: express.Router;
   billingDocumentsRouter?: express.Router;
+  billingTemplatesRouter?: express.Router;
 };
 
 function isLocalDevelopmentOrigin(origin: string): boolean {
@@ -134,6 +136,11 @@ export function createApp(dependencies: AppDependencies) {
   app.use(
     "/api/billing/projects",
     dependencies.billingProjectsRouter ?? createBillingProjectsRouter(),
+  );
+  app.use(
+    "/api/billing/templates",
+    express.json({ limit: "1mb" }),
+    dependencies.billingTemplatesRouter ?? createBillingTemplatesRouter(),
   );
   app.use(
     "/api/billing",

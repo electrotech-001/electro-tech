@@ -4,6 +4,11 @@ const DOCUMENT_LABELS = {
   quotation: "Quotation",
   invoice: "Invoice",
   agreement: "Agreement",
+  slip: "Paid slip",
+  thanks: "Thank you",
+  feedback: "Feedback",
+  reminder: "Reminder",
+  card: "Message",
 } as const;
 
 export type WhatsAppDocumentKind = keyof typeof DOCUMENT_LABELS;

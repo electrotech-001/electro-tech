@@ -34,6 +34,7 @@ test("customer numbers accept local, international, and 00 prefixes", () => {
 test("document captions and file names stay readable", () => {
   assert.equal(documentCaption("invoice", "Balance is due Friday."), "Invoice\nBalance is due Friday.");
   assert.equal(documentCaption("invoice", "Invoice already titled"), "Invoice already titled");
+  assert.equal(documentCaption("slip", "The paid slip is attached."), "Paid slip\nThe paid slip is attached.");
   assert.equal(documentFileName("agreement", "Site Agreement!.pdf", "application/pdf"), "Site Agreement.pdf");
 });
 

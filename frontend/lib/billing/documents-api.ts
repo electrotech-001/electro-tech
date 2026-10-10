@@ -156,6 +156,36 @@ export function listLedger(): Promise<LedgerEntry[]> {
   return billingFetch("/api/billing/ledger").then((response) => expectOk(response, "The payment ledger could not be loaded.")).then((payload) => (payload as { entries: LedgerEntry[] }).entries);
 }
 
+export type TemplateKind = "reminder" | "thank_you" | "feedback" | "custom";
+
+export type MessageTemplate = {
+  id: string;
+  name: string;
+  kind: TemplateKind;
+  body: string;
+  updatedAt: string;
+};
+
+export function listTemplates(): Promise<MessageTemplate[]> {
+  return billingFetch("/api/billing/templates").then((response) => expectOk(response, "Templates could not be loaded.")).then((payload) => (payload as { templates: MessageTemplate[] }).templates);
+}
+
+export function createTemplate(input: { name: string; body: string }): Promise<MessageTemplate> {
+  return billingFetch("/api/billing/templates", { method: "POST", body: JSON.stringify(input) })
+    .then((response) => expectOk(response, "The template could not be saved."))
+    .then((payload) => (payload as { template: MessageTemplate }).template);
+}
+
+export function updateTemplate(id: string, input: { name: string; body: string }): Promise<MessageTemplate> {
+  return billingFetch(`/api/billing/templates/${id}`, { method: "PUT", body: JSON.stringify(input) })
+    .then((response) => expectOk(response, "The template could not be saved."))
+    .then((payload) => (payload as { template: MessageTemplate }).template);
+}
+
+export function deleteTemplate(id: string): Promise<void> {
+  return billingFetch(`/api/billing/templates/${id}`, { method: "DELETE" }).then((response) => expectOk(response, "The template could not be deleted.")).then(() => undefined);
+}
+
 export function updateCustomerProfile(input: CustomerProfileUpdate): Promise<{ cnic: string }> {
   return billingFetch("/api/billing/customers", { method: "PUT", body: JSON.stringify(input) })
     .then((response) => expectOk(response, "The customer profile could not be saved."))

@@ -13,7 +13,7 @@ export type WhatsAppStatus = {
   error: string | null;
 };
 
-export type WhatsAppDocumentKind = "quotation" | "invoice" | "agreement";
+export type WhatsAppDocumentKind = "quotation" | "invoice" | "agreement" | "slip" | "thanks" | "feedback" | "reminder" | "card";
 
 export class WhatsAppApiError extends Error {
   constructor(message: string) {

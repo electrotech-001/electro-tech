@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { MessageCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { DocumentApiError, listReceiveProjects, recordPayment, updateDueDate, updatePayment, type BankMode, type PaymentRecord, type ReceiveProject } from "@/lib/billing/documents-api";
+import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { formatDisplayDate, formatRupees, todayIsoDate } from "@/lib/billing/quotation-math";
+import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import { PaymentSlip } from "./BillingLetters";
 import { FancySelect } from "./FancyControls";
 import shell from "./billing-shell.module.css";
@@ -51,6 +54,9 @@ export function ReceivePaymentsPage() {
   const [editing, setEditing] = useState<PaymentRecord | null>(null);
   const [slip, setSlip] = useState<PaymentRecord | null>(null);
   const [saving, setSaving] = useState(false);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [capture, setCapture] = useState<PaymentRecord | null>(null);
+  const captureRef = useRef<HTMLDivElement>(null);
 
   async function refresh(selected = projectId) {
     const rows = await listReceiveProjects();
@@ -110,6 +116,34 @@ export function ReceivePaymentsPage() {
       setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The installment could not be saved." });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function sendSlip(payment: PaymentRecord) {
+    if (!current) return;
+    setSendingId(payment.id);
+    setBanner(null);
+    setCapture(payment);
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, 80));
+      const node = captureRef.current?.querySelector("article");
+      if (!(node instanceof HTMLElement)) throw new DocumentApiError("The paid slip could not be prepared.");
+      const file = await quotationToPdf(node, `${current.project.serial}-paid-slip`);
+      await sendWhatsAppDocument({
+        phone: current.project.whatsappNo,
+        kind: "slip",
+        message: `Assalam o Alaikum ${current.project.customerName}, your Electro Tech paid slip for ${current.project.serial} is attached.`,
+        file,
+      });
+      setBanner({ tone: "ok", text: `The paid slip for ${current.project.serial} was sent on WhatsApp.` });
+    } catch (error) {
+      const message = error instanceof WhatsAppApiError || error instanceof DocumentApiError
+        ? error.message
+        : "The paid slip could not be sent on WhatsApp.";
+      setBanner({ tone: "bad", text: message });
+    } finally {
+      setCapture(null);
+      setSendingId(null);
     }
   }
 
@@ -229,6 +263,9 @@ export function ReceivePaymentsPage() {
                       <p>{formatDisplayDate(payment.paymentDate)} · {payment.paymentMode === "bank_transfer" ? "Bank transfer" : "Cash"}{payment.installmentNumber ? ` · Installment ${payment.installmentNumber}` : ""}</p>
                       <div className={styles.cardActions}>
                         <button type="button" onClick={() => setSlip(payment)}>Paid slip</button>
+                        <button type="button" onClick={() => void sendSlip(payment)} disabled={sendingId === payment.id}>
+                          <MessageCircle size={15} /> {sendingId === payment.id ? "Sending…" : "WhatsApp"}
+                        </button>
                         <button type="button" onClick={() => setEditing(payment)}>Edit</button>
                       </div>
                     </>
@@ -246,11 +283,19 @@ export function ReceivePaymentsPage() {
               <h2>Paid slip</h2>
               <div>
                 <button className={styles.secondaryButton} type="button" onClick={() => window.print()}>Print</button>
+                <button className={styles.secondaryButton} type="button" onClick={() => void sendSlip(slip)} disabled={sendingId === slip.id}>
+                  <MessageCircle size={15} /> {sendingId === slip.id ? "Sending…" : "Send on WhatsApp"}
+                </button>
                 <button className={styles.secondaryButton} type="button" onClick={() => setSlip(null)}>Close</button>
               </div>
             </div>
             <div className={styles.modalScroll}><PaymentSlip project={current.project} payment={slip} /></div>
           </div>
+        </div>
+      ) : null}
+      {capture && current ? (
+        <div className={styles.capture} ref={captureRef}>
+          <PaymentSlip project={current.project} payment={capture} paper />
         </div>
       ) : null}
     </>

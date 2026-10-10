@@ -671,6 +671,23 @@
   margin-top: 18px;
 }
 
+.signOff {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 28px;
+  margin-top: 48px;
+}
+
+.signOff .paidStamp {
+  position: static;
+  flex: none;
+}
+
+.signOff .signature {
+  margin-top: 0;
+}
+
 .signature {
   display: grid;
   justify-items: end;
@@ -780,6 +797,10 @@
   .signature {
     text-align: left;
     justify-items: start;
+  }
+
+  .signOff {
+    justify-content: space-between;
   }
 
   .letter {

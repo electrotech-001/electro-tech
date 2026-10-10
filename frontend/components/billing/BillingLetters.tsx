@@ -102,12 +102,6 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
 
   return (
     <article className={`${styles.letter} quotation-letter ${paper ? styles.letterPaper : ""}`}>
-      {paid ? (
-        <div className={styles.paidStamp}>
-          Paid
-          <small>{invoice.paymentDate ? formatDisplayDate(invoice.paymentDate) : ""}</small>
-        </div>
-      ) : null}
       <Letterhead title="INVOICE" />
       <section className={styles.parties}>
         <div>
@@ -166,11 +160,25 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
           <tr className={styles.grand}><th>Balance due</th><td>{formatRupees(invoice.balanceDue)}</td></tr>
         </tbody>
       </table>
-      <footer className={styles.signature}>
-        <strong>For, ELECTRO TECH</strong>
-        <img src="/logos/authorized-signature.png" alt="Authorized signature" />
-        <small>Authorized signature</small>
-      </footer>
+      {paid ? (
+        <footer className={styles.signOff}>
+          <div className={styles.paidStamp}>
+            Paid
+            <small>{invoice.paymentDate ? formatDisplayDate(invoice.paymentDate) : ""}</small>
+          </div>
+          <div className={styles.signature}>
+            <strong>For, ELECTRO TECH</strong>
+            <img src="/logos/authorized-signature.png" alt="Authorized signature" />
+            <small>Authorized signature</small>
+          </div>
+        </footer>
+      ) : (
+        <footer className={styles.signature}>
+          <strong>For, ELECTRO TECH</strong>
+          <img src="/logos/authorized-signature.png" alt="Authorized signature" />
+          <small>Authorized signature</small>
+        </footer>
+      )}
     </article>
   );
 }
@@ -186,10 +194,6 @@ export function PaymentSlip({
 }) {
   return (
     <article className={`${styles.letter} quotation-letter ${paper ? styles.letterPaper : ""}`}>
-      <div className={styles.paidStamp}>
-        Paid
-        <small>{formatDisplayDate(payment.paymentDate)}</small>
-      </div>
       <Letterhead title="PAID SLIP" />
       <section className={styles.parties}>
         <div>
@@ -210,6 +214,47 @@ export function PaymentSlip({
           <tr className={styles.grand}><th>Amount received</th><td>{formatRupees(payment.paidAmount)}</td></tr>
         </tbody>
       </table>
+      <footer className={styles.signOff}>
+        <div className={styles.paidStamp}>
+          Paid
+          <small>{formatDisplayDate(payment.paymentDate)}</small>
+        </div>
+        <div className={styles.signature}>
+          <strong>For, ELECTRO TECH</strong>
+          <img src="/logos/authorized-signature.png" alt="Authorized signature" />
+          <small>Authorized signature</small>
+        </div>
+      </footer>
+    </article>
+  );
+}
+
+export function CustomerNoteCard({
+  title,
+  customerName,
+  projectSerial,
+  body,
+  paper = false,
+}: {
+  title: string;
+  customerName: string;
+  projectSerial: string;
+  body: string;
+  paper?: boolean;
+}) {
+  return (
+    <article className={`${styles.letter} quotation-letter ${paper ? styles.letterPaper : ""}`}>
+      <Letterhead title={title} />
+      <section className={styles.parties}>
+        <div>
+          <p className={styles.blockLabel}>For</p>
+          <strong>{customerName}</strong>
+          {projectSerial ? <span>Project {projectSerial}</span> : null}
+        </div>
+      </section>
+      <section className={styles.packageBlock}>
+        <p>{body}</p>
+      </section>
       <footer className={styles.signature}>
         <strong>For, ELECTRO TECH</strong>
         <img src="/logos/authorized-signature.png" alt="Authorized signature" />

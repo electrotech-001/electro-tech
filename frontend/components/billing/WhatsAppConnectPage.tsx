@@ -27,6 +27,11 @@ const kindLabels: Record<WhatsAppDocumentKind, string> = {
   quotation: "Quotation",
   invoice: "Invoice",
   agreement: "Agreement",
+  slip: "Paid slip",
+  thanks: "Thank you",
+  feedback: "Feedback",
+  reminder: "Reminder",
+  card: "Message",
 };
 
 function statusLabel(status: WhatsAppStatus["status"]): string {
@@ -115,7 +120,7 @@ export function WhatsAppConnectPage() {
   async function onSend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!file) {
-      setBanner("Choose the quotation, invoice, or agreement file.");
+      setBanner("Choose the quotation, invoice, agreement, or paid slip file.");
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
@@ -148,7 +153,7 @@ export function WhatsAppConnectPage() {
           <p className={styles.kicker}>Billing CMS</p>
           <h1 className={styles.title}>WhatsApp</h1>
           <p className={styles.summary}>
-            Scan once with the official Electro Tech number. The session stays saved, so quotations, invoices, and agreements can be sent without scanning again.
+            Scan once with the official Electro Tech number. The session stays saved, so quotations, invoices, agreements, and paid slips can be sent without scanning again.
           </p>
         </div>
       </header>
@@ -210,7 +215,7 @@ export function WhatsAppConnectPage() {
         </section>
         <section className={styles.panel} aria-labelledby="whatsapp-send-title">
           <h2 id="whatsapp-send-title">Send a document</h2>
-          <p>Send a quotation, invoice, or agreement from the connected official number.</p>
+          <p>Send a quotation, invoice, agreement, or paid slip from the connected official number.</p>
           {success ? <p className={styles.waSuccess}>{success}</p> : null}
           <form className={styles.waForm} onSubmit={(event) => void onSend(event)}>
             <fieldset className={styles.waForm} disabled={!connected || busy === "send"}>
@@ -223,6 +228,7 @@ export function WhatsAppConnectPage() {
                     { value: "quotation", label: "Quotation" },
                     { value: "invoice", label: "Invoice" },
                     { value: "agreement", label: "Agreement" },
+                    { value: "slip", label: "Paid slip" },
                   ]}
                   onChange={setKind}
                 />

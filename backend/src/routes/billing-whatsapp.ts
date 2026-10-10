@@ -19,7 +19,7 @@ const ALLOWED_MIME_TYPES = new Set([
 
 const sendFieldsSchema = z.object({
   phone: z.string().trim().min(1).max(32),
-  kind: z.enum(["quotation", "invoice", "agreement"]),
+  kind: z.enum(["quotation", "invoice", "agreement", "slip", "thanks", "feedback", "reminder", "card"]),
   message: z.string().trim().min(1).max(1000),
 });
 
@@ -99,7 +99,7 @@ export function createBillingWhatsAppRouter(dependencies: BillingWhatsAppRouterD
       if (!file || !ALLOWED_MIME_TYPES.has(file.mimetype)) {
         response.status(400).json({
           code: "invalid_file",
-          message: "Upload a PDF, JPG, PNG, or WebP of the quotation, invoice, or agreement.",
+          message: "Upload a PDF, JPG, PNG, or WebP of the quotation, invoice, agreement, or paid slip.",
         });
         return;
       }
