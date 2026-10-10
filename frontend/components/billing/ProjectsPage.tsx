@@ -10,7 +10,7 @@ import { printFromControl } from "@/lib/billing/print-letter";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import { AgreementLetter, InvoiceLetter } from "./BillingLetters";
 import shell from "./billing-shell.module.css";
-import { AgreementDialog, DirectPaymentDialog, InstallmentInvoiceDialog } from "./ProjectFlow";
+import { AgreementDialog, AgreementViewDialog, DirectPaymentDialog, InstallmentInvoiceDialog } from "./ProjectFlow";
 import { QuotationDialog } from "./QuotationLetter";
 import styles from "./quotation.module.css";
 import "./quotation-print.css";
@@ -208,18 +208,14 @@ export function ProjectsPage() {
 
       {viewing ? <QuotationDialog quotation={viewing} onClose={() => setViewing(null)} /> : null}
       {agreementView ? (
-        <div className={styles.modal} role="presentation" onClick={() => setAgreementView(null)}>
-          <div className={styles.modalCard} role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-            <div className={styles.modalBar}>
-              <h2>{agreementView.serial}</h2>
-              <div>
-                <button className={styles.secondaryButton} type="button" onClick={(event) => printFromControl(event.currentTarget)}>Print</button>
-                <button className={styles.secondaryButton} type="button" onClick={() => setAgreementView(null)}>Close</button>
-              </div>
-            </div>
-            <div className={styles.modalScroll}><AgreementLetter agreement={agreementView} /></div>
-          </div>
-        </div>
+        <AgreementViewDialog
+          agreement={agreementView}
+          onClose={() => setAgreementView(null)}
+          onSaved={(next) => {
+            setAgreementView(next);
+            setAgreements((rows) => rows.map((row) => row.id === next.id ? next : row));
+          }}
+        />
       ) : null}
       {invoiceView ? (
         <div className={styles.modal} role="presentation" onClick={() => setInvoiceView(null)}>

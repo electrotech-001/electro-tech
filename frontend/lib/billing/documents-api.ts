@@ -69,6 +69,7 @@ export type AgreementRecord = {
   paymentMode: QuotationRecord["paymentMode"];
   schedule: ScheduleLine[];
   guarantors: GuarantorRecord[];
+  body?: string | null;
   createdAt: string;
   project: QuotationRecord;
 };
@@ -207,9 +208,15 @@ export function updateCustomerProfile(input: CustomerProfileUpdate): Promise<{ c
     .then((payload) => payload as { cnic: string });
 }
 
-export function saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[] }): Promise<AgreementRecord> {
+export function saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string }): Promise<AgreementRecord> {
   return billingFetch(`/api/billing/projects/${projectId}/agreement`, { method: "POST", body: JSON.stringify(input) })
     .then((response) => expectOk(response, "The agreement could not be saved."))
+    .then((payload) => (payload as { agreement: AgreementRecord }).agreement);
+}
+
+export function updateAgreementWording(agreementId: string, body: string): Promise<AgreementRecord> {
+  return billingFetch(`/api/billing/agreements/${agreementId}`, { method: "PATCH", body: JSON.stringify({ body }) })
+    .then((response) => expectOk(response, "The agreement wording could not be saved."))
     .then((payload) => (payload as { agreement: AgreementRecord }).agreement);
 }
 

@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { DocumentApiError, readImageFile, saveAgreement, recordPayment, type BankMode, type GuarantorInput, type InvoiceRecord } from "@/lib/billing/documents-api";
+import { defaultAgreementWording } from "@/lib/billing/agreement-wording";
+import { DocumentApiError, readImageFile, saveAgreement, updateAgreementWording, recordPayment, type AgreementRecord, type BankMode, type GuarantorInput, type InvoiceRecord } from "@/lib/billing/documents-api";
+import { printFromControl } from "@/lib/billing/print-letter";
 import { formatRupees, todayIsoDate, type QuotationRecord } from "@/lib/billing/quotation-math";
+import { AgreementLetter } from "./BillingLetters";
 import { FancySelect, FilePicker } from "./FancyControls";
 import styles from "./quotation.module.css";
 
@@ -37,6 +40,7 @@ export function AgreementDialog({
   const installments = project.paymentMode === "installments";
   const [dueDates, setDueDates] = useState<string[]>(() => Array.from({ length: project.installmentCount ?? 0 }, () => ""));
   const [guarantors, setGuarantors] = useState<GuarantorInput[]>([emptyGuarantor(), emptyGuarantor()]);
+  const [wording, setWording] = useState(() => defaultAgreementWording(project));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,6 +65,7 @@ export function AgreementDialog({
       await saveAgreement(project.id, {
         dueDates: installments ? dueDates : [],
         guarantors: installments ? guarantors : [],
+        body: wording,
       });
       onSaved();
     } catch (caught) {
@@ -79,8 +84,12 @@ export function AgreementDialog({
         </div>
         <div className={`${styles.modalScroll} ${styles.form}`}>
           <p>{installments
-            ? "Enter the due date of each installment and the two guarantors. The letter is saved in Agreements and the guarantors are linked to this customer."
-            : "A direct payment agreement is written on the Electro Tech letterhead. Guarantors are not required."}</p>
+            ? "Enter the due date of each installment and the two guarantors. Edit the wording if this customer needs different text."
+            : "A direct payment agreement is written on the Electro Tech letterhead. Guarantors are not required. Edit the wording if this customer needs different text."}</p>
+          <label className={styles.field}>
+            <span>Agreement wording</span>
+            <textarea rows={8} value={wording} onChange={(event) => setWording(event.target.value)} />
+          </label>
           {installments ? dueDates.map((date, index) => (
             <label className={styles.field} key={index}>
               <span>Installment {index + 1} due date · {formatRupees(project.installments[index]?.amount ?? 0)}</span>
@@ -114,6 +123,56 @@ export function AgreementDialog({
             <button className={styles.secondaryButton} type="button" onClick={onClose} disabled={saving}>Cancel</button>
             <button className={styles.primaryButton} type="button" onClick={() => void onSubmit()} disabled={saving}>{saving ? "Saving…" : "Save agreement"}</button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function AgreementViewDialog({
+  agreement,
+  onClose,
+  onSaved,
+}: {
+  agreement: AgreementRecord;
+  onClose: () => void;
+  onSaved: (agreement: AgreementRecord) => void;
+}) {
+  const [wording, setWording] = useState(() => agreement.body?.trim() || defaultAgreementWording(agreement.project));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const preview = { ...agreement, body: wording };
+
+  async function onSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      onSaved(await updateAgreementWording(agreement.id, wording));
+    } catch (caught) {
+      setError(caught instanceof DocumentApiError ? caught.message : "The agreement wording could not be saved.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className={styles.modal} role="presentation" onClick={onClose}>
+      <div className={styles.modalCard} role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+        <div className={styles.modalBar}>
+          <h2>{agreement.serial}</h2>
+          <div>
+            <button className={styles.secondaryButton} type="button" onClick={() => void onSave()} disabled={saving}>{saving ? "Saving…" : "Save wording"}</button>
+            <button className={styles.secondaryButton} type="button" onClick={(event) => void printFromControl(event.currentTarget)}>Print</button>
+            <button className={styles.secondaryButton} type="button" onClick={onClose}>Close</button>
+          </div>
+        </div>
+        <div className={`${styles.modalScroll} ${styles.form}`}>
+          <label className={styles.field}>
+            <span>Agreement wording</span>
+            <textarea rows={8} value={wording} onChange={(event) => setWording(event.target.value)} />
+          </label>
+          {error ? <p className={styles.error}>{error}</p> : null}
+          <AgreementLetter agreement={preview} />
         </div>
       </div>
     </div>

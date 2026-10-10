@@ -16,7 +16,7 @@ export function QuotationLetter({
   return (
     <article className={`${styles.letter} quotation-letter ${paper ? styles.letterPaper : ""}`}>
       <header className={styles.letterHead}>
-        <img className={styles.logo} src="/logos/logo-1.png" alt="Electro Tech" />
+        <img className={styles.logo} src="/logos/logo-1.png" alt="Electro Tech" decoding="sync" />
         <div className={styles.company}>
           <strong>{letterhead.company}</strong>
           <span>{letterhead.person}</span>
@@ -127,7 +127,7 @@ export function QuotationLetter({
 
       <footer className={styles.signature}>
         <strong>For, ELECTRO TECH</strong>
-        <img src="/logos/authorized-signature.png" alt="Authorized signature" />
+        <img src="/logos/authorized-signature.png" alt="Authorized signature" decoding="sync" />
         <small>Authorized signature</small>
       </footer>
     </article>

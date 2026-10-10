@@ -35,14 +35,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-test("print uses the open letter and leaves the off-screen copy out", () => {
+test("print uses the open letter and leaves the off-screen copy out", async () => {
   document.body.innerHTML = `
     <div style="position:fixed;left:-12000px"><article class="quotation-letter">Hidden capture</article></div>
     <div role="dialog"><article class="quotation-letter">QT-014 letter</article></div>
   `;
   vi.spyOn(window, "print").mockImplementation(() => {});
   const dialog = document.querySelector("[role='dialog']");
-  printBillingLetter(dialog instanceof HTMLElement ? dialog : null);
+  await printBillingLetter(dialog instanceof HTMLElement ? dialog : null);
   const host = document.querySelector(".print-host");
   expect(host?.textContent).toContain("QT-014 letter");
   expect(host?.textContent).not.toContain("Hidden capture");
@@ -55,6 +55,9 @@ test("quotation print button prepares only that quotation", async () => {
   vi.spyOn(window, "print").mockImplementation(() => {});
   render(<QuotationDialog quotation={quotation} onClose={() => {}} />);
   await userEvent.click(screen.getByRole("button", { name: "Print" }));
+  await vi.waitFor(() => {
+    expect(document.querySelector(".print-host")?.textContent ?? "").toContain("QT-014");
+  });
   const host = document.querySelector(".print-host");
   expect(host?.textContent).toContain("QT-014");
   expect(host?.textContent).toContain("Sheikh Zain");

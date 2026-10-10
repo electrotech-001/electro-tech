@@ -70,6 +70,7 @@ export type AgreementRecord = {
   paymentMode: QuotationRecord["paymentMode"];
   schedule: ScheduleLine[];
   guarantors: GuarantorRecord[];
+  body: string | null;
   createdAt: string;
   project: QuotationRecord;
 };
@@ -404,9 +405,24 @@ export function editPayment(
   return { ...next, invoices: syncInstallmentInvoices(next, schedule, reservedSerial) };
 }
 
+export function agreementBody(value: string | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (!text) return null;
+  if (text.length > 8000) throw new DocumentError("Agreement wording must be 8000 characters or fewer.");
+  return text;
+}
+
+export function setAgreementBody(workspace: Workspace, body: string): Workspace {
+  if (!workspace.agreement) throw new DocumentError("Agreement was not found.", 404, "not_found");
+  const text = agreementBody(body);
+  if (!text) throw new DocumentError("Enter the agreement wording.");
+  return { ...workspace, agreement: { ...workspace.agreement, body: text } };
+}
+
 export function createAgreement(
   workspace: Workspace,
-  input: { dueDates: string[]; guarantors: GuarantorInput[] },
+  input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string },
   reservedSerial: number,
 ): Workspace {
   if (workspace.agreement) throw new DocumentError("An agreement is already saved for this project.", 409, "agreement_exists");
@@ -425,6 +441,7 @@ export function createAgreement(
         paymentMode: "direct",
         schedule: [],
         guarantors: [],
+        body: agreementBody(input.body),
         createdAt: new Date().toISOString(),
         project: workspace.project,
       },
@@ -449,6 +466,7 @@ export function createAgreement(
       paymentMode: "installments",
       schedule,
       guarantors,
+      body: agreementBody(input.body),
       createdAt: new Date().toISOString(),
       project: workspace.project,
     },

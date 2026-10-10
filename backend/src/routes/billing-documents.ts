@@ -140,8 +140,21 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
     try {
       const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
       const dueDates = Array.isArray(body.dueDates) ? body.dueDates.map((date) => text(date)) : [];
-      const agreement = await repository().saveAgreement(request.params.id ?? "", { dueDates, guarantors: guarantors(body.guarantors) });
+      const agreement = await repository().saveAgreement(request.params.id ?? "", {
+        dueDates,
+        guarantors: guarantors(body.guarantors),
+        body: text(body.body),
+      });
       response.status(201).json({ agreement });
+    } catch (error) {
+      sendFailure(error, response, next);
+    }
+  });
+  router.patch("/agreements/:id", async (request, response, next) => {
+    try {
+      const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+      const agreement = await repository().updateAgreementWording(request.params.id ?? "", text(body.body));
+      response.status(200).json({ agreement });
     } catch (error) {
       sendFailure(error, response, next);
     }

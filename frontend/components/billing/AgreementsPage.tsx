@@ -3,10 +3,9 @@
 import { Eye } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DocumentApiError, listAgreements, type AgreementRecord } from "@/lib/billing/documents-api";
-import { printFromControl } from "@/lib/billing/print-letter";
 import { formatDisplayDate, formatRupees } from "@/lib/billing/quotation-math";
-import { AgreementLetter } from "./BillingLetters";
 import shell from "./billing-shell.module.css";
+import { AgreementViewDialog } from "./ProjectFlow";
 import styles from "./quotation.module.css";
 import "./quotation-print.css";
 
@@ -67,18 +66,14 @@ export function AgreementsPage() {
         ))}
       </div>
       {viewing ? (
-        <div className={styles.modal} role="presentation" onClick={() => setViewing(null)}>
-          <div className={styles.modalCard} role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-            <div className={styles.modalBar}>
-              <h2>{viewing.serial}</h2>
-              <div>
-                <button className={styles.secondaryButton} type="button" onClick={(event) => printFromControl(event.currentTarget)}>Print</button>
-                <button className={styles.secondaryButton} type="button" onClick={() => setViewing(null)}>Close</button>
-              </div>
-            </div>
-            <div className={styles.modalScroll}><AgreementLetter agreement={viewing} /></div>
-          </div>
-        </div>
+        <AgreementViewDialog
+          agreement={viewing}
+          onClose={() => setViewing(null)}
+          onSaved={(next) => {
+            setViewing(next);
+            setAgreements((rows) => rows.map((row) => row.id === next.id ? next : row));
+          }}
+        />
       ) : null}
     </>
   );

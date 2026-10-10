@@ -61,6 +61,9 @@ test("direct agreement has no guarantors and the balance invoice closes at zero"
   const agreement = await repository.saveAgreement("project-1", { dueDates: [], guarantors: [] });
   assert.equal(agreement.serial, "AG-001");
   assert.equal(agreement.guarantors.length, 0);
+  assert.equal(agreement.body, null);
+  const revised = await repository.updateAgreementWording(agreement.id, "The customer will pay the agreed amount in one transfer.");
+  assert.equal(revised.body, "The customer will pay the agreed amount in one transfer.");
 
   const partial = await repository.recordPayment("project-1", {
     kind: "direct",

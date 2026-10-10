@@ -643,9 +643,12 @@
   margin: 16px 0;
 }
 
+.packageBlock p {
+  white-space: pre-wrap;
+}
+
 .packageBlock p:last-child {
   margin: 0;
-  white-space: pre-wrap;
 }
 
 .letter thead th {

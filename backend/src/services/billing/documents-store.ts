@@ -4,6 +4,7 @@ import {
   DocumentError,
   changeDueDate,
   createAgreement,
+  setAgreementBody,
   editPayment,
   paidTotal,
   receiveInstallment,
@@ -30,7 +31,8 @@ export type DocumentsRepository = {
   listInvoices(): Promise<InvoiceRecord[]>;
   listReceiveProjects(): Promise<ReceiveProject[]>;
   workspace(projectId: string): Promise<ReceiveProject>;
-  saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[] }): Promise<AgreementRecord>;
+  saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string }): Promise<AgreementRecord>;
+  updateAgreementWording(agreementId: string, body: string): Promise<AgreementRecord>;
   recordPayment(projectId: string, input: DirectPayment | InstallmentPayment): Promise<ReceiveProject>;
   updatePayment(paymentId: string, input: { paidAmount: number; paymentDate: string; paymentMode: BankMode }): Promise<ReceiveProject>;
   updateDueDate(projectId: string, installmentNumber: number, dueDate: string): Promise<ReceiveProject>;
@@ -168,6 +170,13 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
       if (!saved.agreement) throw new DocumentError("The agreement could not be saved.");
       return saved.agreement;
     },
+    async updateAgreementWording(agreementId, body) {
+      const current = [...workspaces.values()].find((workspace) => workspace.agreement?.id === agreementId);
+      if (!current) throw new DocumentError("Agreement was not found.", 404, "not_found");
+      const saved = remember(setAgreementBody(current, body));
+      if (!saved.agreement) throw new DocumentError("Agreement was not found.", 404, "not_found");
+      return saved.agreement;
+    },
     async recordPayment(projectId, input) {
       const current = requireWorkspace(projectId);
       const reserved = maxSerial([...workspaces.values()]);
@@ -222,12 +231,15 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
   };
 }
 
+const AGREEMENT_COLUMNS = "id, project_id, serial, payment_mode, schedule, body, created_at";
+
 type AgreementRow = {
   id: string;
   project_id: string;
   serial: string;
   payment_mode: "installments" | "direct";
   schedule: ScheduleLine[] | null;
+  body: string | null;
   created_at: string;
 };
 
@@ -355,6 +367,7 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       paymentMode: agreementRow.payment_mode,
       schedule: Array.isArray(agreementRow.schedule) ? agreementRow.schedule : [],
       guarantors,
+      body: typeof agreementRow.body === "string" ? agreementRow.body : null,
       createdAt: agreementRow.created_at,
       project,
     } : null;
@@ -364,7 +377,7 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
   async function loadWorkspace(projectId: string): Promise<Workspace> {
     const project = await loadProject(projectId);
     const [agreementResult, guarantorResult, invoiceResult, paymentResult] = await Promise.all([
-      client.from("billing_agreements").select("id, project_id, serial, payment_mode, schedule, created_at").eq("project_id", projectId).maybeSingle(),
+      client.from("billing_agreements").select(AGREEMENT_COLUMNS).eq("project_id", projectId).maybeSingle(),
       client.from("billing_guarantors").select("id, agreement_id, project_id, customer_name, slot, full_name, designation, occupation, sector, cnic_front, cnic_back").eq("project_id", projectId).order("slot"),
       client.from("billing_invoices").select("id, project_id, serial, serial_number, kind, status, invoice_date, due_date, payment_date, payment_mode, advance_paid, balance_due, grand_total, installment_number").eq("project_id", projectId),
       client.from("billing_payments").select("id, project_id, invoice_id, installment_number, expected_amount, paid_amount, payment_date, payment_mode").eq("project_id", projectId),
@@ -396,6 +409,7 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
         serial: next.agreement.serial,
         payment_mode: next.agreement.paymentMode,
         schedule: next.agreement.schedule,
+        body: next.agreement.body,
         created_at: next.agreement.createdAt,
       });
       if (saved.error) throw storageFailure(saved.error, "saved");
@@ -485,7 +499,7 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
     if (projects.length === 0) return [];
     const ids = projects.map((project) => project.id);
     const [agreementResult, guarantorResult, invoiceResult, paymentResult] = await Promise.all([
-      client.from("billing_agreements").select("id, project_id, serial, payment_mode, schedule, created_at").in("project_id", ids),
+      client.from("billing_agreements").select(AGREEMENT_COLUMNS).in("project_id", ids),
       guarantorsMode === "none"
         ? Promise.resolve({ data: [] as GuarantorRow[], error: null })
         : client.from("billing_guarantors").select(guarantorsMode === "full"
@@ -580,6 +594,18 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       const next = createAgreement(current, input, await reservedSerial());
       await persist(current, next, true);
       if (!next.agreement) throw new DocumentError("The agreement could not be saved.");
+      return next.agreement;
+    },
+    async updateAgreementWording(agreementId, body) {
+      const found = await client.from("billing_agreements").select("project_id").eq("id", agreementId).maybeSingle();
+      if (found.error) throw storageFailure(found.error, "read");
+      const projectId = found.data?.project_id;
+      if (typeof projectId !== "string") throw new DocumentError("Agreement was not found.", 404, "not_found");
+      const current = await loadWorkspace(projectId);
+      const next = setAgreementBody(current, body);
+      const saved = await client.from("billing_agreements").update({ body: next.agreement?.body ?? null }).eq("id", agreementId);
+      if (saved.error) throw storageFailure(saved.error, "updated");
+      if (!next.agreement) throw new DocumentError("Agreement was not found.", 404, "not_found");
       return next.agreement;
     },
     async recordPayment(projectId, input) {
