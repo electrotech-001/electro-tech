@@ -141,8 +141,12 @@ export function InvoicesPage() {
               <span className={styles.badge}>{invoice.status === "partial" ? "Partially paid" : invoice.status === "paid" ? "Paid" : "Due"}</span>
             </div>
             <h2>{invoice.project.customerName}</h2>
-            <p>{formatDisplayDate(invoice.invoiceDate)}{invoice.installmentNumber ? ` · Installment ${invoice.installmentNumber}` : ""} · Balance {formatRupees(invoice.balanceDue)}</p>
+            <p>{formatDisplayDate(invoice.invoiceDate)}{invoice.installmentNumber ? ` · Installment ${invoice.installmentNumber}` : ""}</p>
             <p className={styles.total}>{formatRupees(invoice.grandTotal)}</p>
+            <div className={styles.moneySplit}>
+              <p className={styles.moneyPaid}><span>Paid</span><strong>{formatRupees(invoice.advancePaid)}</strong></p>
+              <p className={styles.moneyPending}><span>Pending</span><strong>{formatRupees(invoice.balanceDue)}</strong></p>
+            </div>
             {(invoice.discountAmount ?? 0) > 0 ? <p>Discount {formatRupees(invoice.discountAmount ?? 0)}</p> : null}
             <div className={styles.cardActions}>
               <button type="button" onClick={() => openInvoice(invoice)}><Eye size={15} /> View</button>

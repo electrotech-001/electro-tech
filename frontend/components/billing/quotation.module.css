@@ -499,6 +499,49 @@
   font-weight: 750;
 }
 
+.moneySplit {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.card .moneyPaid,
+.card .moneyPending {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+.card .moneyPaid {
+  background: #e8f6ee;
+  color: #1f6b45;
+}
+
+.card .moneyPending {
+  background: #fdecec;
+  color: #c4161c;
+}
+
+.card .moneyPaid span,
+.card .moneyPending span {
+  color: inherit;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.card .moneyPaid strong,
+.card .moneyPending strong {
+  color: inherit;
+  font-size: 1rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
 .cardActions {
   display: flex;
   flex-wrap: wrap;

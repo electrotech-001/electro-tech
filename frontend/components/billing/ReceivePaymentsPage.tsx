@@ -212,6 +212,10 @@ export function ReceivePaymentsPage() {
                         <span className={styles.badge}>{line.status === "paid" ? "Paid" : line.paidAmount > 0 ? "Partial" : "Due"}</span>
                       </div>
                       <p className={styles.total}>{formatRupees(line.amount)}</p>
+                      <div className={styles.moneySplit}>
+                        <p className={styles.moneyPaid}><span>Paid</span><strong>{formatRupees(line.paidAmount)}</strong></p>
+                        <p className={styles.moneyPending}><span>Pending</span><strong>{formatRupees(pending)}</strong></p>
+                      </div>
                       <label className={styles.field}>
                         <span>Due date</span>
                         <input type="date" value={line.dueDate} onChange={(event) => {
@@ -223,13 +227,10 @@ export function ReceivePaymentsPage() {
                           });
                         }} />
                       </label>
-                      {line.status === "paid" ? <p>Paid {formatRupees(line.paidAmount)}{(line.discountAmount ?? 0) > 0 ? ` · Discount ${formatRupees(line.discountAmount ?? 0)}` : ""} on {line.paidDate ? formatDisplayDate(line.paidDate) : ""}</p> : (
-                        <>
-                          {line.paidAmount > 0 ? <p>Paid {formatRupees(line.paidAmount)} · Pending {formatRupees(pending)}</p> : null}
-                          <button className={styles.primaryButton} type="button" disabled={saving} onClick={() => void saveInstallment(line.number, cash)}>
-                            Receive {formatRupees(cash)}
-                          </button>
-                        </>
+                      {line.status === "paid" ? <p>Paid in full{(line.discountAmount ?? 0) > 0 ? ` · Discount ${formatRupees(line.discountAmount ?? 0)}` : ""} on {line.paidDate ? formatDisplayDate(line.paidDate) : ""}</p> : (
+                        <button className={styles.primaryButton} type="button" disabled={saving} onClick={() => void saveInstallment(line.number, cash)}>
+                          Receive {formatRupees(cash)}
+                        </button>
                       )}
                     </article>
                     );
