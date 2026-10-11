@@ -235,7 +235,28 @@
 }
 
 .tableWrap {
+  max-width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cellLabel {
+  display: none;
+}
+
+.discountBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px;
+  background: #fff;
+  border-radius: 16px;
+}
+
+.discountBar .field {
+  flex: 1 1 200px;
 }
 
 .editTable,
@@ -245,6 +266,10 @@
 }
 
 .form .tableWrap table {
+  min-width: 860px;
+}
+
+.form .tableWrap table.editTable {
   min-width: 860px;
 }
 
@@ -872,6 +897,7 @@
   text-align: center;
   gap: 2px;
   font-size: 0.86rem;
+  overflow-wrap: anywhere;
 }
 
 .company strong {
@@ -1366,8 +1392,30 @@
     justify-content: space-between;
   }
 
+  .letter,
+  .modalCard,
+  .modalScroll,
+  .confirm,
+  .cards,
+  .card {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .cards {
+    grid-template-columns: 1fr;
+  }
+
   .letter {
-    padding: 16px;
+    padding: 16px 12px 24px;
+  }
+
+  .logo {
+    width: min(160px, 100%);
+  }
+
+  .docTitle {
+    font-size: 1.35rem;
   }
 
   .company {
@@ -1375,8 +1423,137 @@
     text-align: left;
   }
 
+  .modal {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .modalCard,
+  .confirm {
+    width: 100%;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .confirm {
+    align-self: end;
+    max-height: 92dvh;
+    overflow: auto;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .modalBar,
+  .modalBar div,
+  .formActions,
+  .cardActions,
+  .ledgerActions,
+  .ledgerHero,
+  .filters,
+  .dateFilters {
+    flex-wrap: wrap;
+  }
+
   .modalBar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .modalBar div {
+    width: 100%;
+  }
+
+  .modalBar div > button,
+  .formActions > button,
+  .cardActions > button,
+  .cardActions > a {
+    flex: 1 1 calc(50% - 8px);
+  }
+
+  .editTable thead {
+    display: none;
+  }
+
+  .editTable,
+  .form .tableWrap table.editTable,
+  .editTable tbody,
+  .editTable tr,
+  .editTable td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .editTable tr {
+    margin-bottom: 12px;
+    padding: 12px;
+    border: 1px solid rgba(16, 20, 16, 0.08);
+    border-radius: 14px;
+    background: #fff;
+  }
+
+  .editTable td {
+    padding: 0 0 10px;
+  }
+
+  .cellLabel {
+    display: block;
+    margin-bottom: 4px;
+    color: #5c665e;
+    font-size: 0.75rem;
+    font-weight: 750;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .cnicPreview,
+  .slipFacts div {
+    grid-template-columns: 1fr;
+  }
+
+  .slipFacts {
+    padding-right: 0;
+  }
+
+  .paidSeal {
+    position: static;
+    margin: 8px auto 0;
+  }
+
+  .slipAmount strong {
+    font-size: 1.6rem;
+  }
+
+  .greeting {
+    padding: 28px 16px 24px;
+    border-width: 8px;
+    outline-offset: -14px;
+  }
+
+  .greeting h2 {
+    font-size: 1.7rem;
+  }
+
+  .signature img {
+    width: min(180px, 100%);
+  }
+
+  .paymentInstructions {
+    max-width: none;
+  }
+
+  .dateFilters .field,
+  .toolbar .field {
+    width: 100%;
+  }
+
+  .ledgerHero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .paidStamp {
+    position: static;
+    margin: 8px 0;
+    transform: none;
   }
 }

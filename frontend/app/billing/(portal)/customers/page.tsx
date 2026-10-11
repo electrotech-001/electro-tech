@@ -1,5 +1,5 @@
-import { CustomerDirectoryPage } from "@/components/billing/CustomerDirectoryPage";
+import { redirect } from "next/navigation";
 
 export default function BillingCustomersPage() {
-  return <CustomerDirectoryPage mode="active" />;
+  redirect("/billing/profiles");
 }

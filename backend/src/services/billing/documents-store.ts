@@ -5,8 +5,10 @@ import {
   changeDueDate,
   createAgreement,
   deleteInvoice,
+  discountTotal,
   issueDirectInvoice,
   setAgreementBody,
+  setInvoiceDiscount,
   editPayment,
   paidTotal,
   receiveInstallment,
@@ -37,8 +39,9 @@ export type DocumentsRepository = {
   updateAgreementWording(agreementId: string, body: string): Promise<AgreementRecord>;
   issueInvoice(projectId: string): Promise<ReceiveProject>;
   deleteInvoice(invoiceId: string): Promise<ReceiveProject>;
+  setInvoiceDiscount(invoiceId: string, discountAmount: number): Promise<ReceiveProject>;
   recordPayment(projectId: string, input: DirectPayment | InstallmentPayment): Promise<ReceiveProject>;
-  updatePayment(paymentId: string, input: { paidAmount: number; paymentDate: string; paymentMode: BankMode }): Promise<ReceiveProject>;
+  updatePayment(paymentId: string, input: { paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode }): Promise<ReceiveProject>;
   updateDueDate(projectId: string, installmentNumber: number, dueDate: string): Promise<ReceiveProject>;
   completeProject(projectId: string): Promise<void>;
   projectHasDocuments(projectId: string): Promise<boolean>;
@@ -49,6 +52,7 @@ export type DocumentsRepository = {
 
 export type BillingSummary = {
   projectsInProcess: number;
+  projectsCompleted: number;
   openInvoices: number;
   overdueInstallments: number;
   receivedTotal: number;
@@ -102,10 +106,12 @@ export function todayIso(): string {
 export function summarizeDocuments(workspaces: Workspace[], today = todayIso()): BillingSummary {
   const entries = toLedger(workspaces);
   let projectsInProcess = 0;
+  let projectsCompleted = 0;
   let openInvoices = 0;
   let overdueInstallments = 0;
   for (const workspace of workspaces) {
-    if (workspace.project.status !== "completed") projectsInProcess += 1;
+    if (workspace.project.status === "completed") projectsCompleted += 1;
+    else projectsInProcess += 1;
     openInvoices += workspace.invoices.filter((invoice) => invoice.status !== "paid").length;
     for (const line of workspace.agreement?.schedule ?? []) {
       if (line.status === "due" && line.dueDate < today) overdueInstallments += 1;
@@ -114,6 +120,7 @@ export function summarizeDocuments(workspaces: Workspace[], today = todayIso()):
   const receivedTotal = Math.round(entries.reduce((sum, entry) => sum + entry.paidAmount, 0) * 100) / 100;
   return {
     projectsInProcess,
+    projectsCompleted,
     openInvoices,
     overdueInstallments,
     receivedTotal,
@@ -122,17 +129,27 @@ export function summarizeDocuments(workspaces: Workspace[], today = todayIso()):
   };
 }
 
-type DirectPayment = { kind: "direct"; paidAmount: number; paymentDate: string; paymentMode: BankMode };
-type InstallmentPayment = { kind: "installment"; installmentNumber: number; paidAmount: number; paymentDate: string; paymentMode: BankMode };
+type DirectPayment = { kind: "direct"; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode };
+type InstallmentPayment = { kind: "installment"; installmentNumber: number; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode };
 
 const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, installment_count, approved_at, source_quotation_id, status, billing_project_items(line_no, description, qty, unit, price, tax_percent)";
+
+function discountRelief(workspace: Workspace): number {
+  if (workspace.project.paymentMode === "installments") {
+    const invoiceDiscounts = (workspace.agreement?.schedule ?? []).reduce((sum, line) => sum + (line.discountAmount ?? 0), 0);
+    return Math.round((invoiceDiscounts + discountTotal(workspace.payments)) * 100) / 100;
+  }
+  const invoiceDiscounts = workspace.invoices.reduce((sum, invoice) => sum + (invoice.discountAmount ?? 0), 0);
+  return Math.round((invoiceDiscounts + discountTotal(workspace.payments)) * 100) / 100;
+}
 
 function present(workspace: Workspace): ReceiveProject {
   const collected = paidTotal(workspace.payments);
   const balanceBase = workspace.project.paymentMode === "installments"
     ? workspace.project.grandTotal - (workspace.project.downPayment ?? 0)
     : workspace.project.grandTotal;
-  return { ...workspace, paidTotal: collected, balance: Math.max(0, Math.round((balanceBase - collected) * 100) / 100) };
+  const balance = Math.max(0, Math.round((balanceBase - collected - discountRelief(workspace)) * 100) / 100);
+  return { ...workspace, paidTotal: collected, balance };
 }
 
 function maxSerial(workspaces: Workspace[]): number {
@@ -181,6 +198,11 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
       const current = [...workspaces.values()].find((workspace) => workspace.invoices.some((invoice) => invoice.id === invoiceId));
       if (!current) throw new DocumentError("Invoice was not found.", 404, "not_found");
       return remember(deleteInvoice(current, invoiceId));
+    },
+    async setInvoiceDiscount(invoiceId, discountAmount) {
+      const current = [...workspaces.values()].find((workspace) => workspace.invoices.some((invoice) => invoice.id === invoiceId));
+      if (!current) throw new DocumentError("Invoice was not found.", 404, "not_found");
+      return remember(setInvoiceDiscount(current, invoiceId, discountAmount, maxSerial([...workspaces.values()])));
     },
     async updateAgreementWording(agreementId, body) {
       const current = [...workspaces.values()].find((workspace) => workspace.agreement?.id === agreementId);
@@ -285,6 +307,7 @@ type InvoiceRow = {
   advance_paid: number | string;
   balance_due: number | string;
   grand_total: number | string;
+  discount_amount?: number | string | null;
   installment_number: number | null;
 };
 
@@ -295,6 +318,7 @@ type PaymentRow = {
   installment_number: number | null;
   expected_amount: number | string;
   paid_amount: number | string;
+  discount_amount?: number | string | null;
   payment_date: string;
   payment_mode: BankMode;
 };
@@ -329,6 +353,7 @@ function paymentFrom(row: PaymentRow): PaymentRecord {
     installmentNumber: row.installment_number,
     expectedAmount: asNumber(row.expected_amount),
     paidAmount: asNumber(row.paid_amount),
+    discountAmount: asNumber(row.discount_amount),
     paymentDate: row.payment_date,
     paymentMode: row.payment_mode,
   };
@@ -369,6 +394,7 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       advancePaid: asNumber(row.advance_paid),
       balanceDue: asNumber(row.balance_due),
       grandTotal: asNumber(row.grand_total),
+      discountAmount: asNumber(row.discount_amount),
       installmentNumber: row.installment_number,
       payments: payments.filter((payment) => {
         if (payment.installmentNumber != null) return payment.installmentNumber === row.installment_number;
@@ -404,8 +430,8 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
     const [agreementResult, guarantorResult, invoiceResult, paymentResult] = await Promise.all([
       client.from("billing_agreements").select(AGREEMENT_COLUMNS).eq("project_id", projectId).maybeSingle(),
       client.from("billing_guarantors").select("id, agreement_id, project_id, customer_name, slot, full_name, designation, occupation, sector, contact_no, cnic, cnic_front, cnic_back").eq("project_id", projectId).order("slot"),
-      client.from("billing_invoices").select("id, project_id, serial, serial_number, kind, status, invoice_date, due_date, payment_date, payment_mode, advance_paid, balance_due, grand_total, installment_number").eq("project_id", projectId),
-      client.from("billing_payments").select("id, project_id, invoice_id, installment_number, expected_amount, paid_amount, payment_date, payment_mode").eq("project_id", projectId),
+      client.from("billing_invoices").select("id, project_id, serial, serial_number, kind, status, invoice_date, due_date, payment_date, payment_mode, advance_paid, balance_due, grand_total, discount_amount, installment_number").eq("project_id", projectId),
+      client.from("billing_payments").select("id, project_id, invoice_id, installment_number, expected_amount, paid_amount, discount_amount, payment_date, payment_mode").eq("project_id", projectId),
     ]);
     if (agreementResult.error) throw storageFailure(agreementResult.error, "read");
     if (guarantorResult.error) throw storageFailure(guarantorResult.error, "read");
@@ -487,6 +513,7 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
         advance_paid: invoice.advancePaid,
         balance_due: invoice.balanceDue,
         grand_total: invoice.grandTotal,
+        discount_amount: invoice.discountAmount ?? 0,
         installment_number: invoice.installmentNumber,
         updated_at: new Date().toISOString(),
       })));
@@ -500,6 +527,7 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
         installment_number: payment.installmentNumber,
         expected_amount: payment.expectedAmount,
         paid_amount: payment.paidAmount,
+        discount_amount: payment.discountAmount ?? 0,
         payment_date: payment.paymentDate,
         payment_mode: payment.paymentMode,
         updated_at: new Date().toISOString(),
@@ -532,8 +560,8 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
         : client.from("billing_guarantors").select(guarantorsMode === "full"
           ? "id, agreement_id, project_id, customer_name, slot, full_name, designation, occupation, sector, contact_no, cnic, cnic_front, cnic_back"
           : "id, agreement_id, project_id, customer_name, slot, full_name, designation, occupation, sector, contact_no, cnic").in("project_id", ids).order("slot"),
-      client.from("billing_invoices").select("id, project_id, serial, serial_number, kind, status, invoice_date, due_date, payment_date, payment_mode, advance_paid, balance_due, grand_total, installment_number").in("project_id", ids),
-      client.from("billing_payments").select("id, project_id, invoice_id, installment_number, expected_amount, paid_amount, payment_date, payment_mode").in("project_id", ids),
+      client.from("billing_invoices").select("id, project_id, serial, serial_number, kind, status, invoice_date, due_date, payment_date, payment_mode, advance_paid, balance_due, grand_total, discount_amount, installment_number").in("project_id", ids),
+      client.from("billing_payments").select("id, project_id, invoice_id, installment_number, expected_amount, paid_amount, discount_amount, payment_date, payment_mode").in("project_id", ids),
     ]);
     if (agreementResult.error) throw storageFailure(agreementResult.error, "listed");
     if (guarantorResult.error) throw storageFailure(guarantorResult.error, "listed");
@@ -639,6 +667,16 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       await persist(current, next, false);
       return present(next);
     },
+    async setInvoiceDiscount(invoiceId, discountAmount) {
+      const found = await client.from("billing_invoices").select("project_id").eq("id", invoiceId).maybeSingle();
+      if (found.error) throw storageFailure(found.error, "read");
+      const projectId = found.data?.project_id;
+      if (typeof projectId !== "string") throw new DocumentError("Invoice was not found.", 404, "not_found");
+      const current = await loadWorkspace(projectId);
+      const next = setInvoiceDiscount(current, invoiceId, discountAmount, await reservedSerial());
+      await persist(current, next, false);
+      return present(next);
+    },
     async updateAgreementWording(agreementId, body) {
       const found = await client.from("billing_agreements").select("project_id").eq("id", agreementId).maybeSingle();
       if (found.error) throw storageFailure(found.error, "read");
@@ -714,6 +752,7 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       const receivedTotal = Math.round(entries.reduce((sum, entry) => sum + entry.paidAmount, 0) * 100) / 100;
       return {
         projectsInProcess: projects.filter((project) => project.status !== "completed").length,
+        projectsCompleted: projects.filter((project) => project.status === "completed").length,
         openInvoices: invoices.filter((invoice) => invoice.status !== "paid").length,
         overdueInstallments,
         receivedTotal,

@@ -30,6 +30,7 @@ export type ScheduleLine = {
   amount: number;
   status: "due" | "paid";
   paidAmount: number;
+  discountAmount?: number;
   paidDate: string | null;
   paymentMode: BankMode | null;
 };
@@ -41,6 +42,7 @@ export type PaymentRecord = {
   installmentNumber: number | null;
   expectedAmount: number;
   paidAmount: number;
+  discountAmount?: number;
   paymentDate: string;
   paymentMode: BankMode;
 };
@@ -59,6 +61,7 @@ export type InvoiceRecord = {
   advancePaid: number;
   balanceDue: number;
   grandTotal: number;
+  discountAmount?: number;
   installmentNumber: number | null;
   payments: PaymentRecord[];
   schedule?: ScheduleLine[];
@@ -164,6 +167,7 @@ export function listLedger(): Promise<LedgerEntry[]> {
 export type BillingSummary = {
   quotations: number;
   projectsInProcess: number;
+  projectsCompleted: number;
   openInvoices: number;
   overdueInstallments: number;
   receivedTotal: number;
@@ -229,19 +233,25 @@ export function issueDirectInvoice(projectId: string): Promise<ReceiveProject> {
     .then((payload) => (payload as { project: ReceiveProject }).project);
 }
 
+export function updateInvoiceDiscount(invoiceId: string, discountAmount: number): Promise<ReceiveProject> {
+  return billingFetch(`/api/billing/invoices/${invoiceId}`, { method: "PATCH", body: JSON.stringify({ discountAmount }) })
+    .then((response) => expectOk(response, "The discount could not be saved."))
+    .then((payload) => (payload as { project: ReceiveProject }).project);
+}
+
 export function deleteInvoice(invoiceId: string): Promise<void> {
   return billingFetch(`/api/billing/invoices/${invoiceId}`, { method: "DELETE" })
     .then((response) => expectOk(response, "The invoice could not be deleted."))
     .then(() => undefined);
 }
 
-export function recordPayment(projectId: string, input: { kind: "direct"; paidAmount: number; paymentDate: string; paymentMode: BankMode } | { kind: "installment"; installmentNumber: number; paidAmount: number; paymentDate: string; paymentMode: BankMode }): Promise<ReceiveProject> {
+export function recordPayment(projectId: string, input: { kind: "direct"; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode } | { kind: "installment"; installmentNumber: number; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode }): Promise<ReceiveProject> {
   return billingFetch(`/api/billing/projects/${projectId}/payments`, { method: "POST", body: JSON.stringify(input) })
     .then((response) => expectOk(response, "The payment could not be saved."))
     .then((payload) => (payload as { project: ReceiveProject }).project);
 }
 
-export function updatePayment(paymentId: string, input: { paidAmount: number; paymentDate: string; paymentMode: BankMode }): Promise<ReceiveProject> {
+export function updatePayment(paymentId: string, input: { paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode }): Promise<ReceiveProject> {
   return billingFetch(`/api/billing/payments/${paymentId}`, { method: "PUT", body: JSON.stringify(input) })
     .then((response) => expectOk(response, "The payment could not be updated."))
     .then((payload) => (payload as { project: ReceiveProject }).project);

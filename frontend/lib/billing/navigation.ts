@@ -9,7 +9,6 @@ import {
   Receipt,
   Smartphone,
   SunMedium,
-  UserRound,
   Users,
   Wallet,
 } from "lucide-react";
@@ -38,7 +37,6 @@ export const billingNav: BillingNavGroup[] = [
   {
     label: "Customers",
     items: [
-      { href: "/billing/customers", label: "Quoted & In Process", icon: UserRound },
       { href: "/billing/profiles", label: "Customer Profiles", icon: IdCard },
       { href: "/billing/ledger", label: "Payment Ledger", icon: BookOpen },
     ],

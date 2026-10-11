@@ -99,7 +99,7 @@ export function CustomerDirectoryPage({ mode }: { mode: "active" | "profiles" })
             <article className={styles.card} key={card.key}>
               <div className={styles.cardTop}>
                 <strong>{card.cnic}</strong>
-                <span className={styles.badge}>{card.inProcess ? "In process" : card.sendingQuotation ? "Quotation" : "On file"}</span>
+                <span className={styles.badge}>{jobs.some((job) => job.kind === "quotation") ? "Quotation" : jobs.some((job) => job.stage === "in_process") ? "In process" : "On file"}</span>
               </div>
               <h2>{card.customerName}</h2>
               <p>{card.contactNo} · WhatsApp {card.whatsappNo}</p>

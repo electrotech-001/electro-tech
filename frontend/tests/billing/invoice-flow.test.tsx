@@ -146,6 +146,8 @@ test("every invoice shows the bank instructions and the company email", () => {
     }],
   })} />);
   expect(screen.getByText(letterhead.email).textContent).toBe("aqeel@electrotech-attock.com");
+  expect(screen.getByText(letterhead.address).textContent).toContain("Attock");
+  expect(screen.getByText(letterhead.address).textContent).not.toContain("Attack");
   expect(screen.getByText("Payment Instructions")).toBeDefined();
   expect(screen.getByText("Account Title : Electro Tech")).toBeDefined();
   expect(screen.getByText("Account Number : 57365002120531")).toBeDefined();

@@ -27,6 +27,11 @@ function amount(value: unknown): number {
   return typeof value === "number" ? value : Number(value);
 }
 
+function discountAmount(value: unknown): number {
+  if (value == null || value === "") return 0;
+  return amount(value);
+}
+
 function mode(value: unknown): BankMode {
   return value === "cash" ? "cash" : "bank_transfer";
 }
@@ -103,6 +108,16 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
       sendFailure(error, response, next);
     }
   });
+  router.patch("/invoices/:id", async (request, response, next) => {
+    try {
+      const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+      response.status(200).json({
+        project: await repository().setInvoiceDiscount(request.params.id ?? "", discountAmount(body.discountAmount)),
+      });
+    } catch (error) {
+      sendFailure(error, response, next);
+    }
+  });
   router.delete("/invoices/:id", async (request, response, next) => {
     try {
       response.status(200).json({ project: await repository().deleteInvoice(request.params.id ?? "") });
@@ -137,6 +152,7 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
       response.status(200).json({
         project: await repository().updatePayment(request.params.id ?? "", {
           paidAmount: amount(body.paidAmount),
+          discountAmount: discountAmount(body.discountAmount),
           paymentDate: text(body.paymentDate),
           paymentMode: mode(body.paymentMode),
         }),
@@ -183,12 +199,14 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
           kind: "installment",
           installmentNumber: amount(body.installmentNumber),
           paidAmount: amount(body.paidAmount),
+          discountAmount: discountAmount(body.discountAmount),
           paymentDate: text(body.paymentDate),
           paymentMode: mode(body.paymentMode),
         })
         : await repository().recordPayment(request.params.id ?? "", {
           kind: "direct",
           paidAmount: amount(body.paidAmount),
+          discountAmount: discountAmount(body.discountAmount),
           paymentDate: text(body.paymentDate),
           paymentMode: mode(body.paymentMode),
         });

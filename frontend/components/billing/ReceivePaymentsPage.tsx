@@ -16,22 +16,27 @@ import "./quotation-print.css";
 
 function PaymentFields({
   paidAmount,
+  discountAmount,
   paymentDate,
   paymentMode,
   onAmount,
+  onDiscount,
   onDate,
   onMode,
 }: {
   paidAmount: number;
+  discountAmount: number;
   paymentDate: string;
   paymentMode: BankMode;
   onAmount: (value: number) => void;
+  onDiscount: (value: number) => void;
   onDate: (value: string) => void;
   onMode: (value: BankMode) => void;
 }) {
   return (
     <div className={styles.formGrid}>
       <label className={styles.field}><span>Paid amount</span><input type="number" min="0" step="0.01" value={paidAmount} onChange={(event) => onAmount(Number(event.target.value))} /></label>
+      <label className={styles.field}><span>Discount amount</span><input type="number" min="0" step="0.01" value={discountAmount} onChange={(event) => onDiscount(Number(event.target.value))} /></label>
       <label className={styles.field}><span>Date of payment</span><input type="date" value={paymentDate} onChange={(event) => onDate(event.target.value)} /></label>
       <div className={styles.field}>
         <span>Payment mode</span>
@@ -51,6 +56,7 @@ export function ReceivePaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [paidAmount, setPaidAmount] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(0);
   const [paymentDate, setPaymentDate] = useState(todayIsoDate());
   const [paymentMode, setPaymentMode] = useState<BankMode>("cash");
   const [editing, setEditing] = useState<PaymentRecord | null>(null);
@@ -94,9 +100,10 @@ export function ReceivePaymentsPage() {
     setSaving(true);
     setBanner(null);
     try {
-      const saved = await recordPayment(current.project.id, { kind: "installment", installmentNumber, paidAmount: amount, paymentDate, paymentMode });
+      const saved = await recordPayment(current.project.id, { kind: "installment", installmentNumber, paidAmount: amount, discountAmount, paymentDate, paymentMode });
       await refresh(current.project.id);
       setSlip(saved.payments.find((payment) => payment.installmentNumber === installmentNumber) ?? null);
+      setDiscountAmount(0);
       setBanner({ tone: "ok", text: `Installment ${installmentNumber} is marked paid.` });
     } catch (error) {
       setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The installment could not be saved." });
@@ -138,7 +145,7 @@ export function ReceivePaymentsPage() {
     setSaving(true);
     setBanner(null);
     try {
-      await updatePayment(editing.id, { paidAmount: editing.paidAmount, paymentDate: editing.paymentDate, paymentMode: editing.paymentMode });
+      await updatePayment(editing.id, { paidAmount: editing.paidAmount, discountAmount: editing.discountAmount ?? 0, paymentDate: editing.paymentDate, paymentMode: editing.paymentMode });
       await refresh(current.project.id);
       setEditing(null);
       setBanner({ tone: "ok", text: "The received amount was updated." });
@@ -190,7 +197,7 @@ export function ReceivePaymentsPage() {
                 </div>
               ) : current.agreement ? (
                 <>
-                  <PaymentFields paidAmount={paidAmount} paymentDate={paymentDate} paymentMode={paymentMode} onAmount={setPaidAmount} onDate={setPaymentDate} onMode={setPaymentMode} />
+                  <PaymentFields paidAmount={paidAmount} discountAmount={discountAmount} paymentDate={paymentDate} paymentMode={paymentMode} onAmount={setPaidAmount} onDiscount={setDiscountAmount} onDate={setPaymentDate} onMode={setPaymentMode} />
                   <p className={styles.hint}>The date and mode above are used when an installment is received. Due dates stay editable on each card.</p>
                 <div className={styles.cards}>
                   {current.agreement.schedule.map((line) => (
@@ -211,9 +218,9 @@ export function ReceivePaymentsPage() {
                           });
                         }} />
                       </label>
-                      {line.status === "paid" ? <p>Paid {formatRupees(line.paidAmount)} on {line.paidDate ? formatDisplayDate(line.paidDate) : ""}</p> : (
-                        <button className={styles.primaryButton} type="button" disabled={saving} onClick={() => void saveInstallment(line.number, paidAmount > 0 ? paidAmount : line.amount)}>
-                          Receive {formatRupees(line.amount)}
+                      {line.status === "paid" ? <p>Paid {formatRupees(line.paidAmount)}{(line.discountAmount ?? 0) > 0 ? ` · Discount ${formatRupees(line.discountAmount ?? 0)}` : ""} on {line.paidDate ? formatDisplayDate(line.paidDate) : ""}</p> : (
+                        <button className={styles.primaryButton} type="button" disabled={saving} onClick={() => void saveInstallment(line.number, paidAmount > 0 ? paidAmount : Math.max(0, line.amount - (line.discountAmount ?? 0) - discountAmount))}>
+                          Receive {formatRupees(paidAmount > 0 ? paidAmount : Math.max(0, line.amount - (line.discountAmount ?? 0) - discountAmount))}
                         </button>
                       )}
                     </article>
@@ -230,9 +237,11 @@ export function ReceivePaymentsPage() {
                     <>
                       <PaymentFields
                         paidAmount={editing.paidAmount}
+                        discountAmount={editing.discountAmount ?? 0}
                         paymentDate={editing.paymentDate}
                         paymentMode={editing.paymentMode}
                         onAmount={(value) => setEditing({ ...editing, paidAmount: value })}
+                        onDiscount={(value) => setEditing({ ...editing, discountAmount: value })}
                         onDate={(value) => setEditing({ ...editing, paymentDate: value })}
                         onMode={(value) => setEditing({ ...editing, paymentMode: value })}
                       />
@@ -244,7 +253,7 @@ export function ReceivePaymentsPage() {
                   ) : (
                     <>
                       <strong>{formatRupees(payment.paidAmount)}</strong>
-                      <p>{formatDisplayDate(payment.paymentDate)} · {payment.paymentMode === "bank_transfer" ? "Bank transfer" : "Cash"}{payment.installmentNumber ? ` · Installment ${payment.installmentNumber}` : ""}</p>
+                      <p>{formatDisplayDate(payment.paymentDate)} · {payment.paymentMode === "bank_transfer" ? "Bank transfer" : "Cash"}{payment.installmentNumber ? ` · Installment ${payment.installmentNumber}` : ""}{(payment.discountAmount ?? 0) > 0 ? ` · Discount ${formatRupees(payment.discountAmount ?? 0)}` : ""}</p>
                       <div className={styles.cardActions}>
                         <button type="button" onClick={() => setSlip(payment)}>Paid slip</button>
                         <button type="button" onClick={() => void sendSlip(payment)} disabled={sendingId === payment.id}>

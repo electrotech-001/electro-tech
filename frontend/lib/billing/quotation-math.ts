@@ -60,7 +60,7 @@ export type QuotationRecord = Omit<QuotationDraft, "items"> & {
 export const letterhead = {
   company: "Electro Tech",
   person: "Muhammad Aqeel",
-  address: "Near Camel poor floor Mil Fateh jang Road Dhoke Fateh Attack City",
+  address: "Near Camel poor floor Mil Fateh jang Road Dhoke Fateh Attock City",
   phone: "+92 310 5056394",
   email: "aqeel@electrotech-attock.com",
 };

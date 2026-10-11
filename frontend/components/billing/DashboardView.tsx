@@ -42,6 +42,7 @@ export function DashboardView() {
   const cards = [
     { href: "/billing/quotations", label: "Quotations", value: summary ? String(summary.quotations) : "—", hint: "Saved quotations", tone: "" },
     { href: "/billing/projects", label: "Projects in process", value: summary ? String(summary.projectsInProcess) : "—", hint: "Still being delivered", tone: "" },
+    { href: "/billing/projects#completed", label: "Completed projects", value: summary ? String(summary.projectsCompleted ?? 0) : "—", hint: "Marked completed", tone: styles.statDone },
     { href: "/billing/invoices", label: "Open invoices", value: summary ? String(summary.openInvoices) : "—", hint: "Not fully paid", tone: "" },
     { href: "/billing/payments", label: "Overdue installments", value: summary ? String(summary.overdueInstallments) : "—", hint: "Due date has passed", tone: summary && summary.overdueInstallments > 0 ? styles.statAlert : "" },
     { href: "/billing/ledger", label: "Received", value: summary ? formatRupees(summary.receivedTotal) : "—", hint: summary ? `${summary.paymentCount} payment${summary.paymentCount === 1 ? "" : "s"}` : "Payments received", tone: styles.statMoney },

@@ -160,5 +160,59 @@ test("installment agreement stores two guarantors and a received card updates th
   assert.equal(summary.paymentCount, 1);
   assert.equal(summary.receivedTotal, 141000);
   assert.equal(summary.projectsInProcess, 0);
+  assert.equal(summary.projectsCompleted, 1);
   assert.equal(summary.recent[0]?.customerName, "Sheikh Zain Ali");
+});
+
+test("a discount on the invoice and on the payment both reduce the balance", async () => {
+  const repository = createMemoryDocumentsRepository([project("direct")]);
+  const issued = await repository.issueInvoice("project-1");
+  const invoiceId = issued.invoices[0]?.id ?? "";
+  const discounted = await repository.setInvoiceDiscount(invoiceId, 10000);
+  assert.equal(discounted.invoices[0]?.discountAmount, 10000);
+  assert.equal(discounted.invoices[0]?.balanceDue, 663000);
+  assert.equal(discounted.balance, 663000);
+
+  const paid = await repository.recordPayment("project-1", {
+    kind: "direct",
+    paidAmount: 250000,
+    discountAmount: 5000,
+    paymentDate: "2026-10-09",
+    paymentMode: "cash",
+  });
+  assert.equal(paid.payments[0]?.discountAmount, 5000);
+  assert.equal(paid.invoices[0]?.discountAmount, 10000);
+  assert.equal(paid.invoices[0]?.balanceDue, 408000);
+  assert.equal(paid.balance, 408000);
+  await assert.rejects(
+    () => repository.setInvoiceDiscount(invoiceId, 500000),
+    /remaining balance/,
+  );
+});
+
+test("an installment invoice discount lowers that invoice without relabeling the quotation", async () => {
+  const repository = createMemoryDocumentsRepository([project("installments")]);
+  await repository.saveAgreement("project-1", {
+    dueDates: ["2026-11-01", "2026-12-01", "2027-01-01"],
+    guarantors: [guarantor("Ali Raza"), guarantor("Sara Khan")],
+  });
+  const invoiceId = (await repository.listInvoices()).find((invoice) => invoice.installmentNumber === 1)?.id ?? "";
+  const discounted = await repository.setInvoiceDiscount(invoiceId, 10000);
+  assert.equal(discounted.agreement?.schedule.find((line) => line.number === 1)?.discountAmount, 10000);
+  assert.equal(discounted.agreement?.schedule.find((line) => line.number === 2)?.amount, 141000);
+  assert.equal(discounted.invoices.find((invoice) => invoice.installmentNumber === 1)?.balanceDue, 131000);
+  assert.equal(discounted.balance, 413000);
+
+  const received = await repository.recordPayment("project-1", {
+    kind: "installment",
+    installmentNumber: 1,
+    paidAmount: 131000,
+    discountAmount: 0,
+    paymentDate: "2026-11-01",
+    paymentMode: "cash",
+  });
+  assert.equal(received.agreement?.schedule.find((line) => line.number === 1)?.status, "paid");
+  assert.equal(received.balance, 282000);
+  const unpaid = received.agreement?.schedule.filter((line) => line.status === "due") ?? [];
+  assert.equal(unpaid.reduce((sum, line) => sum + line.amount, 0), 282000);
 });

@@ -198,6 +198,7 @@
 
 .main {
   min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -230,6 +231,8 @@
 }
 
 .content {
+  min-width: 0;
+  max-width: 100%;
   padding: 32px;
 }
 
@@ -328,6 +331,10 @@
   background: #f5c400;
 }
 
+.statDone::before {
+  background: #0f6f8a;
+}
+
 .statAlert::before {
   background: #b42318;
 }
@@ -357,6 +364,8 @@
 }
 
 .panel {
+  min-width: 0;
+  max-width: 100%;
   background: #fff;
   border: 1px solid rgba(16, 20, 16, 0.06);
   border-radius: 18px;
@@ -756,6 +765,25 @@
 
   .content {
     padding: 20px 16px 32px;
+  }
+
+  .title {
+    font-size: 1.7rem;
+  }
+
+  .recentRow {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pageHeader > button,
+  .pageHeader > a {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .stats {
+    grid-template-columns: 1fr;
   }
 
   .stats,

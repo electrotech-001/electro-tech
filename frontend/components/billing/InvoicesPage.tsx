@@ -2,7 +2,7 @@
 
 import { Eye, MessageCircle, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { deleteInvoice, DocumentApiError, listInvoices, type InvoiceRecord } from "@/lib/billing/documents-api";
+import { deleteInvoice, DocumentApiError, listInvoices, updateInvoiceDiscount, type InvoiceRecord } from "@/lib/billing/documents-api";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { printFromControl } from "@/lib/billing/print-letter";
 import { formatDisplayDate, formatRupees } from "@/lib/billing/quotation-math";
@@ -17,6 +17,7 @@ export function InvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [viewing, setViewing] = useState<InvoiceRecord | null>(null);
+  const [discount, setDiscount] = useState(0);
   const [deleting, setDeleting] = useState<InvoiceRecord | null>(null);
   const [busy, setBusy] = useState(false);
   const [capture, setCapture] = useState<InvoiceRecord | null>(null);
@@ -51,6 +52,34 @@ export function InvoicesPage() {
 
   async function refresh() {
     setInvoices(await listInvoices());
+  }
+
+  function openInvoice(invoice: InvoiceRecord) {
+    setDiscount(invoice.discountAmount ?? 0);
+    setViewing(invoice);
+  }
+
+  async function saveDiscount() {
+    if (!viewing) return;
+    setBusy(true);
+    setBanner(null);
+    try {
+      const saved = await updateInvoiceDiscount(viewing.id, Number(discount) || 0);
+      const next = saved.invoices.find((invoice) => invoice.id === viewing.id) ?? null;
+      setInvoices((rows) => {
+        const others = rows.filter((invoice) => invoice.projectId !== saved.project.id);
+        return [...saved.invoices, ...others];
+      });
+      if (next) {
+        setViewing(next);
+        setDiscount(next.discountAmount ?? 0);
+      }
+      setBanner({ tone: "ok", text: `Discount saved on ${viewing.serial}.` });
+    } catch (error) {
+      setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The discount could not be saved." });
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onDelete() {
@@ -114,8 +143,9 @@ export function InvoicesPage() {
             <h2>{invoice.project.customerName}</h2>
             <p>{formatDisplayDate(invoice.invoiceDate)}{invoice.installmentNumber ? ` · Installment ${invoice.installmentNumber}` : ""} · Balance {formatRupees(invoice.balanceDue)}</p>
             <p className={styles.total}>{formatRupees(invoice.grandTotal)}</p>
+            {(invoice.discountAmount ?? 0) > 0 ? <p>Discount {formatRupees(invoice.discountAmount ?? 0)}</p> : null}
             <div className={styles.cardActions}>
-              <button type="button" onClick={() => setViewing(invoice)}><Eye size={15} /> View</button>
+              <button type="button" onClick={() => openInvoice(invoice)}><Eye size={15} /> View</button>
               <button type="button" onClick={() => void sendInvoice(invoice)} disabled={busy}><MessageCircle size={15} /> WhatsApp</button>
               <button className={styles.danger} type="button" onClick={() => setDeleting(invoice)} disabled={busy}><Trash2 size={15} /> Delete</button>
             </div>
@@ -133,7 +163,16 @@ export function InvoicesPage() {
                 <button className={styles.secondaryButton} type="button" onClick={() => setViewing(null)}>Close</button>
               </div>
             </div>
-            <div className={styles.modalScroll}><InvoiceLetter invoice={viewing} /></div>
+            <div className={styles.modalScroll}>
+              <div className={styles.discountBar}>
+                <label className={styles.field}>
+                  <span>Discount amount</span>
+                  <input type="number" min="0" step="0.01" value={discount} onChange={(event) => setDiscount(Number(event.target.value))} />
+                </label>
+                <button className={styles.primaryButton} type="button" onClick={() => void saveDiscount()} disabled={busy}>Save discount</button>
+              </div>
+              <InvoiceLetter invoice={viewing} />
+            </div>
           </div>
         </div>
       ) : null}

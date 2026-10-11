@@ -77,10 +77,9 @@ const finished = record({
   approvedAt: "2026-10-02T00:00:00.000Z",
 });
 
-test("sidebar customers group lists the three new pages", () => {
+test("sidebar customers group lists profiles and the payment ledger", () => {
   const customers = billingNav.find((group) => group.label === "Customers");
   expect(customers?.items.map((item) => [item.label, item.href])).toEqual([
-    ["Quoted & In Process", "/billing/customers"],
     ["Customer Profiles", "/billing/profiles"],
     ["Payment Ledger", "/billing/ledger"],
   ]);

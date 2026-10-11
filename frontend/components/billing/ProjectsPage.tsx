@@ -48,6 +48,11 @@ export function ProjectsPage() {
   }
 
   useEffect(() => {
+    if (loading || window.location.hash !== "#completed") return;
+    document.getElementById("completed")?.scrollIntoView({ block: "start" });
+  }, [loading, projects]);
+
+  useEffect(() => {
     let cancelled = false;
     refresh()
       .catch((error: unknown) => {
@@ -215,7 +220,7 @@ export function ProjectsPage() {
       <div className={styles.cards}>{active.map(renderCard)}</div>
       {completed.length > 0 ? (
         <>
-          <h2 className={styles.blockLabel}>Completed</h2>
+          <h2 className={styles.blockLabel} id="completed">Completed</h2>
           <div className={styles.cards}>{completed.map(renderCard)}</div>
         </>
       ) : null}

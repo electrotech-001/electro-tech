@@ -134,8 +134,9 @@ export function QuotationForm({
               const computed = totals.items[index];
               return (
                 <tr key={index}>
-                  <td>{index + 1}</td>
+                  <td><span className={styles.cellLabel}>Serial no</span>{index + 1}</td>
                   <td>
+                    <span className={styles.cellLabel}>Description</span>
                     <textarea
                       value={item.description}
                       rows={2}
@@ -144,6 +145,7 @@ export function QuotationForm({
                     />
                   </td>
                   <td>
+                    <span className={styles.cellLabel}>Qty</span>
                     <input
                       type="number"
                       min="0.01"
@@ -154,6 +156,7 @@ export function QuotationForm({
                     />
                   </td>
                   <td>
+                    <span className={styles.cellLabel}>Unit</span>
                     <input
                       value={item.unit}
                       aria-label={`Unit ${index + 1}`}
@@ -161,6 +164,7 @@ export function QuotationForm({
                     />
                   </td>
                   <td>
+                    <span className={styles.cellLabel}>Price</span>
                     <input
                       type="number"
                       min="0"
@@ -170,8 +174,9 @@ export function QuotationForm({
                       onChange={(event) => set("items", updateItem(draft.items, index, { price: Number(event.target.value) }))}
                     />
                   </td>
-                  <td>{formatRupees(computed?.taxableAmount ?? 0)}</td>
+                  <td><span className={styles.cellLabel}>Taxable amount</span>{formatRupees(computed?.taxableAmount ?? 0)}</td>
                   <td>
+                    <span className={styles.cellLabel}>Tax %</span>
                     <input
                       type="number"
                       min="0"
@@ -182,7 +187,7 @@ export function QuotationForm({
                       onChange={(event) => set("items", updateItem(draft.items, index, { taxPercent: Number(event.target.value) }))}
                     />
                   </td>
-                  <td>{formatRupees(computed?.lineTotal ?? 0)}</td>
+                  <td><span className={styles.cellLabel}>Total</span>{formatRupees(computed?.lineTotal ?? 0)}</td>
                   <td>
                     {draft.items.length > 1 ? (
                       <button

@@ -29,6 +29,7 @@ export type ScheduleLine = {
   amount: number;
   status: "due" | "paid";
   paidAmount: number;
+  discountAmount: number;
   paidDate: string | null;
   paymentMode: BankMode | null;
 };
@@ -40,6 +41,7 @@ export type PaymentRecord = {
   installmentNumber: number | null;
   expectedAmount: number;
   paidAmount: number;
+  discountAmount: number;
   paymentDate: string;
   paymentMode: BankMode;
 };
@@ -60,6 +62,7 @@ export type InvoiceRecord = {
   advancePaid: number;
   balanceDue: number;
   grandTotal: number;
+  discountAmount: number;
   installmentNumber: number | null;
   payments: PaymentRecord[];
   schedule?: ScheduleLine[];
@@ -156,9 +159,28 @@ export function buildSchedule(project: QuotationRecord, dueDates: string[]): Sch
     amount: line.amount,
     status: "due" as const,
     paidAmount: 0,
+    discountAmount: 0,
     paidDate: null,
     paymentMode: null,
   }));
+}
+
+export function normalizeDiscount(value: number | undefined): number {
+  const amount = roundMoney(Number(value ?? 0));
+  if (!Number.isFinite(amount) || amount < 0) throw new DocumentError("Enter a discount of zero or more.");
+  return amount;
+}
+
+export function discountTotal(payments: PaymentRecord[]): number {
+  return roundMoney(payments.reduce((sum, payment) => sum + (payment.discountAmount ?? 0), 0));
+}
+
+function paymentDiscountFor(payments: PaymentRecord[], installmentNumber: number): number {
+  return roundMoney(payments.filter((payment) => payment.installmentNumber === installmentNumber).reduce((sum, payment) => sum + (payment.discountAmount ?? 0), 0));
+}
+
+function settledShare(line: ScheduleLine, payments: PaymentRecord[]): number {
+  return roundMoney(line.paidAmount + (line.discountAmount ?? 0) + paymentDiscountFor(payments, line.number));
 }
 
 export function financeBalance(project: QuotationRecord): number {
@@ -172,17 +194,17 @@ export function paidTotal(payments: PaymentRecord[]): number {
   return roundMoney(payments.reduce((sum, payment) => sum + payment.paidAmount, 0));
 }
 
-export function redistribute(project: QuotationRecord, schedule: ScheduleLine[]): ScheduleLine[] {
+export function redistribute(project: QuotationRecord, schedule: ScheduleLine[], payments: PaymentRecord[] = []): ScheduleLine[] {
   const unpaid = schedule.filter((line) => line.status === "due");
-  const collected = roundMoney(schedule.filter((line) => line.status === "paid").reduce((sum, line) => sum + line.paidAmount, 0));
+  const collected = roundMoney(schedule.filter((line) => line.status === "paid").reduce((sum, line) => sum + settledShare(line, payments), 0));
   const remaining = roundMoney(Math.max(0, financeBalance(project) - collected));
   const split = unpaid.length > 0 ? splitInstallments(remaining, unpaid.length) : [];
   let cursor = 0;
   return schedule.map((line) => {
-    if (line.status === "paid") return { ...line, amount: line.paidAmount };
+    if (line.status === "paid") return { ...line, amount: settledShare(line, payments), discountAmount: line.discountAmount ?? 0 };
     const amount = split[cursor]?.amount ?? 0;
     cursor += 1;
-    return { ...line, amount };
+    return { ...line, amount, discountAmount: line.discountAmount ?? 0 };
   });
 }
 
@@ -201,6 +223,7 @@ function blankInvoice(project: QuotationRecord, serialNumber: number, kind: Invo
     advancePaid: 0,
     balanceDue: 0,
     grandTotal: project.grandTotal,
+    discountAmount: 0,
     installmentNumber: null,
     payments: [],
     project,
@@ -228,6 +251,7 @@ export function issueDirectInvoice(workspace: Workspace, reservedSerial: number,
       advancePaid: 0,
       balanceDue: workspace.project.grandTotal,
       grandTotal: workspace.project.grandTotal,
+      discountAmount: 0,
     }],
   };
 }
@@ -235,12 +259,15 @@ export function issueDirectInvoice(workspace: Workspace, reservedSerial: number,
 export function rebuildDirectInvoices(workspace: Workspace, reservedSerial: number): Workspace {
   const payments = [...workspace.payments].sort((a, b) => a.paymentDate.localeCompare(b.paymentDate) || a.id.localeCompare(b.id));
   const total = paidTotal(payments);
-  const balance = roundMoney(Math.max(0, workspace.project.grandTotal - total));
   const existing = workspace.invoices.find((invoice) => invoice.kind !== "installment");
-  if (!existing && total <= 0) return { ...workspace, invoices: [], payments };
+  const invoiceDiscount = existing?.discountAmount ?? 0;
+  const relief = roundMoney(invoiceDiscount + discountTotal(payments));
+  const balance = roundMoney(Math.max(0, workspace.project.grandTotal - total - relief));
+  if (!existing && total <= 0 && invoiceDiscount <= 0) return { ...workspace, invoices: [], payments };
   const invoice = existing ?? blankInvoice(workspace.project, nextSerial([], reservedSerial), "advance");
   const latest = payments[payments.length - 1];
   const linked = payments.map((payment) => ({ ...payment, invoiceId: invoice.id }));
+  const covered = total > 0 || invoiceDiscount > 0 || discountTotal(payments) > 0;
   return {
     ...workspace,
     payments: linked,
@@ -248,10 +275,11 @@ export function rebuildDirectInvoices(workspace: Workspace, reservedSerial: numb
       ...invoice,
       project: workspace.project,
       kind: "advance",
-      status: total <= 0 ? "due" : balance <= 0 ? "paid" : "partial",
+      status: balance <= 0 && covered ? "paid" : total > 0 ? "partial" : "due",
       advancePaid: total,
       balanceDue: balance,
       grandTotal: workspace.project.grandTotal,
+      discountAmount: invoiceDiscount,
       paymentDate: latest?.paymentDate ?? null,
       paymentMode: latest?.paymentMode ?? null,
       payments: linked,
@@ -265,7 +293,7 @@ export function deleteInvoice(workspace: Workspace, invoiceId: string): Workspac
   if (invoice.kind === "installment" && workspace.agreement && invoice.installmentNumber != null) {
     const number = invoice.installmentNumber;
     const payments = workspace.payments.filter((payment) => payment.installmentNumber !== number && payment.invoiceId !== invoiceId);
-    const schedule = redistribute(workspace.project, workspace.agreement.schedule.filter((line) => line.number !== number));
+    const schedule = redistribute(workspace.project, workspace.agreement.schedule.filter((line) => line.number !== number), payments);
     const next: Workspace = {
       ...workspace,
       payments,
@@ -284,7 +312,7 @@ export function deleteInvoice(workspace: Workspace, invoiceId: string): Workspac
 
 export function recordDirectPayment(
   workspace: Workspace,
-  input: { paidAmount: number; paymentDate: string; paymentMode: BankMode },
+  input: { paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode },
   reservedSerial: number,
 ): Workspace {
   if (workspace.project.paymentMode !== "direct") throw new DocumentError("This project uses installments. Receive the installment instead.");
@@ -292,10 +320,14 @@ export function recordDirectPayment(
   assertDate(input.paymentDate, "payment date");
   if (input.paymentMode !== "bank_transfer" && input.paymentMode !== "cash") throw new DocumentError("Choose bank transfer or cash.");
   const amount = roundMoney(input.paidAmount);
-  const already = paidTotal(workspace.payments);
+  const discount = normalizeDiscount(input.discountAmount);
+  const invoiceDiscount = workspace.invoices.find((invoice) => invoice.kind !== "installment")?.discountAmount ?? 0;
+  const already = roundMoney(paidTotal(workspace.payments) + invoiceDiscount + discountTotal(workspace.payments));
   const due = roundMoney(workspace.project.grandTotal - already);
   if (!(amount > 0)) throw new DocumentError("Enter the paid amount.");
-  if (amount > due) throw new DocumentError("Paid amount cannot be more than the remaining balance.");
+  if (roundMoney(amount + discount) > due) {
+    throw new DocumentError(discount > 0 ? "Paid amount and discount cannot be more than the remaining balance." : "Paid amount cannot be more than the remaining balance.");
+  }
   const payment: PaymentRecord = {
     id: crypto.randomUUID(),
     projectId: workspace.project.id,
@@ -303,6 +335,7 @@ export function recordDirectPayment(
     installmentNumber: null,
     expectedAmount: due,
     paidAmount: amount,
+    discountAmount: discount,
     paymentDate: input.paymentDate,
     paymentMode: input.paymentMode,
   };
@@ -316,6 +349,7 @@ export function syncInstallmentInvoices(workspace: Workspace, schedule: Schedule
     const base = existing ?? blankInvoice(workspace.project, nextSerial([], serialCursor), "installment");
     if (!existing) serialCursor = base.serialNumber;
     const linePayments = workspace.payments.filter((payment) => payment.installmentNumber === line.number);
+    const invoiceDiscount = line.discountAmount ?? 0;
     return {
       ...base,
       project: workspace.project,
@@ -325,8 +359,9 @@ export function syncInstallmentInvoices(workspace: Workspace, schedule: Schedule
       paymentDate: line.paidDate,
       paymentMode: line.paymentMode,
       advancePaid: line.paidAmount,
-      balanceDue: line.status === "paid" ? 0 : line.amount,
+      balanceDue: line.status === "paid" ? 0 : roundMoney(Math.max(0, line.amount - invoiceDiscount)),
       grandTotal: line.amount,
+      discountAmount: invoiceDiscount,
       installmentNumber: line.number,
       payments: linePayments,
       schedule,
@@ -334,9 +369,18 @@ export function syncInstallmentInvoices(workspace: Workspace, schedule: Schedule
   });
 }
 
+function installmentRoom(workspace: Workspace, installmentNumber: number, ignorePaymentId?: string): number {
+  if (!workspace.agreement) return 0;
+  const payments = workspace.payments.filter((payment) => payment.id !== ignorePaymentId);
+  const collected = roundMoney(workspace.agreement.schedule.filter((line) => line.status === "paid" && line.number !== installmentNumber).reduce((sum, line) => sum + settledShare(line, payments), 0));
+  const reserved = roundMoney(workspace.agreement.schedule.filter((line) => line.number !== installmentNumber && line.status !== "paid").reduce((sum, line) => sum + (line.discountAmount ?? 0), 0));
+  const current = workspace.agreement.schedule.find((line) => line.number === installmentNumber);
+  return roundMoney(Math.max(0, financeBalance(workspace.project) - collected - reserved - (current?.discountAmount ?? 0)));
+}
+
 export function receiveInstallment(
   workspace: Workspace,
-  input: { installmentNumber: number; paidAmount: number; paymentDate: string; paymentMode: BankMode },
+  input: { installmentNumber: number; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode },
   reservedSerial: number,
 ): Workspace {
   if (!workspace.agreement || workspace.project.paymentMode !== "installments") {
@@ -349,14 +393,15 @@ export function receiveInstallment(
   if (!current) throw new DocumentError("That installment was not found.", 404, "not_found");
   if (current.status === "paid") throw new DocumentError("This installment is already paid.", 409, "already_paid");
   const amount = roundMoney(input.paidAmount);
-  const collected = roundMoney(workspace.agreement.schedule.filter((line) => line.status === "paid").reduce((sum, line) => sum + line.paidAmount, 0));
-  const due = roundMoney(financeBalance(workspace.project) - collected);
+  const discount = normalizeDiscount(input.discountAmount);
+  const due = installmentRoom(workspace, current.number);
   if (!(amount > 0)) throw new DocumentError("Enter the paid amount.");
-  if (amount > due) throw new DocumentError("Paid amount cannot be more than the remaining balance.");
+  if (roundMoney(amount + discount) > due) {
+    throw new DocumentError(discount > 0 ? "Paid amount and discount cannot be more than the remaining balance." : "Paid amount cannot be more than the remaining balance.");
+  }
   const marked = workspace.agreement.schedule.map((line) => line.number === current.number
-    ? { ...line, status: "paid" as const, paidAmount: amount, paidDate: input.paymentDate, paymentMode: input.paymentMode, amount }
+    ? { ...line, status: "paid" as const, paidAmount: amount, discountAmount: line.discountAmount ?? 0, paidDate: input.paymentDate, paymentMode: input.paymentMode }
     : line);
-  const schedule = redistribute(workspace.project, marked);
   const payment: PaymentRecord = {
     id: crypto.randomUUID(),
     projectId: workspace.project.id,
@@ -364,13 +409,16 @@ export function receiveInstallment(
     installmentNumber: current.number,
     expectedAmount: current.amount,
     paidAmount: amount,
+    discountAmount: discount,
     paymentDate: input.paymentDate,
     paymentMode: input.paymentMode,
   };
+  const payments = [...workspace.payments, payment];
+  const schedule = redistribute(workspace.project, marked, payments);
   const next: Workspace = {
     ...workspace,
     agreement: { ...workspace.agreement, schedule },
-    payments: [...workspace.payments, payment],
+    payments,
   };
   return { ...next, invoices: syncInstallmentInvoices(next, schedule, reservedSerial) };
 }
@@ -378,33 +426,68 @@ export function receiveInstallment(
 export function editPayment(
   workspace: Workspace,
   paymentId: string,
-  input: { paidAmount: number; paymentDate: string; paymentMode: BankMode },
+  input: { paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode },
   reservedSerial: number,
 ): Workspace {
   assertDate(input.paymentDate, "payment date");
   if (input.paymentMode !== "bank_transfer" && input.paymentMode !== "cash") throw new DocumentError("Choose bank transfer or cash.");
   const amount = roundMoney(input.paidAmount);
+  const discount = normalizeDiscount(input.discountAmount);
   if (!(amount > 0)) throw new DocumentError("Enter the paid amount.");
   const payment = workspace.payments.find((entry) => entry.id === paymentId);
   if (!payment) throw new DocumentError("Payment was not found.", 404, "not_found");
   const payments = workspace.payments.map((entry) => entry.id === paymentId
-    ? { ...entry, paidAmount: amount, paymentDate: input.paymentDate, paymentMode: input.paymentMode }
+    ? { ...entry, paidAmount: amount, discountAmount: discount, paymentDate: input.paymentDate, paymentMode: input.paymentMode }
     : entry);
   if (workspace.project.paymentMode === "direct") {
-    const others = paidTotal(payments.filter((entry) => entry.id !== paymentId));
-    if (amount > roundMoney(workspace.project.grandTotal - others)) throw new DocumentError("Paid amount cannot be more than the remaining balance.");
+    const invoiceDiscount = workspace.invoices.find((invoice) => invoice.kind !== "installment")?.discountAmount ?? 0;
+    const others = roundMoney(paidTotal(payments.filter((entry) => entry.id !== paymentId)) + discountTotal(payments.filter((entry) => entry.id !== paymentId)) + invoiceDiscount);
+    if (roundMoney(amount + discount) > roundMoney(workspace.project.grandTotal - others)) {
+      throw new DocumentError(discount > 0 ? "Paid amount and discount cannot be more than the remaining balance." : "Paid amount cannot be more than the remaining balance.");
+    }
     return rebuildDirectInvoices({ ...workspace, payments }, reservedSerial);
   }
   if (!workspace.agreement || payment.installmentNumber == null) throw new DocumentError("Payment was not found.", 404, "not_found");
   const marked = workspace.agreement.schedule.map((line) => line.number === payment.installmentNumber
-    ? { ...line, paidAmount: amount, paidDate: input.paymentDate, paymentMode: input.paymentMode, status: "paid" as const }
+    ? { ...line, paidAmount: amount, paidDate: input.paymentDate, paymentMode: input.paymentMode, status: "paid" as const, discountAmount: line.discountAmount ?? 0 }
     : line);
-  const collectedWithout = roundMoney(marked.filter((line) => line.status === "paid" && line.number !== payment.installmentNumber).reduce((sum, line) => sum + line.paidAmount, 0));
-  if (amount > roundMoney(financeBalance(workspace.project) - collectedWithout)) {
-    throw new DocumentError("Paid amount cannot be more than the remaining balance.");
+  const room = installmentRoom({ ...workspace, agreement: { ...workspace.agreement, schedule: marked }, payments }, payment.installmentNumber, paymentId);
+  if (roundMoney(amount + discount) > room) {
+    throw new DocumentError(discount > 0 ? "Paid amount and discount cannot be more than the remaining balance." : "Paid amount cannot be more than the remaining balance.");
   }
-  const schedule = redistribute(workspace.project, marked);
+  const schedule = redistribute(workspace.project, marked, payments);
   const next = { ...workspace, payments, agreement: { ...workspace.agreement, schedule } };
+  return { ...next, invoices: syncInstallmentInvoices(next, schedule, reservedSerial) };
+}
+
+export function setInvoiceDiscount(workspace: Workspace, invoiceId: string, discountAmount: number, reservedSerial: number): Workspace {
+  if (workspace.project.status === "completed") throw new DocumentError("This project is already completed.", 409, "completed");
+  const discount = normalizeDiscount(discountAmount);
+  const invoice = workspace.invoices.find((entry) => entry.id === invoiceId);
+  if (!invoice) throw new DocumentError("Invoice was not found.", 404, "not_found");
+  if (workspace.project.paymentMode === "direct") {
+    const settled = roundMoney(paidTotal(workspace.payments) + discountTotal(workspace.payments));
+    if (discount > roundMoney(workspace.project.grandTotal - settled)) throw new DocumentError("Discount cannot be more than the remaining balance.");
+    const invoices = workspace.invoices.map((entry) => entry.id === invoiceId ? { ...entry, discountAmount: discount } : entry);
+    return rebuildDirectInvoices({ ...workspace, invoices }, reservedSerial);
+  }
+  if (!workspace.agreement || invoice.installmentNumber == null) throw new DocumentError("Invoice was not found.", 404, "not_found");
+  const number = invoice.installmentNumber;
+  const line = workspace.agreement.schedule.find((entry) => entry.number === number);
+  if (!line) throw new DocumentError("Invoice was not found.", 404, "not_found");
+  const paymentDiscount = paymentDiscountFor(workspace.payments, number);
+  const cash = line.status === "paid" ? line.paidAmount : 0;
+  const others = roundMoney(workspace.agreement.schedule.reduce((sum, entry) => {
+    if (entry.number === number) return sum;
+    if (entry.status === "paid") return sum + settledShare(entry, workspace.payments);
+    return sum + (entry.discountAmount ?? 0);
+  }, 0));
+  const room = roundMoney(financeBalance(workspace.project) - others - cash - paymentDiscount);
+  if (discount > room) throw new DocumentError("Discount cannot be more than the remaining balance.");
+  if (line.status !== "paid" && discount > line.amount) throw new DocumentError("Discount cannot be more than this invoice amount.");
+  const marked = workspace.agreement.schedule.map((entry) => entry.number === number ? { ...entry, discountAmount: discount } : entry);
+  const schedule = line.status === "paid" ? redistribute(workspace.project, marked, workspace.payments) : marked;
+  const next = { ...workspace, agreement: { ...workspace.agreement, schedule } };
   return { ...next, invoices: syncInstallmentInvoices(next, schedule, reservedSerial) };
 }
 

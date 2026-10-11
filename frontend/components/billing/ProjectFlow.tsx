@@ -199,17 +199,18 @@ export function DirectPaymentDialog({
   onSaved: () => void;
 }) {
   const [paidAmount, setPaidAmount] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(0);
   const [paymentDate, setPaymentDate] = useState(todayIsoDate());
   const [paymentMode, setPaymentMode] = useState<BankMode>("cash");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const remaining = Math.max(0, Math.round((balance - Number(paidAmount || 0)) * 100) / 100);
+  const remaining = Math.max(0, Math.round((balance - Number(paidAmount || 0) - Number(discountAmount || 0)) * 100) / 100);
 
   async function onSubmit() {
     setSaving(true);
     setError(null);
     try {
-      await recordPayment(project.id, { kind: "direct", paidAmount: Number(paidAmount), paymentDate, paymentMode });
+      await recordPayment(project.id, { kind: "direct", paidAmount: Number(paidAmount), discountAmount: Number(discountAmount) || 0, paymentDate, paymentMode });
       onSaved();
     } catch (caught) {
       setError(caught instanceof DocumentApiError ? caught.message : "The payment could not be saved.");
@@ -224,6 +225,7 @@ export function DirectPaymentDialog({
         <h2 id="invoice-title">Receive payment · {project.serial}</h2>
         <p>Total {formatRupees(project.grandTotal)}. The remaining balance invoice updates with this payment, its date, and its mode.</p>
         <label className={styles.field}><span>{firstPayment ? "Advance payment" : "Paid amount"}</span><input type="number" min="0" step="0.01" value={paidAmount} onChange={(event) => setPaidAmount(Number(event.target.value))} /></label>
+        <label className={styles.field}><span>Discount amount</span><input type="number" min="0" step="0.01" value={discountAmount} onChange={(event) => setDiscountAmount(Number(event.target.value))} /></label>
         <label className={styles.field}><span>Remaining balance</span><input readOnly value={formatRupees(remaining)} /></label>
         <label className={styles.field}><span>Date of payment</span><input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label>
         <div className={styles.field}>

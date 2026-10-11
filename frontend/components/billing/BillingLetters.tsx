@@ -50,6 +50,11 @@ function PaidSeal({ date }: { date: string }) {
   );
 }
 
+function discountOf(invoice: InvoiceRecord): number {
+  const fromPayments = invoice.payments.reduce((sum, payment) => sum + (payment.discountAmount ?? 0), 0);
+  return Math.round(((invoice.discountAmount ?? 0) + fromPayments) * 100) / 100;
+}
+
 function modeLabel(mode: PaymentRecord["paymentMode"] | null): string {
   if (mode === "bank_transfer") return "Bank transfer";
   if (mode === "cash") return "Cash";
@@ -144,6 +149,7 @@ export function AgreementLetter({ agreement, paper = false }: { agreement: Agree
 export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceRecord; paper?: boolean }) {
   const project = invoice.project;
   const paid = invoice.status === "paid";
+  const discount = discountOf(invoice);
 
   return (
     <article className={`${styles.letter} quotation-letter ${paper ? styles.letterPaper : ""}`}>
@@ -227,6 +233,7 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
         <table className={styles.totals}>
           <tbody>
             <tr><th>Total amount</th><td>{formatRupees(invoice.grandTotal)}</td></tr>
+            {discount > 0 ? <tr><th>Discount</th><td>{formatRupees(discount)}</td></tr> : null}
             <tr><th>Received</th><td>{formatRupees(invoice.advancePaid)}</td></tr>
             <tr className={styles.grand}><th>Balance due</th><td>{formatRupees(invoice.balanceDue)}</td></tr>
           </tbody>
@@ -279,6 +286,7 @@ export function PaymentSlip({
           <div><dt>Project</dt><dd>{project.serial}</dd></div>
           <div><dt>Payment date</dt><dd>{formatDisplayDate(payment.paymentDate)}</dd></div>
           <div><dt>Mode</dt><dd>{modeLabel(payment.paymentMode)}</dd></div>
+          {(payment.discountAmount ?? 0) > 0 ? <div><dt>Discount</dt><dd>{formatRupees(payment.discountAmount ?? 0)}</dd></div> : null}
           {payment.installmentNumber ? <div><dt>Installment</dt><dd>{payment.installmentNumber}</dd></div> : null}
           <div><dt>Contact</dt><dd>{project.contactNo}</dd></div>
         </dl>
