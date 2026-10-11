@@ -441,10 +441,6 @@
   gap: 14px;
 }
 
-.cardWide {
-  grid-column: 1 / -1;
-}
-
 .card {
   display: grid;
   gap: 8px;
@@ -454,6 +450,25 @@
   border: 1px solid rgba(16, 20, 16, 0.06);
   border-radius: 18px;
   box-shadow: 0 10px 30px rgba(23, 32, 25, 0.04);
+}
+
+.cardWide {
+  grid-column: 1 / -1;
+}
+
+.cardDue {
+  background: #fdecec;
+  border-color: #f3c1c1;
+}
+
+.cardPartial {
+  background: #fff4e5;
+  border-color: #f3d2a6;
+}
+
+.cardPaid {
+  background: #e8f6ee;
+  border-color: #b7e0c6;
 }
 
 .cardTop,

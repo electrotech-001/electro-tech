@@ -8,6 +8,7 @@ import {
   billingMfaEnabled,
   currentAssuranceLevel,
   hasBillingAccess,
+  needsAuthenticatorEnrollment,
   signInWithPassword,
   signOutBilling,
   refreshSecondFactorChallenge,
@@ -37,11 +38,13 @@ export function BillingLoginPage() {
       try {
         const level = await currentAssuranceLevel();
         if (!active) return;
-        if (hasBillingAccess(level)) {
+        const setup = await needsAuthenticatorEnrollment();
+        if (!active) return;
+        if (hasBillingAccess(level) && !setup) {
           router.replace("/billing");
           return;
         }
-        if (billingMfaEnabled && level === "aal1") {
+        if (billingMfaEnabled && (level === "aal1" || setup)) {
           const next = await startSecondFactor();
           if (!active) return;
           setFactor(next);

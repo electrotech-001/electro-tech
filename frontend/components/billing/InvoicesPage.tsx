@@ -1,10 +1,10 @@
 "use client";
 
-import { Eye, MessageCircle, Trash2 } from "lucide-react";
+import { Eye, MessageCircle, Pencil, Printer, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { deleteInvoice, DocumentApiError, listInvoices, updateInvoiceDiscount, type InvoiceRecord } from "@/lib/billing/documents-api";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
-import { printFromControl } from "@/lib/billing/print-letter";
+import { printBillingLetter, printFromControl } from "@/lib/billing/print-letter";
 import { formatDisplayDate, formatRupees } from "@/lib/billing/quotation-math";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import { InvoiceLetter } from "./BillingLetters";
@@ -12,7 +12,7 @@ import shell from "./billing-shell.module.css";
 import styles from "./quotation.module.css";
 import "./quotation-print.css";
 
-export function InvoicesPage() {
+export function InvoicesPage({ completed = false }: { completed?: boolean }) {
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
@@ -44,6 +44,23 @@ export function InvoicesPage() {
         ? error.message
         : "The invoice could not be sent on WhatsApp.";
       setBanner({ tone: "bad", text: message });
+    } finally {
+      setCapture(null);
+      setBusy(false);
+    }
+  }
+
+  async function printInvoice(invoice: InvoiceRecord) {
+    setBusy(true);
+    setBanner(null);
+    setCapture(invoice);
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, 80));
+      const root = captureRef.current;
+      if (!root) throw new DocumentApiError("The invoice could not be prepared for printing.");
+      await printBillingLetter(root);
+    } catch (error) {
+      setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The invoice could not be printed." });
     } finally {
       setCapture(null);
       setBusy(false);
@@ -116,26 +133,35 @@ export function InvoicesPage() {
     };
   }, []);
 
+  const visible = invoices.filter((invoice) => (completed ? invoice.status === "paid" : invoice.status !== "paid"));
+
   return (
     <>
       <header className={shell.pageHeader}>
         <div>
           <p className={shell.kicker}>Billing CMS</p>
-          <h1 className={shell.title}>Invoices</h1>
-          <p className={shell.summary}>Each invoice stays here and can be sent on WhatsApp. A later payment updates the same invoice with the amount, date, and mode.</p>
+          <h1 className={shell.title}>{completed ? "Completed Invoices" : "Pending Invoices"}</h1>
+          <p className={shell.summary}>
+            {completed
+              ? "Fully paid invoices stay here. You can view, edit the discount, print, or delete them."
+              : "Invoices that still have a balance stay here. A later payment updates the same invoice with the amount, date, and mode."}
+          </p>
         </div>
       </header>
       {banner ? <p className={banner.tone === "ok" ? styles.success : styles.error}>{banner.text}</p> : null}
       {loading ? <p className={styles.hint}>Loading invoices…</p> : null}
-      {!loading && invoices.length === 0 ? (
+      {!loading && visible.length === 0 ? (
         <section className={`${shell.panel} ${shell.empty}`}>
-          <h2>No invoices yet</h2>
-          <p>Create an invoice from a project card.</p>
+          <h2>{completed ? "No completed invoices" : "No pending invoices"}</h2>
+          <p>{completed ? "An invoice moves here once it is fully paid." : "Create an invoice from a project card."}</p>
         </section>
       ) : null}
       <div className={styles.cards}>
-        {invoices.map((invoice) => (
-          <article className={styles.card} key={invoice.id}>
+        {visible.map((invoice) => (
+          <article
+            className={`${styles.card} ${invoice.status === "paid" ? styles.cardPaid : invoice.status === "partial" ? styles.cardPartial : styles.cardDue}`}
+            key={invoice.id}
+          >
             <div className={styles.cardTop}>
               <strong>{invoice.serial}</strong>
               <span className={styles.badge}>{invoice.status === "partial" ? "Partially paid" : invoice.status === "paid" ? "Paid" : "Due"}</span>
@@ -150,6 +176,8 @@ export function InvoicesPage() {
             {(invoice.discountAmount ?? 0) > 0 ? <p>Discount {formatRupees(invoice.discountAmount ?? 0)}</p> : null}
             <div className={styles.cardActions}>
               <button type="button" onClick={() => openInvoice(invoice)}><Eye size={15} /> View</button>
+              {completed ? <button type="button" onClick={() => openInvoice(invoice)}><Pencil size={15} /> Edit</button> : null}
+              {completed ? <button type="button" onClick={() => void printInvoice(invoice)} disabled={busy}><Printer size={15} /> Print</button> : null}
               <button type="button" onClick={() => void sendInvoice(invoice)} disabled={busy}><MessageCircle size={15} /> WhatsApp</button>
               <button className={styles.danger} type="button" onClick={() => setDeleting(invoice)} disabled={busy}><Trash2 size={15} /> Delete</button>
             </div>

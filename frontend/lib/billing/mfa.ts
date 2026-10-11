@@ -1,8 +1,8 @@
 import type { AuthError, Session } from "@supabase/supabase-js";
 import { billingSupabase } from "./supabase";
 
-/** Authenticator setup stays available, but billing sign-in does not ask for it yet. */
-export const billingMfaEnabled = false;
+/** Billing sign-in requires the authenticator app. */
+export const billingMfaEnabled = true;
 
 export type SecondFactor =
   | {
@@ -47,6 +47,13 @@ export async function signInWithPassword(email: string, password: string): Promi
 export function hasBillingAccess(level: "aal1" | "aal2" | null): boolean {
   if (level === "aal2") return true;
   return !billingMfaEnabled && level === "aal1";
+}
+
+export async function needsAuthenticatorEnrollment(): Promise<boolean> {
+  if (!billingMfaEnabled) return false;
+  const listed = await billingSupabase.auth.mfa.listFactors();
+  if (listed.error || !listed.data) return true;
+  return !listed.data.all.some((factor) => factor.factor_type === "totp" && factor.status === "verified");
 }
 
 export async function currentAssuranceLevel(): Promise<"aal1" | "aal2" | null> {

@@ -8,6 +8,7 @@ import {
   MessageCircle,
   Receipt,
   BadgePercent,
+  CircleCheck,
   Smartphone,
   SunMedium,
   Users,
@@ -45,7 +46,8 @@ export const billingNav: BillingNavGroup[] = [
   {
     label: "Billing",
     items: [
-      { href: "/billing/invoices", label: "Invoices", icon: Receipt },
+      { href: "/billing/invoices", label: "Pending Invoices", icon: Receipt, exact: true },
+      { href: "/billing/invoices/completed", label: "Completed Invoices", icon: CircleCheck },
       { href: "/billing/payments", label: "Receive Payments", icon: Wallet },
       { href: "/billing/discounts", label: "Discounts", icon: BadgePercent },
     ],

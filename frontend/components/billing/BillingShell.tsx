@@ -4,7 +4,7 @@ import { Menu, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { billingNav, isBillingNavActive } from "@/lib/billing/navigation";
-import { currentAssuranceLevel, hasBillingAccess, signOutBilling } from "@/lib/billing/mfa";
+import { currentAssuranceLevel, hasBillingAccess, needsAuthenticatorEnrollment, signOutBilling } from "@/lib/billing/mfa";
 import { billingSupabase } from "@/lib/billing/supabase";
 import styles from "./billing-shell.module.css";
 
@@ -20,7 +20,7 @@ export function BillingShell({ children }: { children: ReactNode }) {
     async function guard() {
       const level = await currentAssuranceLevel();
       if (!active) return;
-      if (!hasBillingAccess(level)) {
+      if (!hasBillingAccess(level) || await needsAuthenticatorEnrollment()) {
         router.replace("/billing/login");
         return;
       }
