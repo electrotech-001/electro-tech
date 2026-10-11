@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { defaultAgreementWording } from "@/lib/billing/agreement-wording";
-import { DocumentApiError, readImageFile, saveAgreement, updateAgreementWording, recordPayment, type AgreementRecord, type BankMode, type GuarantorInput } from "@/lib/billing/documents-api";
+import { DocumentApiError, readImageFile, saveAgreement, updateAgreementWording, recordPayment, type AgreementRecord, type BankMode, type GuarantorInput, type PaymentRecord } from "@/lib/billing/documents-api";
 import { printFromControl } from "@/lib/billing/print-letter";
 import { formatRupees, maskCnic, maskPhone, todayIsoDate, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { AgreementLetter } from "./BillingLetters";
@@ -196,7 +196,7 @@ export function DirectPaymentDialog({
   balance: number;
   firstPayment: boolean;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (payment: PaymentRecord | null) => void;
 }) {
   const [paidAmount, setPaidAmount] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
@@ -210,8 +210,11 @@ export function DirectPaymentDialog({
     setSaving(true);
     setError(null);
     try {
-      await recordPayment(project.id, { kind: "direct", paidAmount: Number(paidAmount), discountAmount: Number(discountAmount) || 0, paymentDate, paymentMode });
-      onSaved();
+      const saved = await recordPayment(project.id, { kind: "direct", paidAmount: Number(paidAmount), discountAmount: Number(discountAmount) || 0, paymentDate, paymentMode });
+      const paid = Number(paidAmount);
+      const discount = Number(discountAmount) || 0;
+      const payment = [...saved.payments].reverse().find((entry) => entry.paymentDate === paymentDate && entry.paidAmount === paid && (entry.discountAmount ?? 0) === discount && entry.paymentMode === paymentMode) ?? null;
+      onSaved(payment);
     } catch (caught) {
       setError(caught instanceof DocumentApiError ? caught.message : "The payment could not be saved.");
     } finally {
@@ -223,7 +226,8 @@ export function DirectPaymentDialog({
     <div className={styles.modal} role="presentation" onClick={onClose}>
       <div className={styles.confirm} role="dialog" aria-modal="true" aria-labelledby="invoice-title" onClick={(event) => event.stopPropagation()}>
         <h2 id="invoice-title">Receive payment · {project.serial}</h2>
-        <p>Total {formatRupees(project.grandTotal)}. The remaining balance invoice updates with this payment, its date, and its mode.</p>
+        <p>Total {formatRupees(project.grandTotal)}. Cash and discount on this receipt update the balance invoice.</p>
+        <label className={styles.field}><span>Balance amount</span><input readOnly value={formatRupees(balance)} /></label>
         <label className={styles.field}><span>{firstPayment ? "Advance payment" : "Paid amount"}</span><input type="number" min="0" step="0.01" value={paidAmount} onChange={(event) => setPaidAmount(Number(event.target.value))} /></label>
         <label className={styles.field}><span>Discount amount</span><input type="number" min="0" step="0.01" value={discountAmount} onChange={(event) => setDiscountAmount(Number(event.target.value))} /></label>
         <label className={styles.field}><span>Remaining balance</span><input readOnly value={formatRupees(remaining)} /></label>

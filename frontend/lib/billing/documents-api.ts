@@ -164,6 +164,23 @@ export function listLedger(): Promise<LedgerEntry[]> {
   return billingFetch("/api/billing/ledger").then((response) => expectOk(response, "The payment ledger could not be loaded.")).then((payload) => (payload as { entries: LedgerEntry[] }).entries);
 }
 
+export type DiscountEntry = {
+  id: string;
+  customerName: string;
+  cnic: string;
+  projectId: string;
+  projectSerial: string;
+  paymentDate: string;
+  discountAmount: number;
+  paidAmount: number;
+  balanceAmount: number;
+  kind: "payment" | "invoice";
+};
+
+export function listDiscounts(): Promise<DiscountEntry[]> {
+  return billingFetch("/api/billing/discounts").then((response) => expectOk(response, "Discounts could not be loaded.")).then((payload) => (payload as { entries: DiscountEntry[] }).entries);
+}
+
 export type BillingSummary = {
   quotations: number;
   projectsInProcess: number;

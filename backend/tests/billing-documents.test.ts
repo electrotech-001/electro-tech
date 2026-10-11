@@ -216,3 +216,72 @@ test("an installment invoice discount lowers that invoice without relabeling the
   const unpaid = received.agreement?.schedule.filter((line) => line.status === "due") ?? [];
   assert.equal(unpaid.reduce((sum, line) => sum + line.amount, 0), 282000);
 });
+
+test("a direct receipt can close the balance with cash plus a discount, and a full discount can close it with no cash", async () => {
+  const base = project("direct");
+  const quoted: QuotationRecord = {
+    ...base,
+    items: [{
+      lineNo: 1,
+      description: "Hybrid inverter",
+      qty: 1,
+      unit: "Set",
+      price: 200000,
+      taxPercent: 0,
+      taxableAmount: 200000,
+      taxAmount: 0,
+      lineTotal: 200000,
+    }],
+    taxableTotal: 200000,
+    taxTotal: 0,
+    grandTotal: 200000,
+  };
+  const repository = createMemoryDocumentsRepository([quoted]);
+  await repository.issueInvoice("project-1");
+  await repository.recordPayment("project-1", { kind: "direct", paidAmount: 50000, paymentDate: "2026-10-01", paymentMode: "cash" });
+  await repository.recordPayment("project-1", { kind: "direct", paidAmount: 100000, paymentDate: "2026-10-05", paymentMode: "cash" });
+  const closed = await repository.recordPayment("project-1", {
+    kind: "direct",
+    paidAmount: 45000,
+    discountAmount: 5000,
+    paymentDate: "2026-10-09",
+    paymentMode: "cash",
+  });
+  const last = closed.payments.find((payment) => payment.paidAmount === 45000);
+  assert.equal(last?.expectedAmount, 50000);
+  assert.equal(last?.discountAmount, 5000);
+  assert.equal(last?.paidAmount, 45000);
+  assert.equal(closed.invoices[0]?.status, "paid");
+  assert.equal(closed.invoices[0]?.balanceDue, 0);
+  assert.equal(closed.invoices[0]?.advancePaid, 195000);
+  assert.equal(closed.balance, 0);
+  assert.equal(closed.invoices[0]?.payments.length, 3);
+
+  const forgiven = createMemoryDocumentsRepository([quoted]);
+  await forgiven.issueInvoice("project-1");
+  await forgiven.recordPayment("project-1", { kind: "direct", paidAmount: 195000, paymentDate: "2026-10-08", paymentMode: "cash" });
+  const writtenOff = await forgiven.recordPayment("project-1", {
+    kind: "direct",
+    paidAmount: 0,
+    discountAmount: 5000,
+    paymentDate: "2026-10-11",
+    paymentMode: "cash",
+  });
+  const waiver = writtenOff.payments.find((payment) => payment.paidAmount === 0);
+  assert.equal(waiver?.expectedAmount, 5000);
+  assert.equal(waiver?.discountAmount, 5000);
+  assert.equal(writtenOff.invoices[0]?.status, "paid");
+  assert.equal(writtenOff.invoices[0]?.balanceDue, 0);
+  assert.equal(writtenOff.balance, 0);
+  assert.equal((await forgiven.listLedger()).length, 1);
+  const discounts = await forgiven.listDiscounts();
+  assert.equal(discounts.length, 1);
+  assert.equal(discounts[0]?.customerName, "Sheikh Zain");
+  assert.equal(discounts[0]?.discountAmount, 5000);
+  assert.equal(discounts[0]?.balanceAmount, 5000);
+  assert.equal(discounts[0]?.paidAmount, 0);
+  await assert.rejects(
+    () => forgiven.recordPayment("project-1", { kind: "direct", paidAmount: 0, discountAmount: 0, paymentDate: "2026-10-12", paymentMode: "cash" }),
+    /paid amount or a discount/,
+  );
+});

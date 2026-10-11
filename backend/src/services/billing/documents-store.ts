@@ -46,6 +46,7 @@ export type DocumentsRepository = {
   completeProject(projectId: string): Promise<void>;
   projectHasDocuments(projectId: string): Promise<boolean>;
   listLedger(): Promise<LedgerEntry[]>;
+  listDiscounts(): Promise<DiscountEntry[]>;
   summary(): Promise<BillingSummary>;
   renameCustomer(projectIds: string[], customerName: string): Promise<void>;
 };
@@ -73,10 +74,24 @@ export type LedgerEntry = {
   invoiceSerial: string | null;
 };
 
+export type DiscountEntry = {
+  id: string;
+  customerName: string;
+  cnic: string;
+  projectId: string;
+  projectSerial: string;
+  paymentDate: string;
+  discountAmount: number;
+  paidAmount: number;
+  balanceAmount: number;
+  kind: "payment" | "invoice";
+};
+
 export function toLedger(workspaces: Workspace[]): LedgerEntry[] {
   const entries: LedgerEntry[] = [];
   for (const workspace of workspaces) {
     for (const payment of workspace.payments) {
+      if (!(payment.paidAmount > 0)) continue;
       const invoice = workspace.invoices.find((entry) => (
         payment.invoiceId
           ? entry.id === payment.invoiceId
@@ -97,6 +112,43 @@ export function toLedger(workspaces: Workspace[]): LedgerEntry[] {
     }
   }
   return entries.sort((left, right) => left.paymentDate.localeCompare(right.paymentDate) || left.id.localeCompare(right.id));
+}
+
+export function toDiscounts(workspaces: Workspace[]): DiscountEntry[] {
+  const entries: DiscountEntry[] = [];
+  for (const workspace of workspaces) {
+    for (const payment of workspace.payments) {
+      if (!((payment.discountAmount ?? 0) > 0)) continue;
+      entries.push({
+        id: payment.id,
+        customerName: workspace.project.customerName,
+        cnic: workspace.project.cnic,
+        projectId: workspace.project.id,
+        projectSerial: workspace.project.serial,
+        paymentDate: payment.paymentDate,
+        discountAmount: payment.discountAmount ?? 0,
+        paidAmount: payment.paidAmount,
+        balanceAmount: payment.expectedAmount,
+        kind: "payment",
+      });
+    }
+    for (const invoice of workspace.invoices) {
+      if (!((invoice.discountAmount ?? 0) > 0)) continue;
+      entries.push({
+        id: `invoice-${invoice.id}`,
+        customerName: workspace.project.customerName,
+        cnic: workspace.project.cnic,
+        projectId: workspace.project.id,
+        projectSerial: workspace.project.serial,
+        paymentDate: invoice.invoiceDate,
+        discountAmount: invoice.discountAmount ?? 0,
+        paidAmount: 0,
+        balanceAmount: invoice.grandTotal,
+        kind: "invoice",
+      });
+    }
+  }
+  return entries.sort((left, right) => right.paymentDate.localeCompare(left.paymentDate) || left.customerName.localeCompare(right.customerName) || left.id.localeCompare(right.id));
 }
 
 export function todayIso(): string {
@@ -238,6 +290,9 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
     },
     async listLedger() {
       return toLedger([...workspaces.values()]);
+    },
+    async listDiscounts() {
+      return toDiscounts([...workspaces.values()]);
     },
     async summary() {
       return summarizeDocuments([...workspaces.values()]);
@@ -584,6 +639,7 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
     const { data, error } = await client
       .from("billing_payments")
       .select("id, project_id, invoice_id, installment_number, paid_amount, payment_date, payment_mode")
+      .gt("paid_amount", 0)
       .order("payment_date", { ascending: true });
     if (error) throw storageFailure(error, "listed");
     const payments = (data ?? []) as Array<{
@@ -626,6 +682,68 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       };
     });
     return entries.sort((left, right) => left.paymentDate.localeCompare(right.paymentDate) || left.id.localeCompare(right.id));
+  }
+
+  async function listDiscountRows(): Promise<DiscountEntry[]> {
+    const [paymentResult, invoiceResult] = await Promise.all([
+      client.from("billing_payments").select("id, project_id, expected_amount, paid_amount, discount_amount, payment_date").gt("discount_amount", 0),
+      client.from("billing_invoices").select("id, project_id, invoice_date, grand_total, discount_amount").gt("discount_amount", 0),
+    ]);
+    if (paymentResult.error) throw storageFailure(paymentResult.error, "listed");
+    if (invoiceResult.error) throw storageFailure(invoiceResult.error, "listed");
+    const payments = (paymentResult.data ?? []) as Array<{
+      id: string;
+      project_id: string;
+      expected_amount: number | string;
+      paid_amount: number | string;
+      discount_amount: number | string;
+      payment_date: string;
+    }>;
+    const invoices = (invoiceResult.data ?? []) as Array<{
+      id: string;
+      project_id: string;
+      invoice_date: string;
+      grand_total: number | string;
+      discount_amount: number | string;
+    }>;
+    const projectIds = [...new Set([...payments.map((row) => row.project_id), ...invoices.map((row) => row.project_id)])];
+    if (projectIds.length === 0) return [];
+    const projectResult = await client.from("billing_projects").select("id, customer_name, cnic, serial").in("id", projectIds);
+    if (projectResult.error) throw storageFailure(projectResult.error, "listed");
+    const projects = new Map(((projectResult.data ?? []) as Array<{ id: string; customer_name: string; cnic: string; serial: string }>).map((row) => [row.id, row]));
+    const entries: DiscountEntry[] = [
+      ...payments.map((payment): DiscountEntry => {
+        const project = projects.get(payment.project_id);
+        return {
+          id: payment.id,
+          customerName: project?.customer_name ?? "",
+          cnic: project?.cnic ?? "",
+          projectId: payment.project_id,
+          projectSerial: project?.serial ?? "",
+          paymentDate: payment.payment_date,
+          discountAmount: asNumber(payment.discount_amount),
+          paidAmount: asNumber(payment.paid_amount),
+          balanceAmount: asNumber(payment.expected_amount),
+          kind: "payment",
+        };
+      }),
+      ...invoices.map((invoice): DiscountEntry => {
+        const project = projects.get(invoice.project_id);
+        return {
+          id: `invoice-${invoice.id}`,
+          customerName: project?.customer_name ?? "",
+          cnic: project?.cnic ?? "",
+          projectId: invoice.project_id,
+          projectSerial: project?.serial ?? "",
+          paymentDate: invoice.invoice_date,
+          discountAmount: asNumber(invoice.discount_amount),
+          paidAmount: 0,
+          balanceAmount: asNumber(invoice.grand_total),
+          kind: "invoice",
+        };
+      }),
+    ];
+    return entries.sort((left, right) => right.paymentDate.localeCompare(left.paymentDate) || left.customerName.localeCompare(right.customerName) || left.id.localeCompare(right.id));
   }
 
   return {
@@ -728,6 +846,9 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
     },
     async listLedger() {
       return listLedgerRows();
+    },
+    async listDiscounts() {
+      return listDiscountRows();
     },
     async summary() {
       const today = todayIso();

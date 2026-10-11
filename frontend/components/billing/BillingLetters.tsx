@@ -150,6 +150,7 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
   const project = invoice.project;
   const paid = invoice.status === "paid";
   const discount = discountOf(invoice);
+  const paymentDiscount = invoice.payments.some((payment) => (payment.discountAmount ?? 0) > 0);
 
   return (
     <article className={`${styles.letter} quotation-letter ${paper ? styles.letterPaper : ""}`}>
@@ -210,13 +211,14 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
       {invoice.payments.length > 0 ? (
         <div className={styles.tableWrap}>
           <table>
-            <thead><tr><th>Payment date</th><th>Mode</th><th>Amount</th></tr></thead>
+            <thead><tr><th>Payment date</th><th>Mode</th><th>Amount</th>{paymentDiscount ? <th>Discount</th> : null}</tr></thead>
             <tbody>
               {invoice.payments.map((payment) => (
                 <tr key={payment.id}>
                   <td>{formatDisplayDate(payment.paymentDate)}</td>
                   <td>{modeLabel(payment.paymentMode)}</td>
                   <td className={styles.num}>{formatRupees(payment.paidAmount)}</td>
+                  {paymentDiscount ? <td className={styles.num}>{(payment.discountAmount ?? 0) > 0 ? formatRupees(payment.discountAmount ?? 0) : ""}</td> : null}
                 </tr>
               ))}
             </tbody>
@@ -286,12 +288,20 @@ export function PaymentSlip({
           <div><dt>Project</dt><dd>{project.serial}</dd></div>
           <div><dt>Payment date</dt><dd>{formatDisplayDate(payment.paymentDate)}</dd></div>
           <div><dt>Mode</dt><dd>{modeLabel(payment.paymentMode)}</dd></div>
-          {(payment.discountAmount ?? 0) > 0 ? <div><dt>Discount</dt><dd>{formatRupees(payment.discountAmount ?? 0)}</dd></div> : null}
+          {(payment.discountAmount ?? 0) > 0 ? (
+            <>
+              <div><dt>Balance amount</dt><dd>{formatRupees(payment.expectedAmount)}</dd></div>
+              <div><dt>Discount amount</dt><dd>{formatRupees(payment.discountAmount ?? 0)}</dd></div>
+              <div><dt>Received amount</dt><dd>{formatRupees(payment.paidAmount)}</dd></div>
+            </>
+          ) : null}
           {payment.installmentNumber ? <div><dt>Installment</dt><dd>{payment.installmentNumber}</dd></div> : null}
           <div><dt>Contact</dt><dd>{project.contactNo}</dd></div>
         </dl>
       </div>
-      <p className={styles.slipNote}>This slip confirms that Electro Tech has received the payment shown above.</p>
+      <p className={styles.slipNote}>{(payment.discountAmount ?? 0) > 0
+        ? "This slip confirms the balance, the discount, and the amount received shown above."
+        : "This slip confirms that Electro Tech has received the payment shown above."}</p>
       <footer className={styles.signature}>
         <strong>For, ELECTRO TECH</strong>
         <img src="/logos/authorized-signature.png" alt="Authorized signature" decoding="sync" />

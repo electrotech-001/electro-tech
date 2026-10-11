@@ -275,9 +275,10 @@ export function ReceivePaymentsPage() {
           balance={current.balance}
           firstPayment={current.paidTotal <= 0}
           onClose={() => setReceiving(false)}
-          onSaved={() => {
+          onSaved={(payment) => {
             const id = current.project.id;
             setReceiving(false);
+            if (payment) setSlip(payment);
             setBanner({ tone: "ok", text: "Payment received. The remaining balance invoice is updated." });
             void refresh(id);
           }}

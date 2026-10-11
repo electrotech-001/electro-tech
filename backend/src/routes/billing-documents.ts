@@ -79,6 +79,13 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
       sendFailure(error, response, next);
     }
   });
+  router.get("/discounts", async (_request, response, next) => {
+    try {
+      response.status(200).json({ entries: await repository().listDiscounts() });
+    } catch (error) {
+      sendFailure(error, response, next);
+    }
+  });
   router.put("/customers", async (request, response, next) => {
     try {
       const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
