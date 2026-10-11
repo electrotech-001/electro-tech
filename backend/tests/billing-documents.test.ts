@@ -217,6 +217,71 @@ test("an installment invoice discount lowers that invoice without relabeling the
   assert.equal(unpaid.reduce((sum, line) => sum + line.amount, 0), 282000);
 });
 
+test("a partial installment payment stays on that installment", async () => {
+  const base = project("installments");
+  const quoted: QuotationRecord = {
+    ...base,
+    downPayment: 0,
+    installmentCount: 2,
+    items: [{
+      lineNo: 1,
+      description: "Battery",
+      qty: 1,
+      unit: "Set",
+      price: 100000,
+      taxPercent: 0,
+      taxableAmount: 100000,
+      taxAmount: 0,
+      lineTotal: 100000,
+    }],
+    taxableTotal: 100000,
+    taxTotal: 0,
+    grandTotal: 100000,
+    installments: [{ number: 1, amount: 50000 }, { number: 2, amount: 50000 }],
+  };
+  const repository = createMemoryDocumentsRepository([quoted]);
+  await repository.saveAgreement("project-1", {
+    dueDates: ["2026-11-01", "2026-12-01"],
+    guarantors: [guarantor("Ali Raza"), guarantor("Sara Khan")],
+  });
+  const received = await repository.recordPayment("project-1", {
+    kind: "installment",
+    installmentNumber: 1,
+    paidAmount: 25000,
+    paymentDate: "2026-11-01",
+    paymentMode: "cash",
+  });
+  const first = received.agreement?.schedule.find((line) => line.number === 1);
+  const second = received.agreement?.schedule.find((line) => line.number === 2);
+  assert.equal(first?.amount, 50000);
+  assert.equal(first?.paidAmount, 25000);
+  assert.equal(first?.status, "due");
+  assert.equal(second?.amount, 50000);
+  assert.equal(second?.paidAmount, 0);
+  assert.equal(second?.status, "due");
+  const firstInvoice = received.invoices.find((invoice) => invoice.installmentNumber === 1);
+  const secondInvoice = received.invoices.find((invoice) => invoice.installmentNumber === 2);
+  assert.equal(firstInvoice?.grandTotal, 50000);
+  assert.equal(firstInvoice?.balanceDue, 25000);
+  assert.equal(firstInvoice?.status, "partial");
+  assert.equal(secondInvoice?.grandTotal, 50000);
+  assert.equal(secondInvoice?.balanceDue, 50000);
+  assert.equal(secondInvoice?.status, "due");
+  assert.equal(received.balance, 75000);
+
+  const closed = await repository.recordPayment("project-1", {
+    kind: "installment",
+    installmentNumber: 1,
+    paidAmount: 25000,
+    paymentDate: "2026-11-15",
+    paymentMode: "cash",
+  });
+  assert.equal(closed.agreement?.schedule.find((line) => line.number === 1)?.status, "paid");
+  assert.equal(closed.agreement?.schedule.find((line) => line.number === 2)?.amount, 50000);
+  assert.equal(closed.invoices.find((invoice) => invoice.installmentNumber === 2)?.grandTotal, 50000);
+  assert.equal(closed.balance, 50000);
+});
+
 test("a direct receipt can close the balance with cash plus a discount, and a full discount can close it with no cash", async () => {
   const base = project("direct");
   const quoted: QuotationRecord = {

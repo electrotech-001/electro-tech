@@ -7,12 +7,14 @@ import {
   deleteInvoice,
   discountTotal,
   issueDirectInvoice,
+  keepInstallmentAmounts,
   setAgreementBody,
   setInvoiceDiscount,
   editPayment,
   paidTotal,
   receiveInstallment,
   recordDirectPayment,
+  syncInstallmentInvoices,
   type AgreementRecord,
   type BankMode,
   type GuarantorInput,
@@ -470,6 +472,16 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       createdAt: agreementRow.created_at,
       project,
     } : null;
+    if (agreement && project.paymentMode === "installments") {
+      const schedule = keepInstallmentAmounts(project, agreement.schedule, payments);
+      const corrected = { ...agreement, schedule };
+      return {
+        project,
+        agreement: corrected,
+        invoices: syncInstallmentInvoices({ project, agreement: corrected, invoices, payments }, schedule, 0),
+        payments,
+      };
+    }
     return {
       project,
       agreement,

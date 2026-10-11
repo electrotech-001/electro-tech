@@ -102,9 +102,10 @@ export function ReceivePaymentsPage() {
     try {
       const saved = await recordPayment(current.project.id, { kind: "installment", installmentNumber, paidAmount: amount, discountAmount, paymentDate, paymentMode });
       await refresh(current.project.id);
-      setSlip(saved.payments.find((payment) => payment.installmentNumber === installmentNumber) ?? null);
+      setSlip([...saved.payments].reverse().find((payment) => payment.installmentNumber === installmentNumber) ?? null);
       setDiscountAmount(0);
-      setBanner({ tone: "ok", text: `Installment ${installmentNumber} is marked paid.` });
+      const line = saved.agreement?.schedule.find((entry) => entry.number === installmentNumber);
+      setBanner({ tone: "ok", text: line?.status === "paid" ? `Installment ${installmentNumber} is marked paid.` : `Installment ${installmentNumber} payment was received.` });
     } catch (error) {
       setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The installment could not be saved." });
     } finally {
@@ -200,11 +201,15 @@ export function ReceivePaymentsPage() {
                   <PaymentFields paidAmount={paidAmount} discountAmount={discountAmount} paymentDate={paymentDate} paymentMode={paymentMode} onAmount={setPaidAmount} onDiscount={setDiscountAmount} onDate={setPaymentDate} onMode={setPaymentMode} />
                   <p className={styles.hint}>The date and mode above are used when an installment is received. Due dates stay editable on each card.</p>
                 <div className={styles.cards}>
-                  {current.agreement.schedule.map((line) => (
+                  {current.agreement.schedule.map((line) => {
+                    const paymentDiscount = current.payments.filter((payment) => payment.installmentNumber === line.number).reduce((sum, payment) => sum + (payment.discountAmount ?? 0), 0);
+                    const pending = Math.max(0, Math.round((line.amount - line.paidAmount - (line.discountAmount ?? 0) - paymentDiscount) * 100) / 100);
+                    const cash = paidAmount > 0 ? paidAmount : Math.max(0, Math.round((pending - discountAmount) * 100) / 100);
+                    return (
                     <article className={styles.card} key={line.number}>
                       <div className={styles.cardTop}>
                         <strong>Installment {line.number}</strong>
-                        <span className={styles.badge}>{line.status === "paid" ? "Paid" : "Due"}</span>
+                        <span className={styles.badge}>{line.status === "paid" ? "Paid" : line.paidAmount > 0 ? "Partial" : "Due"}</span>
                       </div>
                       <p className={styles.total}>{formatRupees(line.amount)}</p>
                       <label className={styles.field}>
@@ -219,12 +224,16 @@ export function ReceivePaymentsPage() {
                         }} />
                       </label>
                       {line.status === "paid" ? <p>Paid {formatRupees(line.paidAmount)}{(line.discountAmount ?? 0) > 0 ? ` · Discount ${formatRupees(line.discountAmount ?? 0)}` : ""} on {line.paidDate ? formatDisplayDate(line.paidDate) : ""}</p> : (
-                        <button className={styles.primaryButton} type="button" disabled={saving} onClick={() => void saveInstallment(line.number, paidAmount > 0 ? paidAmount : Math.max(0, line.amount - (line.discountAmount ?? 0) - discountAmount))}>
-                          Receive {formatRupees(paidAmount > 0 ? paidAmount : Math.max(0, line.amount - (line.discountAmount ?? 0) - discountAmount))}
-                        </button>
+                        <>
+                          {line.paidAmount > 0 ? <p>Paid {formatRupees(line.paidAmount)} · Pending {formatRupees(pending)}</p> : null}
+                          <button className={styles.primaryButton} type="button" disabled={saving} onClick={() => void saveInstallment(line.number, cash)}>
+                            Receive {formatRupees(cash)}
+                          </button>
+                        </>
                       )}
                     </article>
-                  ))}
+                    );
+                  })}
                 </div>
                 </>
               ) : <p>Generate the installment agreement on the project card before receiving these payments.</p>}

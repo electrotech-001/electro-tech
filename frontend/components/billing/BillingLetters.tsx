@@ -199,7 +199,7 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
                   <td>{line.number}</td>
                   <td>{formatDisplayDate(line.dueDate)}</td>
                   <td className={styles.num}>{formatRupees(line.amount)}</td>
-                  <td>{line.status === "paid" ? "Paid" : "Due"}</td>
+                  <td>{line.status === "paid" ? "Paid" : line.paidAmount > 0 ? "Partial" : "Due"}</td>
                   <td>{line.paidDate ? formatDisplayDate(line.paidDate) : ""}</td>
                   <td>{modeLabel(line.paymentMode)}</td>
                 </tr>
