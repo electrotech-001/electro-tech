@@ -1548,8 +1548,10 @@
   }
 
   .paidSeal {
-    position: static;
-    margin: 8px auto 0;
+    position: relative;
+    top: auto;
+    right: auto;
+    margin: 8px auto 18px;
   }
 
   .slipAmount strong {
