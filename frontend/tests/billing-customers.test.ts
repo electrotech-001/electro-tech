@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { activeCustomers, customerKey, groupCustomers } from "@/lib/billing/customers";
+import { activeCustomers, customerIdentity, customerKey, groupCustomers } from "@/lib/billing/customers";
 import type { QuotationRecord } from "@/lib/billing/quotation-math";
 
 function record(overrides: Partial<QuotationRecord> & Pick<QuotationRecord, "id" | "kind">): QuotationRecord {
@@ -47,4 +47,16 @@ test("customers group by CNIC and the active list keeps quotations being sent or
   expect(updated?.customerName).toBe("Updated Name");
   expect(updated?.jobs.map((job) => job.stage)).toEqual(["in_process", "sending", "approved"]);
   expect(activeCustomers(cards).map((card) => card.customerName)).toEqual(["Updated Name"]);
+  const open = groupCustomers(
+    [
+      record({ id: "q4", kind: "quotation", customerName: "No Card", cnic: "" }),
+      record({ id: "q5", kind: "quotation", customerName: "Also Open", cnic: "" }),
+    ],
+    [],
+  );
+  expect(open.map((card) => card.customerName)).toEqual(["Also Open", "No Card"]);
+  expect(open.map((card) => card.key)).toEqual([
+    customerIdentity({ cnic: "", customerName: "Also Open", whatsappNo: "0300-5607350" }),
+    customerIdentity({ cnic: "", customerName: "No Card", whatsappNo: "0300-5607350" }),
+  ]);
 });

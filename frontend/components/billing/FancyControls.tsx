@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronDown, Upload } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type InputHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
 import styles from "./quotation.module.css";
 
@@ -112,6 +112,79 @@ export function FancySelect<T extends string>({
       </button>
       {menu && typeof document !== "undefined" ? createPortal(menu, document.body) : null}
     </div>
+  );
+}
+
+function shownAmount(value: number | null): string {
+  if (value == null || value === 0) return "";
+  return String(value);
+}
+
+export function AmountInput({
+  value,
+  onChange,
+  integer = false,
+  emptyAs = 0,
+  ...props
+}: {
+  value: number | null;
+  onChange: (value: number | null) => void;
+  integer?: boolean;
+  emptyAs?: number | null;
+} & Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type">) {
+  const [text, setText] = useState(() => shownAmount(value));
+  const focused = useRef(false);
+  const pattern = integer ? /^\d*$/ : /^\d*\.?\d*$/;
+
+  useEffect(() => {
+    if (focused.current) return;
+    setText(shownAmount(value));
+  }, [value]);
+
+  function commit(next: string) {
+    if (next === "" || next === ".") {
+      onChange(emptyAs);
+      setText("");
+      return;
+    }
+    const parsed = Number(next);
+    if (!Number.isFinite(parsed)) {
+      setText(shownAmount(value));
+      return;
+    }
+    const amount = integer ? Math.trunc(parsed) : parsed;
+    onChange(amount);
+    setText(amount === 0 ? "" : String(amount));
+  }
+
+  return (
+    <input
+      {...props}
+      type="text"
+      inputMode={integer ? "numeric" : "decimal"}
+      value={text}
+      onFocus={(event) => {
+        focused.current = true;
+        props.onFocus?.(event);
+      }}
+      onBlur={(event) => {
+        focused.current = false;
+        commit(text);
+        props.onBlur?.(event);
+      }}
+      onChange={(event) => {
+        const next = event.target.value;
+        if (!pattern.test(next)) return;
+        setText(next);
+        if (next === "" || next === ".") {
+          onChange(emptyAs);
+          return;
+        }
+        const parsed = Number(next);
+        if (!Number.isFinite(parsed)) return;
+        onChange(integer ? Math.trunc(parsed) : parsed);
+      }}
+    />
   );
 }
 

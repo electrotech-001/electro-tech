@@ -1,6 +1,6 @@
 import { Plus, Trash2 } from "lucide-react";
 import { computeTotals, formatRupees, maskCnic, maskPhone, quotationIssues, type PaymentMode, type QuotationDraft, type QuotationItemInput } from "@/lib/billing/quotation-math";
-import { FancySelect } from "./FancyControls";
+import { AmountInput, FancySelect } from "./FancyControls";
 import styles from "./quotation.module.css";
 
 const paymentModes: { value: PaymentMode; label: string }[] = [
@@ -59,13 +59,12 @@ export function QuotationForm({
           <input value={draft.customerName} onChange={(event) => set("customerName", event.target.value)} required />
         </label>
         <label className={styles.field}>
-          <span>CNIC number</span>
+          <span>CNIC number (optional)</span>
           <input
             value={draft.cnic}
             onChange={(event) => set("cnic", maskCnic(event.target.value))}
             inputMode="numeric"
             placeholder="00000-0000000-0"
-            required
           />
         </label>
         <label className={`${styles.field} ${styles.wide}`}>
@@ -73,23 +72,21 @@ export function QuotationForm({
           <textarea value={draft.address} onChange={(event) => set("address", event.target.value)} rows={3} required />
         </label>
         <label className={styles.field}>
-          <span>Contact no</span>
+          <span>Contact no (optional)</span>
           <input
             value={draft.contactNo}
             onChange={(event) => set("contactNo", maskPhone(event.target.value))}
             inputMode="numeric"
             placeholder="0300-0000000"
-            required
           />
         </label>
         <label className={styles.field}>
-          <span>WhatsApp number</span>
+          <span>WhatsApp number (optional)</span>
           <input
             value={draft.whatsappNo}
             onChange={(event) => set("whatsappNo", maskPhone(event.target.value))}
             inputMode="numeric"
             placeholder="0300-0000000"
-            required
           />
         </label>
         <label className={`${styles.field} ${styles.wide}`}>
@@ -106,7 +103,7 @@ export function QuotationForm({
               onChange({
                 ...draft,
                 paymentMode,
-                downPayment: paymentMode === "installments" ? draft.downPayment ?? 0 : null,
+                downPayment: paymentMode === "installments" ? draft.downPayment ?? 0 : draft.downPayment,
                 installmentCount: paymentMode === "installments" ? draft.installmentCount ?? 1 : null,
               });
             }}
@@ -146,13 +143,10 @@ export function QuotationForm({
                   </td>
                   <td>
                     <span className={styles.cellLabel}>Qty</span>
-                    <input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
+                    <AmountInput
                       value={item.qty}
                       aria-label={`Quantity ${index + 1}`}
-                      onChange={(event) => set("items", updateItem(draft.items, index, { qty: Number(event.target.value) }))}
+                      onChange={(qty) => set("items", updateItem(draft.items, index, { qty: qty ?? 0 }))}
                     />
                   </td>
                   <td>
@@ -165,26 +159,19 @@ export function QuotationForm({
                   </td>
                   <td>
                     <span className={styles.cellLabel}>Price</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                    <AmountInput
                       value={item.price}
                       aria-label={`Price ${index + 1}`}
-                      onChange={(event) => set("items", updateItem(draft.items, index, { price: Number(event.target.value) }))}
+                      onChange={(price) => set("items", updateItem(draft.items, index, { price: price ?? 0 }))}
                     />
                   </td>
                   <td><span className={styles.cellLabel}>Taxable amount</span>{formatRupees(computed?.taxableAmount ?? 0)}</td>
                   <td>
                     <span className={styles.cellLabel}>Tax %</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
+                    <AmountInput
                       value={item.taxPercent}
                       aria-label={`Tax ${index + 1}`}
-                      onChange={(event) => set("items", updateItem(draft.items, index, { taxPercent: Number(event.target.value) }))}
+                      onChange={(taxPercent) => set("items", updateItem(draft.items, index, { taxPercent: taxPercent ?? 0 }))}
                     />
                   </td>
                   <td><span className={styles.cellLabel}>Total</span>{formatRupees(computed?.lineTotal ?? 0)}</td>
@@ -215,30 +202,39 @@ export function QuotationForm({
       </button>
 
       <div className={styles.summaryRow}>
+        {draft.paymentMode === "direct" ? (
+          <div className={styles.planFields}>
+            <label className={styles.field}>
+              <span>Advance payment</span>
+              <AmountInput
+                value={draft.downPayment}
+                emptyAs={null}
+                onChange={(amount) => set("downPayment", amount)}
+              />
+            </label>
+            <p>Remaining after advance payment <strong>{formatRupees(Math.max(0, totals.grandTotal - (draft.downPayment ?? 0)))}</strong></p>
+          </div>
+        ) : null}
         {draft.paymentMode === "installments" ? (
           <div className={styles.planFields}>
             <label className={styles.field}>
               <span>Down payment</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={draft.downPayment ?? 0}
-                onChange={(event) => set("downPayment", Number(event.target.value))}
+              <AmountInput
+                value={draft.downPayment}
+                onChange={(amount) => set("downPayment", amount ?? 0)}
               />
             </label>
             <label className={styles.field}>
               <span>Total number of installments</span>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={draft.installmentCount ?? 1}
-                onChange={(event) => set("installmentCount", Number(event.target.value))}
+              <AmountInput
+                integer
+                value={draft.installmentCount}
+                emptyAs={null}
+                onChange={(count) => set("installmentCount", count)}
               />
             </label>
             <div className={styles.breakdown}>
-              <p>Balance after down payment <strong>{formatRupees(Math.max(0, balance))}</strong></p>
+              <p>Remaining amount <strong>{formatRupees(Math.max(0, balance))}</strong></p>
               <ol>
                 {totals.installments.map((line) => (
                   <li key={line.number}>

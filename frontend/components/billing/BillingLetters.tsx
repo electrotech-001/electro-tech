@@ -1,9 +1,28 @@
 import { agreementWording } from "@/lib/billing/agreement-wording";
-import type { AgreementRecord, InvoiceRecord, PaymentRecord } from "@/lib/billing/documents-api";
+import type { AgreementRecord, GuarantorRecord, InvoiceRecord, PaymentRecord } from "@/lib/billing/documents-api";
 import { formatDisplayDate, formatRupees, letterhead, type QuotationRecord } from "@/lib/billing/quotation-math";
+import { DocumentTermsNote } from "./DocumentTerms";
 import styles from "./quotation.module.css";
 
-function Letterhead({ title }: { title: string }) {
+function PhoneMark() {
+  return (
+    <svg className={styles.contactIcon} viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="currentColor" d="M7 3h3l1.5 4-2 1.2a12 12 0 0 0 6.3 6.3L17 12.5 21 14v3a2 2 0 0 1-2.2 2A16 16 0 0 1 5 5.2 2 2 0 0 1 7 3z" />
+    </svg>
+  );
+}
+
+function MailMark() {
+  return (
+    <svg className={styles.contactIcon} viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="5" width="18" height="14" rx="1.5" />
+      <path d="M4 7l8 6 8-6" />
+    </svg>
+  );
+}
+
+export function Letterhead({ title }: { title: string }) {
+  const lines = title.split("\n");
   return (
     <header className={styles.letterHead}>
       <img className={styles.logo} src="/logos/logo-1.png" alt="Electro Tech" decoding="sync" />
@@ -11,10 +30,16 @@ function Letterhead({ title }: { title: string }) {
         <strong>{letterhead.company}</strong>
         <span>{letterhead.person}</span>
         <span>{letterhead.address}</span>
-        <span>{letterhead.phone}</span>
-        <span>{letterhead.email}</span>
+        <span className={styles.contactLine}>
+          <PhoneMark />
+          <span>{letterhead.phone}</span>
+          <MailMark />
+          <span>{letterhead.email}</span>
+        </span>
       </div>
-      <p className={styles.docTitle}>{title}</p>
+      <p className={styles.docTitle}>
+        {lines.map((line) => <span key={line}>{line}</span>)}
+      </p>
     </header>
   );
 }
@@ -109,17 +134,8 @@ export function AgreementLetter({ agreement, paper = false }: { agreement: Agree
           </tbody>
         </table>
       </div>
-      {installments ? agreement.guarantors.map((guarantor) => (
-        <section className={styles.packageBlock} key={guarantor.id}>
-          <p className={styles.blockLabel}>Guarantor {guarantor.slot}</p>
-          <p>{guarantor.fullName} accepts responsibility for the unpaid balance of this agreement.</p>
-          <p>Designation: {guarantor.designation}. Occupation: {guarantor.occupation}. Sector: {guarantor.sector === "government" ? "Government" : "Private"}.</p>
-          <p>Contact: {guarantor.contactNo || "—"}. CNIC: {guarantor.cnic || "—"}.</p>
-          <div className={styles.cnicRow}>
-            <img src={guarantor.cnicFront} alt={`${guarantor.fullName} CNIC front`} />
-            <img src={guarantor.cnicBack} alt={`${guarantor.fullName} CNIC back`} />
-          </div>
-        </section>
+      {installments ? agreement.guarantors.filter((guarantor) => guarantor.slot === 1).map((guarantor) => (
+        <GuarantorBlock guarantor={guarantor} key={guarantor.id} />
       )) : null}
       <div className={styles.signGrid}>
         <div className={styles.signBox}>
@@ -128,12 +144,12 @@ export function AgreementLetter({ agreement, paper = false }: { agreement: Agree
           <small>Customer signature</small>
           <small>CNIC {project.cnic}</small>
         </div>
-        {installments ? agreement.guarantors.map((guarantor) => (
+        {installments ? agreement.guarantors.filter((guarantor) => guarantor.slot === 1).map((guarantor) => (
           <div className={styles.signBox} key={`${guarantor.id}-sign`}>
             <span className={styles.signLine} />
-            <strong>{guarantor.fullName}</strong>
-            <small>Guarantor {guarantor.slot} signature</small>
-            <small>CNIC {guarantor.cnic || "—"}</small>
+            <strong>{guarantor.fullName || "Guarantor"}</strong>
+            <small>Guarantor 1 signature</small>
+            {guarantor.cnic ? <small>CNIC {guarantor.cnic}</small> : null}
           </div>
         )) : null}
       </div>
@@ -146,22 +162,63 @@ export function AgreementLetter({ agreement, paper = false }: { agreement: Agree
   );
 }
 
+function GuarantorBlock({ guarantor }: { guarantor: GuarantorRecord }) {
+  return (
+    <section className={styles.packageBlock}>
+      <p className={styles.blockLabel}>Guarantor 1</p>
+      {guarantor.fullName ? <p>{guarantor.fullName} accepts responsibility for the unpaid balance of this agreement.</p> : null}
+      <p>
+        {[
+          guarantor.designation ? `Designation: ${guarantor.designation}` : "",
+          guarantor.occupation ? `Occupation: ${guarantor.occupation}` : "",
+          `Sector: ${guarantor.sector === "government" ? "Government" : "Private"}`,
+        ].filter(Boolean).join(". ")}.
+      </p>
+      {(guarantor.contactNo || guarantor.cnic) ? <p>{[guarantor.contactNo ? `Contact: ${guarantor.contactNo}` : "", guarantor.cnic ? `CNIC: ${guarantor.cnic}` : ""].filter(Boolean).join(". ")}.</p> : null}
+      {(guarantor.cnicFront || guarantor.cnicBack) ? (
+        <div className={styles.cnicRow}>
+          {guarantor.cnicFront ? <img src={guarantor.cnicFront} alt={`${guarantor.fullName || "Guarantor"} CNIC front`} /> : null}
+          {guarantor.cnicBack ? <img src={guarantor.cnicBack} alt={`${guarantor.fullName || "Guarantor"} CNIC back`} /> : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function remainingInstallmentLines(invoice: InvoiceRecord): Array<{ number: number; dueDate: string | null; amount: number }> {
+  if (invoice.installmentNumber == null) return [];
+  const current = invoice.installmentNumber;
+  if (invoice.schedule && invoice.schedule.length > 0) {
+    return invoice.schedule
+      .filter((line) => line.number !== current && line.status !== "paid")
+      .map((line) => ({ number: line.number, dueDate: line.dueDate, amount: line.amount }));
+  }
+  return invoice.project.installments
+    .filter((line) => line.number !== current)
+    .map((line) => ({ number: line.number, dueDate: null, amount: line.amount }));
+}
+
 export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceRecord; paper?: boolean }) {
   const project = invoice.project;
   const paid = invoice.status === "paid";
   const discount = discountOf(invoice);
   const paymentDiscount = invoice.payments.some((payment) => (payment.discountAmount ?? 0) > 0);
+  const remainingInstallments = remainingInstallmentLines(invoice);
+  const remainingInstallmentTotal = remainingInstallments.reduce((sum, line) => sum + line.amount, 0);
+  const openingPayments = invoice.openingPayments ?? [];
+  const openingPaid = openingPayments.reduce((sum, payment) => sum + payment.paidAmount + (payment.discountAmount ?? 0), 0);
 
   return (
-    <article className={`${styles.letter} quotation-letter ${paper ? styles.letterPaper : ""}`}>
-      <Letterhead title="INVOICE" />
+    <article className={`${styles.letter} ${styles.sheet} quotation-letter ${paper ? styles.letterPaper : ""}`}>
+      <Letterhead title={"TAX\nINVOICE"} />
       <section className={styles.parties}>
         <div>
           <p className={styles.blockLabel}>Bill to</p>
           <strong>{project.customerName}</strong>
           <span>{project.address}</span>
-          <span>CNIC {project.cnic}</span>
-          <span>{project.contactNo}</span>
+          {project.cnic ? <span>CNIC {project.cnic}</span> : null}
+          {project.contactNo ? <span>{project.contactNo}</span> : null}
+          {project.customerPackage ? <span>{project.customerPackage}</span> : null}
         </div>
         <dl className={styles.meta}>
           <div><dt>Invoice#</dt><dd>{invoice.serial}</dd></div>
@@ -171,25 +228,65 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
         </dl>
       </section>
       {invoice.installmentNumber ? <p className={styles.packageBlock}>This invoice is for installment {invoice.installmentNumber}{invoice.dueDate ? `, due ${formatDisplayDate(invoice.dueDate)}` : ""}.</p> : null}
+      {openingPayments.length > 0 ? (
+        <div className={styles.plan}>
+          <p className={styles.blockLabel}>Down payment received</p>
+          {openingPayments.map((payment) => (
+            <p key={payment.id}>
+              {formatDisplayDate(payment.paymentDate)} · {modeLabel(payment.paymentMode)} <strong>{formatRupees(payment.paidAmount)}</strong>
+            </p>
+          ))}
+          <p>Balance after down payment <strong>{formatRupees(Math.max(0, project.grandTotal - openingPaid))}</strong></p>
+        </div>
+      ) : null}
+      {remainingInstallments.length > 0 ? (
+        <div className={styles.plan}>
+          <p className={styles.blockLabel}>Remaining installments</p>
+          {remainingInstallments.map((line) => (
+            <p key={line.number}>
+              Installment {line.number}{line.dueDate ? ` · due ${formatDisplayDate(line.dueDate)}` : ""} <strong>{formatRupees(line.amount)}</strong>
+            </p>
+          ))}
+          <p>Remaining amount <strong>{formatRupees(remainingInstallmentTotal)}</strong></p>
+        </div>
+      ) : null}
+      {invoice.kind === "advance" && (project.downPayment ?? 0) > 0 && invoice.grandTotal <= (project.downPayment ?? 0) ? (
+        <p className={styles.packageBlock}>{project.paymentMode === "installments" ? "This invoice is the down payment." : "This invoice is the advance payment."}</p>
+      ) : null}
       <div className={styles.tableWrap}>
         <table>
           <thead>
-            <tr><th>#</th><th>Description</th><th>Qty</th><th>Unit</th><th>Total</th></tr>
+            <tr>
+              <th>#</th>
+              <th>Description</th>
+              <th className={styles.num}>Qty</th>
+              <th>Unit</th>
+              <th className={styles.num}>Price</th>
+              <th className={styles.num}>Taxable amount</th>
+              <th className={styles.num}>Tax</th>
+              <th className={styles.num}>Total</th>
+            </tr>
           </thead>
           <tbody>
             {project.items.map((item) => (
               <tr key={item.lineNo}>
                 <td>{item.lineNo}</td>
-                <td>{item.description}</td>
+                <td className={styles.itemText}>{item.description}</td>
                 <td className={styles.num}>{item.qty}</td>
                 <td>{item.unit}</td>
+                <td className={styles.num}>{formatRupees(item.price)}</td>
+                <td className={styles.num}>{formatRupees(item.taxableAmount)}</td>
+                <td className={styles.num}>
+                  {formatRupees(item.taxAmount)}
+                  <small>{item.taxPercent.toFixed(2)}%</small>
+                </td>
                 <td className={styles.num}>{formatRupees(item.lineTotal)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {invoice.schedule && invoice.schedule.length > 0 ? (
+      {invoice.installmentNumber == null && invoice.schedule && invoice.schedule.length > 0 ? (
         <div className={styles.tableWrap}>
           <table>
             <thead><tr><th>Installment</th><th>Due date</th><th>Amount</th><th>Status</th><th>Paid on</th><th>Mode</th></tr></thead>
@@ -226,40 +323,52 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
         </div>
       ) : null}
       <div className={styles.letterFoot}>
+        <div />
+        <table className={styles.totals}>
+          <tbody>
+            <tr><th>Taxable amount</th><td>{formatRupees(project.taxableTotal)}</td></tr>
+            <tr><th>Tax</th><td>{formatRupees(project.taxTotal)}</td></tr>
+            <tr className={styles.grand}><th>Total</th><td>{formatRupees(invoice.grandTotal)}</td></tr>
+            {discount > 0 ? <tr><th>Discount</th><td>{formatRupees(discount)}</td></tr> : null}
+            <tr><th>Paid</th><td>{formatRupees(invoice.advancePaid)}</td></tr>
+            <tr className={styles.grand}><th>Balance due</th><td>{formatRupees(invoice.balanceDue)}</td></tr>
+            {invoice.kind === "advance" && project.grandTotal - invoice.grandTotal > 0 ? (
+              <tr><th>Remaining amount</th><td>{formatRupees(project.grandTotal - invoice.grandTotal)}</td></tr>
+            ) : null}
+            {remainingInstallments.length > 0 ? (
+              <tr><th>Remaining installments</th><td>{formatRupees(remainingInstallmentTotal)}</td></tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+      <div className={styles.sheetClose}>
         <div className={styles.paymentInstructions}>
           <strong>Payment Instructions</strong>
           <span>Account Title : Electro Tech</span>
           <span>Account Number : 57365002120531</span>
           <span>Bank Name: Bank Alfalah.</span>
         </div>
-        <table className={styles.totals}>
-          <tbody>
-            <tr><th>Total amount</th><td>{formatRupees(invoice.grandTotal)}</td></tr>
-            {discount > 0 ? <tr><th>Discount</th><td>{formatRupees(discount)}</td></tr> : null}
-            <tr><th>Received</th><td>{formatRupees(invoice.advancePaid)}</td></tr>
-            <tr className={styles.grand}><th>Balance due</th><td>{formatRupees(invoice.balanceDue)}</td></tr>
-          </tbody>
-        </table>
-      </div>
-      {paid ? (
-        <footer className={styles.signOff}>
-          <div className={styles.paidStamp}>
-            Paid
-            <small>{invoice.paymentDate ? formatDisplayDate(invoice.paymentDate) : ""}</small>
-          </div>
-          <div className={styles.signature}>
+        {paid ? (
+          <footer className={styles.signOff}>
+            <div className={styles.paidStamp}>
+              Paid
+              <small>{invoice.paymentDate ? formatDisplayDate(invoice.paymentDate) : ""}</small>
+            </div>
+            <div className={styles.signature}>
+              <strong>For, ELECTRO TECH</strong>
+              <img src="/logos/authorized-signature.png" alt="Authorized signature" decoding="sync" />
+              <small>Authorized signature</small>
+            </div>
+          </footer>
+        ) : (
+          <footer className={styles.signature}>
             <strong>For, ELECTRO TECH</strong>
             <img src="/logos/authorized-signature.png" alt="Authorized signature" decoding="sync" />
             <small>Authorized signature</small>
-          </div>
-        </footer>
-      ) : (
-        <footer className={styles.signature}>
-          <strong>For, ELECTRO TECH</strong>
-          <img src="/logos/authorized-signature.png" alt="Authorized signature" decoding="sync" />
-          <small>Authorized signature</small>
-        </footer>
-      )}
+          </footer>
+        )}
+      </div>
+      <DocumentTermsNote />
     </article>
   );
 }

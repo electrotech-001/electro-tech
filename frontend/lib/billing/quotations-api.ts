@@ -1,5 +1,4 @@
-import { apiUrl } from "../api-origin";
-import { billingSupabase } from "./supabase";
+import { billingFetch as requestBilling } from "./billing-fetch";
 import type { QuotationDraft, QuotationRecord } from "./quotation-math";
 
 export class QuotationApiError extends Error {
@@ -10,17 +9,10 @@ export class QuotationApiError extends Error {
 }
 
 async function billingFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const { data } = await billingSupabase.auth.getSession();
-  const headers = new Headers(options.headers);
-  const token = data.session?.access_token;
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  if (options.body && typeof options.body === "string" && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
   try {
-    return await fetch(apiUrl(path), { ...options, headers, cache: "no-store" });
-  } catch {
-    throw new QuotationApiError("The billing API is not running. Start it, then try again.");
+    return await requestBilling(path, options);
+  } catch (error) {
+    throw new QuotationApiError(error instanceof Error ? error.message : "The billing API is not running. Start it, then try again.");
   }
 }
 

@@ -91,19 +91,24 @@ function invoice(record: QuotationRecord, overrides: Partial<InvoiceRecord> = {}
   };
 }
 
-test("a direct invoice is created without a popup and the button is then disabled", async () => {
-  const direct = project({ id: "direct-1", serial: "QT-010" });
-  const created = invoice(direct);
+test("a direct invoice asks for the advance payment, then creates one invoice", async () => {
+  const direct = project({ id: "direct-1", serial: "QT-010", downPayment: 50000 });
+  const created = invoice(direct, { advancePaid: 0, balanceDue: 673000, grandTotal: 673000 });
   api.listProjects.mockResolvedValue([direct]);
   api.listAgreements.mockResolvedValue([]);
   api.listInvoices.mockResolvedValueOnce([]).mockResolvedValue([created]);
   api.issueDirectInvoice.mockResolvedValue({ project: direct, invoices: [created], payments: [], agreement: null, paidTotal: 0, balance: 673000 });
   const user = userEvent.setup();
   render(<ProjectsPage />);
-  const button = await screen.findByRole("button", { name: /create invoice/i });
-  await user.click(button);
-  await waitFor(() => expect(api.issueDirectInvoice).toHaveBeenCalledWith("direct-1"));
-  expect(screen.queryByRole("dialog")).toBeNull();
+  await user.click(await screen.findByRole("button", { name: /create invoice/i }));
+  const dialog = await screen.findByRole("dialog");
+  expect(dialog.textContent).toContain("Advance payment received");
+  expect(dialog.textContent).toContain("Balance");
+  const amount = screen.getByLabelText(/advance payment received/i);
+  await user.clear(amount);
+  await user.type(amount, "0");
+  await user.click(screen.getByRole("button", { name: /save invoice/i }));
+  await waitFor(() => expect(api.issueDirectInvoice).toHaveBeenCalledWith("direct-1", expect.objectContaining({ paidAmount: 0, paymentMode: "cash" })));
   await waitFor(() => expect((screen.getByRole("button", { name: /create invoice/i }) as HTMLButtonElement).disabled).toBe(true));
 });
 
@@ -122,7 +127,9 @@ test("an installment invoice opens the dates and guarantor form", async () => {
   const user = userEvent.setup();
   render(<ProjectsPage />);
   await user.click(await screen.findByRole("button", { name: /create invoice/i }));
-  expect(await screen.findByRole("dialog")).toBeDefined();
+  const dialog = await screen.findByRole("dialog");
+  expect(dialog.textContent).toMatch(/down payment received/i);
+  expect(dialog.textContent).toMatch(/balance after down payment/i);
   expect(screen.getByText(/installment 1 due date/i)).toBeDefined();
   expect(screen.getByText(/guarantor 1/i)).toBeDefined();
   expect(api.issueDirectInvoice).not.toHaveBeenCalled();
@@ -145,7 +152,8 @@ test("every invoice shows the bank instructions and the company email", () => {
       paymentMode: "cash",
     }],
   })} />);
-  expect(screen.getByText(letterhead.email).textContent).toBe("aqeel@electrotech-attock.com");
+  expect(screen.getByText(letterhead.phone)).toBeDefined();
+  expect(screen.getByText(letterhead.email)).toBeDefined();
   expect(screen.getByText(letterhead.address).textContent).toContain("Attock");
   expect(screen.getByText(letterhead.address).textContent).not.toContain("Attack");
   expect(screen.getByText("Payment Instructions")).toBeDefined();
@@ -153,4 +161,32 @@ test("every invoice shows the bank instructions and the company email", () => {
   expect(screen.getByText("Account Number : 57365002120531")).toBeDefined();
   expect(screen.getByText("Bank Name: Bank Alfalah.")).toBeDefined();
   expect(screen.getByText("Cash")).toBeDefined();
+});
+
+test("an installment invoice lists the installments that are still unpaid", () => {
+  const record = project({
+    id: "inst-1",
+    paymentMode: "installments",
+    downPayment: 250000,
+    installmentCount: 3,
+    installments: [
+      { number: 1, amount: 141000 },
+      { number: 2, amount: 141000 },
+      { number: 3, amount: 141000 },
+    ],
+  });
+  render(<InvoiceLetter invoice={invoice(record, {
+    kind: "installment",
+    installmentNumber: 1,
+    grandTotal: 141000,
+    balanceDue: 141000,
+    schedule: [
+      { number: 1, dueDate: "2026-11-01", amount: 141000, status: "due", paidAmount: 0, paidDate: null, paymentMode: null },
+      { number: 2, dueDate: "2026-12-01", amount: 141000, status: "due", paidAmount: 0, paidDate: null, paymentMode: null },
+      { number: 3, dueDate: "2027-01-01", amount: 141000, status: "paid", paidAmount: 141000, paidDate: "2026-10-01", paymentMode: "cash" },
+    ],
+  })} />);
+  expect(screen.getAllByText("Remaining installments").length).toBeGreaterThan(0);
+  expect(screen.getByText(/Installment 2/)).toBeDefined();
+  expect(screen.queryByText(/Installment 3/)).toBeNull();
 });

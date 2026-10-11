@@ -1,5 +1,4 @@
-import { apiUrl } from "../api-origin";
-import { billingSupabase } from "./supabase";
+import { billingFetch as requestBilling } from "./billing-fetch";
 
 export type WhatsAppLinkStatus = "disconnected" | "connecting" | "qr" | "connected";
 
@@ -23,17 +22,11 @@ export class WhatsAppApiError extends Error {
 }
 
 async function billingFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const { data } = await billingSupabase.auth.getSession();
-  const token = data.session?.access_token;
-  const headers = new Headers(options.headers);
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  if (options.body && typeof options.body === "string" && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
   try {
-    return await fetch(apiUrl(path), { ...options, headers });
-  } catch {
-    throw new WhatsAppApiError("The billing API is not running. Start it, then try connecting again.");
+    return await requestBilling(path, options);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "The billing API is not running. Start it, then try connecting again.";
+    throw new WhatsAppApiError(message.includes("not running") ? "The billing API is not running. Start it, then try connecting again." : message);
   }
 }
 

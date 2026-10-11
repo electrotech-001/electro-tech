@@ -100,10 +100,10 @@ export function quotationIssues(draft: QuotationDraft): string[] {
     issues.push("Choose a quotation date.");
   }
   if (!draft.customerName.trim()) issues.push("Enter the customer name.");
-  if (!CNIC.test(draft.cnic)) issues.push("Enter the CNIC as 00000-0000000-0.");
+  if (draft.cnic.trim() && !CNIC.test(draft.cnic.trim())) issues.push("Enter the CNIC as 00000-0000000-0.");
   if (!draft.address.trim()) issues.push("Enter the address.");
-  if (!PHONE.test(draft.contactNo)) issues.push("Enter the contact number as 0300-0000000.");
-  if (!PHONE.test(draft.whatsappNo)) issues.push("Enter the WhatsApp number as 0300-0000000.");
+  if (draft.contactNo.trim() && !PHONE.test(draft.contactNo.trim())) issues.push("Enter the contact number as 0300-0000000.");
+  if (draft.whatsappNo.trim() && !PHONE.test(draft.whatsappNo.trim())) issues.push("Enter the WhatsApp number as 0300-0000000.");
   if (!draft.customerPackage.trim()) issues.push("Enter the customer package.");
   if (draft.paymentMode !== "installments" && draft.paymentMode !== "direct") {
     issues.push("Choose installments or direct payment.");
@@ -127,6 +127,10 @@ export function quotationIssues(draft: QuotationDraft): string[] {
       issues.push("Enter the number of installments.");
     }
   }
+  if (draft.paymentMode === "direct" && draft.downPayment != null) {
+    if (draft.downPayment < 0 || Number.isNaN(draft.downPayment)) issues.push("Enter the advance payment.");
+    else if (draft.downPayment > grandTotal) issues.push("Advance payment cannot be more than the total amount.");
+  }
   return issues;
 }
 
@@ -140,6 +144,6 @@ export function customerProfileIssues(profile: CustomerProfileInput): string[] {
   if (!address) issues.push("Enter the address.");
   else if (address.length > 400) issues.push("Address must be 400 characters or fewer.");
   if (!PHONE.test(profile.contactNo.trim())) issues.push("Enter the contact number as 0300-0000000.");
-  if (!PHONE.test(profile.whatsappNo.trim())) issues.push("Enter the WhatsApp number as 0300-0000000.");
+  if (profile.whatsappNo.trim() && !PHONE.test(profile.whatsappNo.trim())) issues.push("Enter the WhatsApp number as 0300-0000000.");
   return issues;
 }

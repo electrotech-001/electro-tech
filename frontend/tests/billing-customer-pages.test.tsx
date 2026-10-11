@@ -134,6 +134,9 @@ test("customer profile shows editable details, invoices, and payments", async ()
   expect(await screen.findByDisplayValue("Ayesha Khan")).toBeTruthy();
   expect(screen.getByDisplayValue("37101-9999999-1")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Save profile" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Pending invoices" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Agreements" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Payments received" })).toBeTruthy();
   expect(screen.getByText("INV-001")).toBeTruthy();
   expect(screen.getByText("Direct payment · INV-001")).toBeTruthy();
   expect(screen.queryByText("Sheikh Zain")).toBeNull();

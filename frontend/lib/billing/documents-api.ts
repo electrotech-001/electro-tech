@@ -1,6 +1,5 @@
-import { apiUrl } from "../api-origin";
 import type { QuotationRecord } from "./quotation-math";
-import { billingSupabase } from "./supabase";
+import { billingFetch as requestBilling } from "./billing-fetch";
 
 export type BankMode = "bank_transfer" | "cash";
 export type GuarantorSector = "private" | "government";
@@ -64,6 +63,7 @@ export type InvoiceRecord = {
   discountAmount?: number;
   installmentNumber: number | null;
   payments: PaymentRecord[];
+  openingPayments?: PaymentRecord[];
   schedule?: ScheduleLine[];
   project: QuotationRecord;
 };
@@ -97,17 +97,10 @@ export class DocumentApiError extends Error {
 }
 
 async function billingFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const { data } = await billingSupabase.auth.getSession();
-  const headers = new Headers(options.headers);
-  const token = data.session?.access_token;
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  if (options.body && typeof options.body === "string" && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
   try {
-    return await fetch(apiUrl(path), { ...options, headers, cache: "no-store" });
-  } catch {
-    throw new DocumentApiError("The billing API is not running. Start it, then try again.");
+    return await requestBilling(path, options);
+  } catch (error) {
+    throw new DocumentApiError(error instanceof Error ? error.message : "The billing API is not running. Start it, then try again.");
   }
 }
 
@@ -144,6 +137,7 @@ export type LedgerEntry = {
   paidAmount: number;
   paymentMode: BankMode;
   installmentNumber: number | null;
+  paymentKind?: "down" | "direct" | "installment";
   customerName: string;
   cnic: string;
   projectId: string;
@@ -222,6 +216,18 @@ export function updateTemplate(id: string, input: { name: string; body: string }
     .then((payload) => (payload as { template: MessageTemplate }).template);
 }
 
+export function getDocumentTerms(): Promise<string> {
+  return billingFetch("/api/billing/terms")
+    .then((response) => expectOk(response, "Terms and conditions could not be loaded."))
+    .then((payload) => (payload as { body?: string }).body ?? "");
+}
+
+export function saveDocumentTerms(body: string): Promise<string> {
+  return billingFetch("/api/billing/terms", { method: "PUT", body: JSON.stringify({ body }) })
+    .then((response) => expectOk(response, "Terms and conditions could not be saved."))
+    .then((payload) => (payload as { body?: string }).body ?? "");
+}
+
 export function deleteTemplate(id: string): Promise<void> {
   return billingFetch(`/api/billing/templates/${id}`, { method: "DELETE" }).then((response) => expectOk(response, "The template could not be deleted.")).then(() => undefined);
 }
@@ -232,7 +238,7 @@ export function updateCustomerProfile(input: CustomerProfileUpdate): Promise<{ c
     .then((payload) => payload as { cnic: string });
 }
 
-export function saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string }): Promise<AgreementRecord> {
+export function saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string; opening?: { paidAmount: number; paymentDate: string; paymentMode: BankMode } }): Promise<AgreementRecord> {
   return billingFetch(`/api/billing/projects/${projectId}/agreement`, { method: "POST", body: JSON.stringify(input) })
     .then((response) => expectOk(response, "The agreement could not be saved."))
     .then((payload) => (payload as { agreement: AgreementRecord }).agreement);
@@ -244,8 +250,8 @@ export function updateAgreementWording(agreementId: string, body: string): Promi
     .then((payload) => (payload as { agreement: AgreementRecord }).agreement);
 }
 
-export function issueDirectInvoice(projectId: string): Promise<ReceiveProject> {
-  return billingFetch(`/api/billing/projects/${projectId}/invoice`, { method: "POST", body: "{}" })
+export function issueDirectInvoice(projectId: string, opening?: { paidAmount: number; paymentDate: string; paymentMode: BankMode }): Promise<ReceiveProject> {
+  return billingFetch(`/api/billing/projects/${projectId}/invoice`, { method: "POST", body: JSON.stringify(opening ?? { paidAmount: 0 }) })
     .then((response) => expectOk(response, "The invoice could not be created."))
     .then((payload) => (payload as { project: ReceiveProject }).project);
 }
@@ -262,7 +268,7 @@ export function deleteInvoice(invoiceId: string): Promise<void> {
     .then(() => undefined);
 }
 
-export function recordPayment(projectId: string, input: { kind: "direct"; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode } | { kind: "installment"; installmentNumber: number; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode }): Promise<ReceiveProject> {
+export function recordPayment(projectId: string, input: { kind: "direct"; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode } | { kind: "opening"; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode } | { kind: "installment"; installmentNumber: number; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode }): Promise<ReceiveProject> {
   return billingFetch(`/api/billing/projects/${projectId}/payments`, { method: "POST", body: JSON.stringify(input) })
     .then((response) => expectOk(response, "The payment could not be saved."))
     .then((payload) => (payload as { project: ReceiveProject }).project);

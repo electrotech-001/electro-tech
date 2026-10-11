@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { customerKey, groupCustomers, stageLabel, type CustomerCard } from "@/lib/billing/customers";
+import { customerIdentity, groupCustomers, matchesCustomerKey, stageLabel, type CustomerCard } from "@/lib/billing/customers";
 import {
   DocumentApiError,
   listAgreements,
@@ -13,6 +13,7 @@ import {
   type InvoiceRecord,
   type LedgerEntry,
 } from "@/lib/billing/documents-api";
+import { outstandingBalances, stillOpen } from "@/lib/billing/pending-invoices";
 import {
   customerProfileIssues,
   formatDisplayDate,
@@ -20,6 +21,7 @@ import {
   maskCnic,
   maskPhone,
   type CustomerProfileInput,
+  type QuotationRecord,
 } from "@/lib/billing/quotation-math";
 import { listProjects, listQuotations, QuotationApiError } from "@/lib/billing/quotations-api";
 import shell from "./billing-shell.module.css";
@@ -29,9 +31,38 @@ function modeLabel(mode: string): string {
   return mode === "bank_transfer" ? "Bank transfer" : mode === "cash" ? "Cash" : mode === "installments" ? "Installments" : "Direct";
 }
 
-function paymentDetail(entry: LedgerEntry): string {
-  const kind = entry.installmentNumber == null ? "Direct payment" : `Installment ${entry.installmentNumber}`;
+function paymentDetail(entry: LedgerEntry, projects: QuotationRecord[]): string {
+  const project = projects.find((item) => item.id === entry.projectId);
+  const kind = entry.paymentKind === "down" || (entry.paymentKind == null && entry.installmentNumber == null && project?.paymentMode === "installments")
+    ? "Down payment"
+    : entry.installmentNumber != null
+      ? `Installment ${entry.installmentNumber}`
+      : "Direct payment";
   return entry.invoiceSerial ? `${kind} · ${entry.invoiceSerial}` : kind;
+}
+
+function receivedDownPayment(projectId: string, rows: LedgerEntry[]): number {
+  return rows
+    .filter((entry) => entry.projectId === projectId && entry.installmentNumber == null)
+    .reduce((sum, entry) => sum + entry.paidAmount, 0);
+}
+
+function invoiceLabel(invoice: InvoiceRecord): string {
+  if (invoice.installmentNumber) return `Installment ${invoice.installmentNumber}`;
+  const opening = invoice.project.downPayment ?? 0;
+  if (invoice.kind === "advance" && opening > 0 && invoice.grandTotal <= opening + 0.001) {
+    return invoice.project.paymentMode === "installments" ? "Down payment" : "Advance payment";
+  }
+  if (invoice.kind === "settlement") return "Balance";
+  return "Invoice";
+}
+
+function profileKey(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 const emptyProfile: CustomerProfileInput = {
@@ -44,8 +75,10 @@ const emptyProfile: CustomerProfileInput = {
 
 export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
   const router = useRouter();
-  const requestKey = useRef(cnicKey);
+  const key = profileKey(cnicKey);
+  const requestKey = useRef(key);
   const [customer, setCustomer] = useState<CustomerCard | null>(null);
+  const [projects, setProjects] = useState<QuotationRecord[]>([]);
   const [form, setForm] = useState<CustomerProfileInput>(emptyProfile);
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [payments, setPayments] = useState<LedgerEntry[]>([]);
@@ -57,19 +90,22 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
 
   async function load(key: string) {
     requestKey.current = key;
-    const [quotations, projects, invoiceRows, ledger, agreementRows] = await Promise.all([
-      listQuotations(),
-      listProjects(),
+    const [quotations, projectRows] = await Promise.all([listQuotations(), listProjects()]);
+    if (requestKey.current !== key) return;
+    const match = groupCustomers(quotations, projectRows).find((card) => card.key === key) ?? null;
+    const customerProjects = projectRows.filter((project) => matchesCustomerKey(key, project));
+    const projectIds = new Set(customerProjects.map((project) => project.id));
+    setCustomer(match);
+    setProjects(customerProjects);
+    const [invoiceRows, ledger, agreementRows] = await Promise.all([
       listInvoices(),
       listLedger(),
       listAgreements({ photos: false }),
     ]);
     if (requestKey.current !== key) return;
-    const match = groupCustomers(quotations, projects).find((card) => card.key === key) ?? null;
-    setCustomer(match);
-    setInvoices(invoiceRows.filter((invoice) => customerKey(invoice.project.cnic) === key));
-    setPayments(ledger.filter((entry) => customerKey(entry.cnic) === key));
-    setAgreements(agreementRows.filter((agreement) => customerKey(agreement.project.cnic) === key));
+    setInvoices(invoiceRows.filter((invoice) => projectIds.has(invoice.projectId) || matchesCustomerKey(key, invoice.project)));
+    setPayments(ledger.filter((entry) => projectIds.has(entry.projectId) || matchesCustomerKey(key, entry)));
+    setAgreements(agreementRows.filter((agreement) => projectIds.has(agreement.projectId) || matchesCustomerKey(key, agreement.project)));
     if (match) {
       setForm({
         customerName: match.customerName,
@@ -83,7 +119,7 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    load(cnicKey)
+    load(key)
       .catch((error: unknown) => {
         if (cancelled) return;
         const message = error instanceof QuotationApiError || error instanceof DocumentApiError
@@ -97,7 +133,7 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
     return () => {
       cancelled = true;
     };
-  }, [cnicKey]);
+  }, [key]);
 
   function setField<K extends keyof CustomerProfileInput>(key: K, value: CustomerProfileInput[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -122,13 +158,13 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
         contactNo: form.contactNo,
         whatsappNo: form.whatsappNo,
       });
-      const nextKey = customerKey(saved.cnic);
+      const nextKey = customerIdentity({ cnic: saved.cnic, customerName: form.customerName, whatsappNo: form.whatsappNo });
       setBanner({ tone: "ok", text: "Customer profile saved." });
-      if (nextKey !== cnicKey) {
+      if (nextKey !== key) {
         router.replace(`/billing/profiles/${nextKey}`);
         return;
       }
-      await load(cnicKey);
+      await load(key);
     } catch (error) {
       setFormError(error instanceof DocumentApiError ? error.message : "The customer profile could not be saved.");
     } finally {
@@ -137,6 +173,9 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
   }
 
   const received = payments.reduce((sum, entry) => sum + entry.paidAmount, 0);
+  const pendingInvoices = [...invoices.filter(stillOpen), ...outstandingBalances(projects, invoices)];
+  const paidInvoices = invoices.filter((invoice) => !stillOpen(invoice));
+  const plansWithoutAgreement = projects.filter((project) => project.paymentMode === "installments" && !agreements.some((agreement) => agreement.projectId === project.id));
 
   return (
     <>
@@ -175,7 +214,7 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
                 <input value={form.contactNo} inputMode="numeric" placeholder="0300-0000000" onChange={(event) => setField("contactNo", maskPhone(event.target.value))} />
               </label>
               <label className={styles.field}>
-                <span>WhatsApp number</span>
+                <span>WhatsApp number (optional)</span>
                 <input value={form.whatsappNo} inputMode="numeric" placeholder="0300-0000000" onChange={(event) => setField("whatsappNo", maskPhone(event.target.value))} />
               </label>
               <label className={`${styles.field} ${styles.wide}`}>
@@ -194,7 +233,7 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
           <section className={shell.stats} aria-label="Customer totals">
             <div className={shell.stat}><span className={shell.statLabel}>Quotations</span><span className={shell.statValue}>{customer.jobs.filter((job) => job.kind === "quotation").length}</span></div>
             <div className={shell.stat}><span className={shell.statLabel}>Projects</span><span className={shell.statValue}>{customer.jobs.filter((job) => job.kind === "project").length}</span></div>
-            <div className={shell.stat}><span className={shell.statLabel}>Invoices</span><span className={shell.statValue}>{invoices.length}</span></div>
+            <div className={shell.stat}><span className={shell.statLabel}>Pending invoices</span><span className={shell.statValue}>{pendingInvoices.length}</span></div>
             <div className={shell.stat}><span className={shell.statLabel}>Received</span><span className={`${shell.statValue} ${styles.moneyStat}`}>{formatRupees(received)}</span></div>
           </section>
 
@@ -229,63 +268,137 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
           </section>
 
           <section className={shell.panel}>
-            <h2>Invoices</h2>
-            {invoices.length === 0 ? <p>No invoices for this customer yet.</p> : (
+            <h2>Pending invoices</h2>
+            {pendingInvoices.length === 0 ? <p>No pending invoices for this customer.</p> : (
               <div className={styles.tableWrap}>
                 <table className={styles.recordTable}>
                   <thead>
                     <tr>
                       <th>Invoice</th>
                       <th>Project</th>
-                      <th>Date</th>
+                      <th>For</th>
                       <th>Status</th>
                       <th className={styles.amount}>Balance</th>
-                      <th className={styles.amount}>Total</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {invoices.map((invoice) => (
+                    {pendingInvoices.map((invoice) => (
                       <tr key={invoice.id}>
                         <td>{invoice.serial}</td>
                         <td>{invoice.project.serial}</td>
-                        <td>{formatDisplayDate(invoice.invoiceDate)}</td>
-                        <td>{invoice.status === "partial" ? "Partially paid" : invoice.status === "paid" ? "Paid" : "Due"}</td>
+                        <td>{invoiceLabel(invoice)}</td>
+                        <td>{invoice.status === "partial" ? "Partially paid" : "Due"}</td>
                         <td className={styles.amount}>{formatRupees(invoice.balanceDue)}</td>
-                        <td className={styles.amount}>{formatRupees(invoice.grandTotal)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
+            {paidInvoices.length > 0 ? (
+              <div className={styles.formGap}>
+                <h2>Paid invoices</h2>
+                <div className={styles.tableWrap}>
+                  <table className={styles.recordTable}>
+                    <thead>
+                      <tr>
+                        <th>Invoice</th>
+                        <th>Project</th>
+                        <th>For</th>
+                        <th className={styles.amount}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paidInvoices.map((invoice) => (
+                        <tr key={invoice.id}>
+                          <td>{invoice.serial}</td>
+                          <td>{invoice.project.serial}</td>
+                          <td>{invoiceLabel(invoice)}</td>
+                          <td className={styles.amount}>{formatRupees(invoice.grandTotal)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
           </section>
 
           <section className={shell.panel}>
             <h2>Agreements</h2>
-            {agreements.length === 0 ? <p>No agreements for this customer yet.</p> : (
-              <div className={styles.tableWrap}>
-                <table className={styles.recordTable}>
-                  <thead>
-                    <tr>
-                      <th>Agreement</th>
-                      <th>Project</th>
-                      <th>Plan</th>
-                      <th>Guarantors</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {agreements.map((agreement) => (
-                      <tr key={agreement.id}>
-                        <td>{agreement.serial}</td>
-                        <td>{agreement.project.serial}</td>
-                        <td>{modeLabel(agreement.paymentMode)}</td>
-                        <td>{agreement.guarantors.map((person) => person.fullName).join(", ") || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {agreements.length === 0 && plansWithoutAgreement.length === 0 ? <p>No agreements for this customer yet.</p> : null}
+            {agreements.map((agreement) => (
+              <div className={styles.formGap} key={agreement.id}>
+                <p>{agreement.serial} · {agreement.project.serial} · {modeLabel(agreement.paymentMode)} · {agreement.guarantors.map((person) => person.fullName).join(", ") || "No guarantor"}</p>
+                {agreement.paymentMode === "installments" ? (
+                  <div className={styles.tableWrap}>
+                    <table className={styles.recordTable}>
+                      <thead>
+                        <tr>
+                          <th>Installment</th>
+                          <th>Due date</th>
+                          <th className={styles.amount}>Amount</th>
+                          <th>Status</th>
+                          <th className={styles.amount}>Paid</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(agreement.project.downPayment ?? 0) > 0 ? (
+                          <tr>
+                            <td>Down payment</td>
+                            <td />
+                            <td className={styles.amount}>{formatRupees(agreement.project.downPayment ?? 0)}</td>
+                            <td>{receivedDownPayment(agreement.projectId, payments) + 0.001 >= (agreement.project.downPayment ?? 0) ? "Paid" : receivedDownPayment(agreement.projectId, payments) > 0 ? "Partial" : "Due"}</td>
+                            <td className={styles.amount}>{formatRupees(receivedDownPayment(agreement.projectId, payments))}</td>
+                          </tr>
+                        ) : null}
+                        {agreement.schedule.map((line) => (
+                          <tr key={line.number}>
+                            <td>Installment {line.number}</td>
+                            <td>{formatDisplayDate(line.dueDate)}</td>
+                            <td className={styles.amount}>{formatRupees(line.amount)}</td>
+                            <td>{line.status === "paid" ? "Paid" : line.paidAmount > 0 ? "Partial" : "Due"}</td>
+                            <td className={styles.amount}>{formatRupees(line.paidAmount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
               </div>
-            )}
+            ))}
+            {plansWithoutAgreement.map((project) => (
+              <div className={styles.formGap} key={project.id}>
+                <p>{project.serial} · Installments · Agreement is saved when the invoices are created.</p>
+                <div className={styles.tableWrap}>
+                  <table className={styles.recordTable}>
+                    <thead>
+                      <tr>
+                        <th>Installment</th>
+                        <th className={styles.amount}>Amount</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(project.downPayment ?? 0) > 0 ? (
+                        <tr>
+                          <td>Down payment</td>
+                          <td className={styles.amount}>{formatRupees(project.downPayment ?? 0)}</td>
+                          <td>{receivedDownPayment(project.id, payments) + 0.001 >= (project.downPayment ?? 0) ? "Paid" : receivedDownPayment(project.id, payments) > 0 ? "Partial" : "Due"}</td>
+                        </tr>
+                      ) : null}
+                      {project.installments.map((line) => (
+                        <tr key={line.number}>
+                          <td>Installment {line.number}</td>
+                          <td className={styles.amount}>{formatRupees(line.amount)}</td>
+                          <td>Due</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
           </section>
 
           <section className={shell.panel}>
@@ -307,7 +420,7 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
                       <tr key={entry.id}>
                         <td>{formatDisplayDate(entry.paymentDate)}</td>
                         <td>{entry.projectSerial}</td>
-                        <td>{paymentDetail(entry)}</td>
+                        <td>{paymentDetail(entry, projects)}</td>
                         <td>{modeLabel(entry.paymentMode)}</td>
                         <td className={styles.amount}>{formatRupees(entry.paidAmount)}</td>
                       </tr>

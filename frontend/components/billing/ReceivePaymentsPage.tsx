@@ -2,17 +2,81 @@
 
 import { MessageCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { DocumentApiError, listReceiveProjects, recordPayment, updateDueDate, updatePayment, type BankMode, type PaymentRecord, type ReceiveProject } from "@/lib/billing/documents-api";
+import { DocumentApiError, listReceiveProjects, recordPayment, saveAgreement, updateDueDate, updatePayment, type BankMode, type PaymentRecord, type ReceiveProject } from "@/lib/billing/documents-api";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { formatDisplayDate, formatRupees, todayIsoDate } from "@/lib/billing/quotation-math";
 import { printFromControl } from "@/lib/billing/print-letter";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import { PaymentSlip } from "./BillingLetters";
-import { FancySelect } from "./FancyControls";
+import { AmountInput, FancySelect } from "./FancyControls";
 import { DirectPaymentDialog } from "./ProjectFlow";
 import shell from "./billing-shell.module.css";
 import styles from "./quotation.module.css";
 import "./quotation-print.css";
+
+function addMonths(iso: string, months: number): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  const date = new Date(year || 2026, (month || 1) - 1 + months, day || 1);
+  const nextYear = date.getFullYear();
+  const nextMonth = String(date.getMonth() + 1).padStart(2, "0");
+  const nextDay = String(date.getDate()).padStart(2, "0");
+  return `${nextYear}-${nextMonth}-${nextDay}`;
+}
+
+function legacyAdvanceInvoice(current: ReceiveProject) {
+  const face = current.project.downPayment ?? 0;
+  if (!(face > 0) || face + 0.001 >= current.project.grandTotal) return undefined;
+  return current.invoices.find((entry) => entry.kind === "advance" && entry.grandTotal <= face + 0.001);
+}
+
+function openingPending(current: ReceiveProject): number {
+  const face = current.project.downPayment ?? 0;
+  if (!(face > 0)) return 0;
+  if (current.project.paymentMode === "installments") {
+    const covered = current.payments
+      .filter((payment) => payment.installmentNumber == null)
+      .reduce((sum, payment) => sum + payment.paidAmount + (payment.discountAmount ?? 0), 0);
+    return Math.max(0, Math.round((face - covered) * 100) / 100);
+  }
+  return legacyAdvanceInvoice(current)?.balanceDue ?? 0;
+}
+
+function OpeningCard({
+  current,
+  paidAmount,
+  saving,
+  onReceived,
+}: {
+  current: ReceiveProject;
+  paidAmount: number;
+  saving: boolean;
+  onReceived: (amount: number) => void;
+}) {
+  const face = current.project.downPayment ?? 0;
+  const pending = openingPending(current);
+  if (!(face > 0)) return null;
+  if (current.project.paymentMode === "direct" && !legacyAdvanceInvoice(current)) return null;
+  const title = current.project.paymentMode === "installments" ? "Down payment" : "Advance payment";
+  const cash = Math.min(paidAmount > 0 ? paidAmount : pending, pending);
+  return (
+    <article className={styles.card}>
+      <div className={styles.cardTop}>
+        <strong>{title}</strong>
+        <span className={styles.badge}>{pending <= 0 ? "Paid" : "Due"}</span>
+      </div>
+      <p className={styles.total}>{formatRupees(face)}</p>
+      <div className={styles.moneySplit}>
+        <p className={styles.moneyPaid}><span>Paid</span><strong>{formatRupees(Math.max(0, face - pending))}</strong></p>
+        <p className={styles.moneyPending}><span>Pending</span><strong>{formatRupees(pending)}</strong></p>
+      </div>
+      {pending <= 0 ? <p>Received in cash or bank.</p> : (
+        <button className={styles.primaryButton} type="button" disabled={saving || cash <= 0} onClick={() => onReceived(cash)}>
+          Receive {formatRupees(cash)}
+        </button>
+      )}
+    </article>
+  );
+}
 
 function PaymentFields({
   paidAmount,
@@ -35,8 +99,8 @@ function PaymentFields({
 }) {
   return (
     <div className={styles.formGrid}>
-      <label className={styles.field}><span>Paid amount</span><input type="number" min="0" step="0.01" value={paidAmount} onChange={(event) => onAmount(Number(event.target.value))} /></label>
-      <label className={styles.field}><span>Discount amount</span><input type="number" min="0" step="0.01" value={discountAmount} onChange={(event) => onDiscount(Number(event.target.value))} /></label>
+      <label className={styles.field}><span>Paid amount</span><AmountInput value={paidAmount} onChange={(amount) => onAmount(amount ?? 0)} /></label>
+      <label className={styles.field}><span>Discount amount</span><AmountInput value={discountAmount} onChange={(amount) => onDiscount(amount ?? 0)} /></label>
       <label className={styles.field}><span>Date of payment</span><input type="date" value={paymentDate} onChange={(event) => onDate(event.target.value)} /></label>
       <div className={styles.field}>
         <span>Payment mode</span>
@@ -65,7 +129,12 @@ export function ReceivePaymentsPage() {
   const [saving, setSaving] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [capture, setCapture] = useState<PaymentRecord | null>(null);
+  const [draftDueDates, setDraftDueDates] = useState<Record<string, string>>({});
   const captureRef = useRef<HTMLDivElement>(null);
+
+  function draftDueDate(projectId: string, number: number, index: number): string {
+    return draftDueDates[`${projectId}:${number}`] ?? addMonths(todayIsoDate(), index + 1);
+  }
 
   async function refresh(selected = projectId) {
     const rows = await listReceiveProjects();
@@ -95,11 +164,33 @@ export function ReceivePaymentsPage() {
 
   const current = projects.find((row) => row.project.id === projectId) ?? null;
 
+  async function saveOpening(amount: number) {
+    if (!current) return;
+    setSaving(true);
+    setBanner(null);
+    try {
+      const saved = await recordPayment(current.project.id, { kind: "opening", paidAmount: amount, discountAmount, paymentDate, paymentMode });
+      await refresh(current.project.id);
+      const label = current.project.paymentMode === "installments" ? "Down payment" : "Advance payment";
+      setSlip([...saved.payments].reverse().find((payment) => payment.installmentNumber == null && payment.paidAmount === amount) ?? null);
+      setDiscountAmount(0);
+      setBanner({ tone: "ok", text: `${label} was received and added to the payment ledger.` });
+    } catch (error) {
+      setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The payment could not be saved." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveInstallment(installmentNumber: number, amount: number) {
     if (!current) return;
     setSaving(true);
     setBanner(null);
     try {
+      if (!current.agreement) {
+        const dueDates = current.project.installments.map((line, index) => draftDueDate(current.project.id, line.number, index));
+        await saveAgreement(current.project.id, { dueDates, guarantors: [] });
+      }
       const saved = await recordPayment(current.project.id, { kind: "installment", installmentNumber, paidAmount: amount, discountAmount, paymentDate, paymentMode });
       await refresh(current.project.id);
       setSlip([...saved.payments].reverse().find((payment) => payment.installmentNumber === installmentNumber) ?? null);
@@ -192,16 +283,36 @@ export function ReceivePaymentsPage() {
             <div className={styles.form}>
               <p>Total {formatRupees(current.project.grandTotal)} · Received {formatRupees(current.paidTotal)} · Balance {formatRupees(current.balance)}</p>
               {current.project.paymentMode === "direct" ? (
-                <div className={styles.formActions}>
-                  {current.invoices.length === 0 ? <p className={styles.hint}>Create the invoice from Projects in Process before receiving a payment.</p> : null}
-                  <button className={styles.primaryButton} type="button" onClick={() => setReceiving(true)} disabled={saving || current.balance <= 0 || current.invoices.length === 0}>Receive payment</button>
-                </div>
-              ) : current.agreement ? (
+                <>
+                  {legacyAdvanceInvoice(current) ? (
+                    <>
+                      <PaymentFields paidAmount={paidAmount} discountAmount={discountAmount} paymentDate={paymentDate} paymentMode={paymentMode} onAmount={setPaidAmount} onDiscount={setDiscountAmount} onDate={setPaymentDate} onMode={setPaymentMode} />
+                      <div className={styles.cards}>
+                        <OpeningCard current={current} paidAmount={paidAmount} saving={saving} onReceived={(amount) => void saveOpening(amount)} />
+                      </div>
+                    </>
+                  ) : null}
+                  <div className={styles.formActions}>
+                    {current.invoices.length === 0 ? <p className={styles.hint}>Create the invoice from Projects in Process. The advance payment is recorded there and shown on the invoice balance.</p> : null}
+                    {openingPending(current) > 0 ? <p className={styles.hint}>Receive the advance payment before the remaining balance.</p> : null}
+                    <button className={styles.primaryButton} type="button" onClick={() => setReceiving(true)} disabled={saving || current.balance <= 0 || openingPending(current) > 0 || current.invoices.length === 0}>Receive payment</button>
+                  </div>
+                </>
+              ) : current.project.installments.length > 0 || current.agreement ? (
                 <>
                   <PaymentFields paidAmount={paidAmount} discountAmount={discountAmount} paymentDate={paymentDate} paymentMode={paymentMode} onAmount={setPaidAmount} onDiscount={setDiscountAmount} onDate={setPaymentDate} onMode={setPaymentMode} />
-                  <p className={styles.hint}>The date and mode above are used when an installment is received. Due dates stay editable on each card.</p>
+                  <p className={styles.hint}>A down payment already received is in the ledger and reduces the project balance. It is not a separate invoice. The date and mode above are used when a remaining down payment or installment is received.</p>
                 <div className={styles.cards}>
-                  {current.agreement.schedule.map((line) => {
+                  <OpeningCard current={current} paidAmount={paidAmount} saving={saving} onReceived={(amount) => void saveOpening(amount)} />
+                  {(current.agreement ? current.agreement.schedule : current.project.installments.map((line, index) => ({
+                    number: line.number,
+                    dueDate: draftDueDate(current.project.id, line.number, index),
+                    amount: line.amount,
+                    status: "due" as const,
+                    paidAmount: 0,
+                    discountAmount: 0,
+                    paidDate: null,
+                  }))).map((line) => {
                     const paymentDiscount = current.payments.filter((payment) => payment.installmentNumber === line.number).reduce((sum, payment) => sum + (payment.discountAmount ?? 0), 0);
                     const pending = Math.max(0, Math.round((line.amount - line.paidAmount - (line.discountAmount ?? 0) - paymentDiscount) * 100) / 100);
                     const cash = paidAmount > 0 ? paidAmount : Math.max(0, Math.round((pending - discountAmount) * 100) / 100);
@@ -220,6 +331,10 @@ export function ReceivePaymentsPage() {
                         <span>Due date</span>
                         <input type="date" value={line.dueDate} onChange={(event) => {
                           const dueDate = event.target.value;
+                          if (!current.agreement) {
+                            setDraftDueDates((dates) => ({ ...dates, [`${current.project.id}:${line.number}`]: dueDate }));
+                            return;
+                          }
                           void updateDueDate(current.project.id, line.number, dueDate).then((saved) => {
                             setProjects((rows) => rows.map((row) => row.project.id === saved.project.id ? saved : row));
                           }).catch((error: unknown) => {
@@ -228,7 +343,7 @@ export function ReceivePaymentsPage() {
                         }} />
                       </label>
                       {line.status === "paid" ? <p>Paid in full{(line.discountAmount ?? 0) > 0 ? ` · Discount ${formatRupees(line.discountAmount ?? 0)}` : ""} on {line.paidDate ? formatDisplayDate(line.paidDate) : ""}</p> : (
-                        <button className={styles.primaryButton} type="button" disabled={saving} onClick={() => void saveInstallment(line.number, cash)}>
+                        <button className={styles.primaryButton} type="button" disabled={saving || cash <= 0} onClick={() => void saveInstallment(line.number, cash)}>
                           Receive {formatRupees(cash)}
                         </button>
                       )}
@@ -237,7 +352,7 @@ export function ReceivePaymentsPage() {
                   })}
                 </div>
                 </>
-              ) : <p>Generate the installment agreement on the project card before receiving these payments.</p>}
+              ) : <p>This installment project has no amounts to receive yet.</p>}
 
               <h2>Payment history</h2>
               {current.payments.length === 0 ? <p>No payments received yet.</p> : null}

@@ -198,6 +198,71 @@ test("a logged-out socket removes the saved session", async () => {
   assert.equal(await repository.read("creds"), null);
 });
 
+test("a stored WhatsApp identity reconnects without a new QR", async () => {
+  const repository = createMemoryAuthRepository();
+  const seeded = await loadAuthState(repository);
+  seeded.state.creds.registered = false;
+  seeded.state.creds.me = { id: "923001234567:1@s.whatsapp.net", name: "Electro Tech" };
+  await seeded.saveCreds();
+
+  let opened = 0;
+  const session = new WhatsAppSession({
+    repository,
+    connections: createMemoryConnectionStore(),
+    createSocket: async (auth) => {
+      opened += 1;
+      assert.equal(auth.creds.me?.id, "923001234567:1@s.whatsapp.net");
+      const socket = createFakeSocket();
+      setTimeout(() => socket.emit({ connection: "open" }), 0);
+      return socket as unknown as WhatsAppSocket;
+    },
+  });
+
+  await session.restore();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  await session.idle();
+  const snapshot = session.snapshot();
+  assert.equal(opened, 1);
+  assert.equal(snapshot.status, "connected");
+  assert.equal(snapshot.savedSession, true);
+  assert.equal(snapshot.qrDataUrl, null);
+  assert.ok(await repository.read("creds"));
+});
+
+test("a replaced connection keeps the saved WhatsApp session", async () => {
+  const repository = createMemoryAuthRepository();
+  const session = new WhatsAppSession({
+    repository,
+    connections: createMemoryConnectionStore(),
+    createSocket: async (auth) => {
+      const socket = createFakeSocket();
+      setTimeout(() => {
+        auth.creds.me = { id: "923001234567:1@s.whatsapp.net", name: "Electro Tech" };
+        auth.creds.registered = false;
+        socket.emitCreds();
+        socket.emit({ connection: "open" });
+        socket.emit({
+          connection: "close",
+          lastDisconnect: {
+            error: Object.assign(new Error("replaced"), { output: { statusCode: 440 } }),
+            date: new Date(),
+          },
+        });
+      }, 0);
+      return socket as unknown as WhatsAppSocket;
+    },
+  });
+
+  await session.connect();
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  await session.idle();
+  const snapshot = session.snapshot();
+  assert.equal(snapshot.savedSession, true);
+  assert.equal(snapshot.error, null);
+  const saved = await repository.read("creds") as { me?: { id?: string } } | null;
+  assert.equal(saved?.me?.id, "923001234567:1@s.whatsapp.net");
+});
+
 test("sending before connect is rejected", async () => {
   const session = new WhatsAppSession({
     repository: createMemoryAuthRepository(),

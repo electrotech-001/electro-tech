@@ -12,7 +12,9 @@ import {
   setInvoiceDiscount,
   editPayment,
   paidTotal,
+  attachOpeningInvoice,
   receiveInstallment,
+  receiveOpening,
   recordDirectPayment,
   syncInstallmentInvoices,
   type AgreementRecord,
@@ -20,6 +22,7 @@ import {
   type GuarantorInput,
   type GuarantorRecord,
   type InvoiceRecord,
+  type OpeningReceipt,
   type PaymentRecord,
   type ScheduleLine,
   type Workspace,
@@ -37,12 +40,12 @@ export type DocumentsRepository = {
   listInvoices(): Promise<InvoiceRecord[]>;
   listReceiveProjects(): Promise<ReceiveProject[]>;
   workspace(projectId: string): Promise<ReceiveProject>;
-  saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string }): Promise<AgreementRecord>;
+  saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string; opening?: OpeningReceipt | null }): Promise<AgreementRecord>;
   updateAgreementWording(agreementId: string, body: string): Promise<AgreementRecord>;
-  issueInvoice(projectId: string): Promise<ReceiveProject>;
+  issueInvoice(projectId: string, opening?: OpeningReceipt | null): Promise<ReceiveProject>;
   deleteInvoice(invoiceId: string): Promise<ReceiveProject>;
   setInvoiceDiscount(invoiceId: string, discountAmount: number): Promise<ReceiveProject>;
-  recordPayment(projectId: string, input: DirectPayment | InstallmentPayment): Promise<ReceiveProject>;
+  recordPayment(projectId: string, input: DirectPayment | OpeningPayment | InstallmentPayment): Promise<ReceiveProject>;
   updatePayment(paymentId: string, input: { paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode }): Promise<ReceiveProject>;
   updateDueDate(projectId: string, installmentNumber: number, dueDate: string): Promise<ReceiveProject>;
   completeProject(projectId: string): Promise<void>;
@@ -69,6 +72,7 @@ export type LedgerEntry = {
   paidAmount: number;
   paymentMode: BankMode;
   installmentNumber: number | null;
+  paymentKind: "down" | "direct" | "installment";
   customerName: string;
   cnic: string;
   projectId: string;
@@ -105,6 +109,7 @@ export function toLedger(workspaces: Workspace[]): LedgerEntry[] {
         paidAmount: payment.paidAmount,
         paymentMode: payment.paymentMode,
         installmentNumber: payment.installmentNumber,
+        paymentKind: payment.installmentNumber != null ? "installment" : workspace.project.paymentMode === "installments" ? "down" : "direct",
         customerName: workspace.project.customerName,
         cnic: workspace.project.cnic,
         projectId: workspace.project.id,
@@ -184,6 +189,7 @@ export function summarizeDocuments(workspaces: Workspace[], today = todayIso()):
 }
 
 type DirectPayment = { kind: "direct"; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode };
+type OpeningPayment = { kind: "opening"; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode };
 type InstallmentPayment = { kind: "installment"; installmentNumber: number; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode };
 
 const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, installment_count, approved_at, source_quotation_id, status, billing_project_items(line_no, description, qty, unit, price, tax_percent)";
@@ -191,7 +197,10 @@ const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name
 function discountRelief(workspace: Workspace): number {
   if (workspace.project.paymentMode === "installments") {
     const invoiceDiscounts = (workspace.agreement?.schedule ?? []).reduce((sum, line) => sum + (line.discountAmount ?? 0), 0);
-    return Math.round((invoiceDiscounts + discountTotal(workspace.payments)) * 100) / 100;
+    const openingDiscount = workspace.invoices
+      .filter((invoice) => invoice.kind === "advance")
+      .reduce((sum, invoice) => sum + (invoice.discountAmount ?? 0), 0);
+    return Math.round((invoiceDiscounts + openingDiscount + discountTotal(workspace.payments)) * 100) / 100;
   }
   const invoiceDiscounts = workspace.invoices.reduce((sum, invoice) => sum + (invoice.discountAmount ?? 0), 0);
   return Math.round((invoiceDiscounts + discountTotal(workspace.payments)) * 100) / 100;
@@ -199,9 +208,7 @@ function discountRelief(workspace: Workspace): number {
 
 function present(workspace: Workspace): ReceiveProject {
   const collected = paidTotal(workspace.payments);
-  const balanceBase = workspace.project.paymentMode === "installments"
-    ? workspace.project.grandTotal - (workspace.project.downPayment ?? 0)
-    : workspace.project.grandTotal;
+  const balanceBase = workspace.project.grandTotal;
   const balance = Math.max(0, Math.round((balanceBase - collected - discountRelief(workspace)) * 100) / 100);
   return { ...workspace, paidTotal: collected, balance };
 }
@@ -245,8 +252,8 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
       if (!saved.agreement) throw new DocumentError("The agreement could not be saved.");
       return saved.agreement;
     },
-    async issueInvoice(projectId) {
-      return remember(issueDirectInvoice(requireWorkspace(projectId), maxSerial([...workspaces.values()]), todayIso()));
+    async issueInvoice(projectId, opening) {
+      return remember(issueDirectInvoice(requireWorkspace(projectId), maxSerial([...workspaces.values()]), todayIso(), opening));
     },
     async deleteInvoice(invoiceId) {
       const current = [...workspaces.values()].find((workspace) => workspace.invoices.some((invoice) => invoice.id === invoiceId));
@@ -268,9 +275,11 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
     async recordPayment(projectId, input) {
       const current = requireWorkspace(projectId);
       const reserved = maxSerial([...workspaces.values()]);
-      const next = input.kind === "direct"
-        ? recordDirectPayment(current, input, reserved)
-        : receiveInstallment(current, input, reserved);
+      const next = input.kind === "opening"
+        ? receiveOpening(current, input, reserved)
+        : input.kind === "direct"
+          ? recordDirectPayment(current, input, reserved)
+          : receiveInstallment(current, input, reserved);
       return remember(next);
     },
     async updatePayment(paymentId, input) {
@@ -475,11 +484,19 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
     if (agreement && project.paymentMode === "installments") {
       const schedule = keepInstallmentAmounts(project, agreement.schedule, payments);
       const corrected = { ...agreement, schedule };
+      const installmentInvoices = syncInstallmentInvoices({ project, agreement: corrected, invoices, payments }, schedule, 0);
+      const opening = invoices.find((invoice) => invoice.kind === "advance");
+      const attached = attachOpeningInvoice({
+        project,
+        agreement: corrected,
+        invoices: opening ? [...installmentInvoices, opening] : installmentInvoices,
+        payments,
+      }, 0);
       return {
         project,
         agreement: corrected,
-        invoices: syncInstallmentInvoices({ project, agreement: corrected, invoices, payments }, schedule, 0),
-        payments,
+        invoices: attached.invoices,
+        payments: attached.payments,
       };
     }
     return {
@@ -666,12 +683,12 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
     if (payments.length === 0) return [];
     const projectIds = [...new Set(payments.map((row) => row.project_id))];
     const [projectResult, invoiceResult] = await Promise.all([
-      client.from("billing_projects").select("id, customer_name, cnic, serial").in("id", projectIds),
+      client.from("billing_projects").select("id, customer_name, cnic, serial, payment_mode").in("id", projectIds),
       client.from("billing_invoices").select("id, project_id, serial, installment_number").in("project_id", projectIds),
     ]);
     if (projectResult.error) throw storageFailure(projectResult.error, "listed");
     if (invoiceResult.error) throw storageFailure(invoiceResult.error, "listed");
-    const projects = new Map(((projectResult.data ?? []) as Array<{ id: string; customer_name: string; cnic: string; serial: string }>).map((row) => [row.id, row]));
+    const projects = new Map(((projectResult.data ?? []) as Array<{ id: string; customer_name: string; cnic: string; serial: string; payment_mode: "installments" | "direct" }>).map((row) => [row.id, row]));
     const invoices = groupByProject((invoiceResult.data ?? []) as Array<{ id: string; project_id: string; serial: string; installment_number: number | null }>);
     const entries = payments.map((payment): LedgerEntry => {
       const project = projects.get(payment.project_id);
@@ -686,6 +703,7 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
         paidAmount: asNumber(payment.paid_amount),
         paymentMode: payment.payment_mode,
         installmentNumber: payment.installment_number,
+        paymentKind: payment.installment_number != null ? "installment" : project?.payment_mode === "installments" ? "down" : "direct",
         customerName: project?.customer_name ?? "",
         cnic: project?.cnic ?? "",
         projectId: payment.project_id,
@@ -781,9 +799,9 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       if (!next.agreement) throw new DocumentError("The agreement could not be saved.");
       return next.agreement;
     },
-    async issueInvoice(projectId) {
+    async issueInvoice(projectId, opening) {
       const current = await loadWorkspace(projectId);
-      const next = issueDirectInvoice(current, await reservedSerial(), todayIso());
+      const next = issueDirectInvoice(current, await reservedSerial(), todayIso(), opening);
       await persist(current, next, false);
       return present(next);
     },
@@ -822,7 +840,11 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
     async recordPayment(projectId, input) {
       const current = await loadWorkspace(projectId);
       const reserved = await reservedSerial();
-      const next = input.kind === "direct" ? recordDirectPayment(current, input, reserved) : receiveInstallment(current, input, reserved);
+      const next = input.kind === "opening"
+        ? receiveOpening(current, input, reserved)
+        : input.kind === "direct"
+          ? recordDirectPayment(current, input, reserved)
+          : receiveInstallment(current, input, reserved);
       await persist(current, next, false);
       return present(next);
     },

@@ -102,7 +102,7 @@ export function CustomerDirectoryPage({ mode }: { mode: "active" | "profiles" })
                 <span className={styles.badge}>{jobs.some((job) => job.kind === "quotation") ? "Quotation" : jobs.some((job) => job.stage === "in_process") ? "In process" : "On file"}</span>
               </div>
               <h2>{card.customerName}</h2>
-              <p>{card.contactNo} · WhatsApp {card.whatsappNo}</p>
+              <p>{[card.contactNo, card.whatsappNo ? `WhatsApp ${card.whatsappNo}` : ""].filter(Boolean).join(" · ") || "No phone number"}</p>
               <p>{card.address}</p>
               {jobs.map((job) => (
                 <p key={`${job.kind}-${job.id}`}>

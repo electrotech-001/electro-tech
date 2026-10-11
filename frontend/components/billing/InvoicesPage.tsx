@@ -3,17 +3,32 @@
 import { Eye, MessageCircle, Pencil, Printer, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { deleteInvoice, DocumentApiError, listInvoices, updateInvoiceDiscount, type InvoiceRecord } from "@/lib/billing/documents-api";
+import { outstandingBalances, plannedInvoice, stillOpen } from "@/lib/billing/pending-invoices";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { printBillingLetter, printFromControl } from "@/lib/billing/print-letter";
-import { formatDisplayDate, formatRupees } from "@/lib/billing/quotation-math";
+import { formatDisplayDate, formatRupees, type QuotationRecord } from "@/lib/billing/quotation-math";
+import { listProjects } from "@/lib/billing/quotations-api";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import { InvoiceLetter } from "./BillingLetters";
+import { AmountInput } from "./FancyControls";
 import shell from "./billing-shell.module.css";
 import styles from "./quotation.module.css";
 import "./quotation-print.css";
 
+function invoicePill(invoice: InvoiceRecord): string {
+  const opening = invoice.project.downPayment ?? 0;
+  if (invoice.kind === "advance" && invoice.installmentNumber == null && opening > 0 && invoice.grandTotal <= opening + 0.001) {
+    return invoice.project.paymentMode === "installments" ? "Down payment" : "Advance payment";
+  }
+  if (invoice.kind === "settlement" || invoice.installmentNumber) return "Balance";
+  if (invoice.status === "partial") return "Partially paid";
+  if (invoice.status === "paid") return "Paid";
+  return "Pending";
+}
+
 export function InvoicesPage({ completed = false }: { completed?: boolean }) {
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
+  const [projects, setProjects] = useState<QuotationRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [viewing, setViewing] = useState<InvoiceRecord | null>(null);
@@ -68,7 +83,12 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
   }
 
   async function refresh() {
-    setInvoices(await listInvoices());
+    const [invoiceRows, projectRows] = await Promise.all([
+      listInvoices(),
+      listProjects().catch(() => [] as QuotationRecord[]),
+    ]);
+    setInvoices(invoiceRows);
+    setProjects(projectRows);
   }
 
   function openInvoice(invoice: InvoiceRecord) {
@@ -118,9 +138,15 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
 
   useEffect(() => {
     let cancelled = false;
-    listInvoices()
-      .then((rows) => {
-        if (!cancelled) setInvoices(rows);
+    Promise.all([
+      listInvoices(),
+      listProjects().catch(() => [] as QuotationRecord[]),
+    ])
+      .then(([invoiceRows, projectRows]) => {
+        if (!cancelled) {
+          setInvoices(invoiceRows);
+          setProjects(projectRows);
+        }
       })
       .catch((error: unknown) => {
         if (!cancelled) setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "Invoices could not be loaded." });
@@ -133,7 +159,10 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
     };
   }, []);
 
-  const visible = invoices.filter((invoice) => (completed ? invoice.status === "paid" : invoice.status !== "paid"));
+  const pendingBalances = completed ? [] : outstandingBalances(projects, invoices);
+  const visible = completed
+    ? invoices.filter((invoice) => !stillOpen(invoice))
+    : [...invoices.filter(stillOpen), ...pendingBalances];
 
   return (
     <>
@@ -144,7 +173,7 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
           <p className={shell.summary}>
             {completed
               ? "Fully paid invoices stay here. You can view, edit the discount, print, or delete them."
-              : "Invoices that still have a balance stay here. A later payment updates the same invoice with the amount, date, and mode."}
+              : "Unpaid invoices stay here until the balance is received. An advance or down payment is recorded on the remaining balance and in the payment ledger, not as its own invoice."}
           </p>
         </div>
       </header>
@@ -153,7 +182,7 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
       {!loading && visible.length === 0 ? (
         <section className={`${shell.panel} ${shell.empty}`}>
           <h2>{completed ? "No completed invoices" : "No pending invoices"}</h2>
-          <p>{completed ? "An invoice moves here once it is fully paid." : "Create an invoice from a project card."}</p>
+          <p>{completed ? "An invoice moves here once it is fully paid." : "Approve an installment project, or create an invoice from a project card. Each remaining installment is listed here."}</p>
         </section>
       ) : null}
       <div className={styles.cards}>
@@ -164,7 +193,7 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
           >
             <div className={styles.cardTop}>
               <strong>{invoice.serial}</strong>
-              <span className={styles.badge}>{invoice.status === "partial" ? "Partially paid" : invoice.status === "paid" ? "Paid" : "Due"}</span>
+              <span className={`${styles.badge} ${invoice.status === "paid" ? "" : styles.badgeLive}`}>{invoicePill(invoice)}</span>
             </div>
             <h2>{invoice.project.customerName}</h2>
             <p>{formatDisplayDate(invoice.invoiceDate)}{invoice.installmentNumber ? ` · Installment ${invoice.installmentNumber}` : ""}</p>
@@ -179,7 +208,7 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
               {completed ? <button type="button" onClick={() => openInvoice(invoice)}><Pencil size={15} /> Edit</button> : null}
               {completed ? <button type="button" onClick={() => void printInvoice(invoice)} disabled={busy}><Printer size={15} /> Print</button> : null}
               <button type="button" onClick={() => void sendInvoice(invoice)} disabled={busy}><MessageCircle size={15} /> WhatsApp</button>
-              <button className={styles.danger} type="button" onClick={() => setDeleting(invoice)} disabled={busy}><Trash2 size={15} /> Delete</button>
+              {plannedInvoice(invoice) ? null : <button className={styles.danger} type="button" onClick={() => setDeleting(invoice)} disabled={busy}><Trash2 size={15} /> Delete</button>}
             </div>
           </article>
         ))}
@@ -196,13 +225,15 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
               </div>
             </div>
             <div className={styles.modalScroll}>
-              <div className={styles.discountBar}>
-                <label className={styles.field}>
-                  <span>Discount amount</span>
-                  <input type="number" min="0" step="0.01" value={discount} onChange={(event) => setDiscount(Number(event.target.value))} />
-                </label>
-                <button className={styles.primaryButton} type="button" onClick={() => void saveDiscount()} disabled={busy}>Save discount</button>
-              </div>
+              {plannedInvoice(viewing) ? null : (
+                <div className={styles.discountBar}>
+                  <label className={styles.field}>
+                    <span>Discount amount</span>
+                    <AmountInput value={discount} onChange={(amount) => setDiscount(amount ?? 0)} />
+                  </label>
+                  <button className={styles.primaryButton} type="button" onClick={() => void saveDiscount()} disabled={busy}>Save discount</button>
+                </div>
+              )}
               <InvoiceLetter invoice={viewing} />
             </div>
           </div>

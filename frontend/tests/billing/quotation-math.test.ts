@@ -25,4 +25,24 @@ describe("quotation field masks", () => {
     expect(totals.installments.map((line) => line.amount).reduce((sum, amount) => sum + amount, 0)).toBe(423000);
     expect(quotationIssues(draft)).toEqual([]);
   });
+
+  it("allows a blank CNIC and contact number, and rejects a partial one", () => {
+    const draft = blankDraft();
+    draft.customerName = "Sheikh Zain";
+    draft.address = "Saddar Attock";
+    draft.whatsappNo = "0300-5607350";
+    draft.customerPackage = "12 Kw system";
+    draft.items = [{ description: "Inverter", qty: 1, unit: "Set", price: 1000, taxPercent: 0 }];
+    expect(quotationIssues(draft)).toEqual([]);
+    draft.cnic = "123";
+    expect(quotationIssues(draft).some((issue) => issue.includes("CNIC"))).toBe(true);
+    draft.cnic = "";
+    draft.contactNo = "0300";
+    expect(quotationIssues(draft).some((issue) => issue.includes("contact number"))).toBe(true);
+    draft.contactNo = "";
+    draft.whatsappNo = "";
+    expect(quotationIssues(draft)).toEqual([]);
+    draft.whatsappNo = "0300";
+    expect(quotationIssues(draft).some((issue) => issue.includes("WhatsApp"))).toBe(true);
+  });
 });

@@ -68,6 +68,13 @@ function disconnectCode(error: unknown): number | undefined {
   return typeof statusCode === "number" ? statusCode : undefined;
 }
 
+function credsAreLinked(saved: unknown): boolean {
+  if (!saved || typeof saved !== "object") return false;
+  const creds = saved as { registered?: unknown; me?: { id?: unknown } | null };
+  if (creds.registered === true) return true;
+  return typeof creds.me?.id === "string" && creds.me.id.length > 0;
+}
+
 function readIdentity(creds: AuthenticationCreds): { phone: string | null; pushName: string | null } {
   const source = creds.me?.phoneNumber || creds.me?.id || "";
   const digits = source.split("@")[0]?.split(":")[0]?.replace(/\D/g, "") ?? "";
@@ -167,11 +174,9 @@ export class WhatsAppSession {
 
   async restore(): Promise<void> {
     const saved = await this.repository.read("creds");
-    const registered = Boolean(
-      saved && typeof saved === "object" && (saved as { registered?: boolean }).registered,
-    );
-    this.savedSession = registered;
-    if (!registered) return;
+    const linked = credsAreLinked(saved);
+    this.savedSession = linked;
+    if (!linked) return;
     await this.connect();
   }
 
@@ -275,7 +280,7 @@ export class WhatsAppSession {
 
     const auth = await loadAuthState(this.repository);
     this.auth = auth;
-    this.savedSession = auth.state.creds.registered;
+    this.savedSession = credsAreLinked(auth.state.creds);
     const socket = await this.createSocket(auth.state);
     if (this.stopping || token !== this.socketToken) {
       await socket.end(undefined).catch(() => undefined);
@@ -288,7 +293,7 @@ export class WhatsAppSession {
         if (generation !== this.saveGeneration) return;
         await auth.saveCreds();
         if (generation !== this.saveGeneration) return;
-        this.savedSession = auth.state.creds.registered;
+        this.savedSession = credsAreLinked(auth.state.creds);
       }).catch((error: unknown) => {
         console.error("WhatsApp credentials were not saved.", error instanceof Error ? error.message : error);
       });
@@ -333,11 +338,16 @@ export class WhatsAppSession {
     if (this.stopping) return;
     this.socket = null;
     const code = disconnectCode(error);
+    if (code === DisconnectReason.connectionReplaced) {
+      this.socket = null;
+      this.qrDataUrl = null;
+      this.error = null;
+      return;
+    }
     const loggedOut = code === DisconnectReason.loggedOut
       || code === DisconnectReason.badSession
       || code === DisconnectReason.multideviceMismatch
-      || code === DisconnectReason.forbidden
-      || code === DisconnectReason.connectionReplaced;
+      || code === DisconnectReason.forbidden;
     if (loggedOut) {
       await this.forgetSavedSession();
       this.phone = null;

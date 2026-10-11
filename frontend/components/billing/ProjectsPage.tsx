@@ -2,7 +2,7 @@
 
 import { BadgeCheck, Eye, FileSignature, MessageCircle, Receipt, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { completeProject, DocumentApiError, issueDirectInvoice, listAgreements, listInvoices, type AgreementRecord, type InvoiceRecord } from "@/lib/billing/documents-api";
+import { completeProject, DocumentApiError, listAgreements, listInvoices, type AgreementRecord, type InvoiceRecord } from "@/lib/billing/documents-api";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { formatDisplayDate, formatRupees, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { disapproveProject, listProjects, QuotationApiError } from "@/lib/billing/quotations-api";
@@ -10,7 +10,7 @@ import { printFromControl } from "@/lib/billing/print-letter";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import { AgreementLetter, InvoiceLetter } from "./BillingLetters";
 import shell from "./billing-shell.module.css";
-import { AgreementDialog, AgreementViewDialog } from "./ProjectFlow";
+import { AgreementDialog, AgreementViewDialog, DirectInvoiceDialog } from "./ProjectFlow";
 import { QuotationDialog } from "./QuotationLetter";
 import styles from "./quotation.module.css";
 import "./quotation-print.css";
@@ -30,6 +30,7 @@ export function ProjectsPage() {
   const [agreementView, setAgreementView] = useState<AgreementRecord | null>(null);
   const [invoiceView, setInvoiceView] = useState<InvoiceRecord | null>(null);
   const [drafting, setDrafting] = useState<QuotationRecord | null>(null);
+  const [invoicing, setInvoicing] = useState<QuotationRecord | null>(null);
   const [disapproving, setDisapproving] = useState<QuotationRecord | null>(null);
   const [completing, setCompleting] = useState<QuotationRecord | null>(null);
   const [busy, setBusy] = useState(false);
@@ -103,22 +104,12 @@ export function ProjectsPage() {
     }
   }
 
-  async function onCreateInvoice(project: QuotationRecord) {
+  function onCreateInvoice(project: QuotationRecord) {
     if (project.paymentMode === "installments") {
       setDrafting(project);
       return;
     }
-    setBusy(true);
-    setBanner(null);
-    try {
-      await issueDirectInvoice(project.id);
-      await refresh();
-      setBanner({ tone: "ok", text: `The invoice for ${project.serial} is in Invoices.` });
-    } catch (error) {
-      setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The invoice could not be created." });
-    } finally {
-      setBusy(false);
-    }
+    setInvoicing(project);
   }
 
   async function sendLetter(project: QuotationRecord, kind: "agreement" | "invoice") {
@@ -171,7 +162,7 @@ export function ProjectsPage() {
       <article className={styles.card} key={project.id}>
         <div className={styles.cardTop}>
           <strong>{project.serial}</strong>
-          <span className={styles.badge}>{done ? "Completed" : "In process"}</span>
+          <span className={`${styles.badge} ${done ? styles.badgeDone : styles.badgeLive}`}>{done ? "Completed" : "In process"}</span>
         </div>
         <h2>{project.customerName}</h2>
         <p>{formatDisplayDate(project.quotationDate)} · {project.paymentMode === "installments" ? "Installments" : "Direct"}</p>
@@ -180,7 +171,7 @@ export function ProjectsPage() {
         <div className={styles.cardActions}>
           <button type="button" onClick={() => setViewing(project)}><Eye size={15} /> View</button>
           {done ? null : (
-            <button type="button" onClick={() => void onCreateInvoice(project)} disabled={invoiceCreated || busy} title={invoiceCreated ? "Invoice already created" : undefined}>
+            <button type="button" onClick={() => onCreateInvoice(project)} disabled={invoiceCreated || busy} title={invoiceCreated ? "Invoice already created" : undefined}>
               <Receipt size={15} /> Create Invoice
             </button>
           )}
@@ -219,10 +210,10 @@ export function ProjectsPage() {
       ) : null}
       <div className={styles.cards}>{active.map(renderCard)}</div>
       {completed.length > 0 ? (
-        <>
-          <h2 className={styles.blockLabel} id="completed">Completed</h2>
+        <section className={styles.completedBlock} id="completed">
+          <h2 className={styles.completedPill}>Completed</h2>
           <div className={styles.cards}>{completed.map(renderCard)}</div>
-        </>
+        </section>
       ) : null}
 
       {viewing ? <QuotationDialog quotation={viewing} onClose={() => setViewing(null)} /> : null}
@@ -251,6 +242,18 @@ export function ProjectsPage() {
         </div>
       ) : null}
       {drafting ? <AgreementDialog project={drafting} onClose={() => setDrafting(null)} onSaved={() => { setDrafting(null); void refresh(); setBanner({ tone: "ok", text: drafting.paymentMode === "installments" ? `Invoices for ${drafting.serial} are in Invoices.` : "Agreement saved." }); }} /> : null}
+      {invoicing ? (
+        <DirectInvoiceDialog
+          project={invoicing}
+          onClose={() => setInvoicing(null)}
+          onSaved={() => {
+            const serial = invoicing.serial;
+            setInvoicing(null);
+            void refresh();
+            setBanner({ tone: "ok", text: `The invoice for ${serial} is in Invoices.` });
+          }}
+        />
+      ) : null}
       {disapproving ? (
         <div className={styles.modal} role="presentation" onClick={() => setDisapproving(null)}>
           <div className={styles.confirm} role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>

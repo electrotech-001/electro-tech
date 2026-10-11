@@ -152,6 +152,17 @@ test("customer profile updates every quotation and project that shares the CNIC"
   );
 });
 
+test("a quotation can omit the CNIC, contact number, and WhatsApp number", async () => {
+  const repository = createMemoryQuotationRepository();
+  const saved = await repository.create(sample({ cnic: "", contactNo: "   ", whatsappNo: "  " }));
+  assert.equal(saved.cnic, "");
+  assert.equal(saved.contactNo, "");
+  assert.equal(saved.whatsappNo, "");
+  await assert.rejects(() => repository.create(sample({ cnic: "123" })), /CNIC/);
+  await assert.rejects(() => repository.create(sample({ contactNo: "0300" })), /contact number/);
+  await assert.rejects(() => repository.create(sample({ whatsappNo: "0300" })), /WhatsApp/);
+});
+
 test("quotation routes require billing login and reject an incomplete CNIC", async () => {
   const baseUrl = await listen(createMemoryQuotationRepository());
   const missing = await fetch(`${baseUrl}/api/billing/quotations`);

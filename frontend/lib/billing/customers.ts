@@ -31,6 +31,22 @@ export function customerKey(cnic: string): string {
   return cnic.replace(/\D/g, "");
 }
 
+function nameSlug(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "customer";
+}
+
+export function customerIdentity(input: { cnic: string; customerName: string; whatsappNo?: string }): string {
+  const digits = customerKey(input.cnic);
+  if (digits) return digits;
+  const phone = (input.whatsappNo ?? "").replace(/\D/g, "");
+  return `open:${nameSlug(input.customerName)}:${phone || "na"}`;
+}
+
+export function matchesCustomerKey(key: string, input: { cnic: string; customerName: string; whatsappNo?: string }): boolean {
+  if (customerKey(input.cnic)) return customerIdentity(input) === key;
+  return key.startsWith(`open:${nameSlug(input.customerName)}:`);
+}
+
 function jobFrom(record: QuotationRecord): CustomerJob {
   const stage: CustomerStage = record.kind === "project"
     ? record.status === "completed" ? "completed" : "in_process"
@@ -60,7 +76,7 @@ function applyIdentity(bucket: Bucket, record: QuotationRecord): void {
 export function groupCustomers(quotations: QuotationRecord[], projects: QuotationRecord[]): CustomerCard[] {
   const buckets = new Map<string, Bucket>();
   function bucketFor(record: QuotationRecord): Bucket {
-    const key = customerKey(record.cnic);
+    const key = customerIdentity(record);
     const existing = buckets.get(key);
     if (existing) return existing;
     const created: Bucket = {

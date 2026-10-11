@@ -158,10 +158,15 @@ function assertDraft(draft: QuotationDraft): QuotationDraft {
   const normalized: QuotationDraft = {
     ...draft,
     customerName: draft.customerName.trim(),
+    cnic: draft.cnic.trim(),
     address: draft.address.trim(),
+    contactNo: draft.contactNo.trim(),
+    whatsappNo: draft.whatsappNo.trim(),
     customerPackage: draft.customerPackage.trim(),
     paymentMode: draft.paymentMode,
-    downPayment: draft.paymentMode === "installments" ? draft.downPayment : null,
+    downPayment: draft.paymentMode === "installments" || (draft.paymentMode === "direct" && draft.downPayment != null)
+      ? draft.downPayment
+      : null,
     installmentCount: draft.paymentMode === "installments" ? draft.installmentCount : null,
     items: draft.items.map((item) => ({
       description: item.description.trim(),
@@ -327,6 +332,9 @@ export function createMemoryQuotationRepository(): QuotationRepository {
       quotations.splice(index, 1);
     },
     async updateCustomer(currentCnic, profile) {
+      if (!/^\d{5}-\d{7}-\d$/.test(currentCnic.trim())) {
+        throw new QuotationServiceError("Add a CNIC on the quotation before updating this customer from the profile.", 400, "invalid_customer");
+      }
       const clean = assertProfile(profile);
       const quotationHits = quotations.filter((row) => row.cnic === currentCnic);
       const projectHits = projects.filter((row) => row.cnic === currentCnic);
@@ -524,6 +532,9 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
       if (removed.error) throw storageFailure(removed.error, "deleted");
     },
     async updateCustomer(currentCnic, profile) {
+      if (!/^\d{5}-\d{7}-\d$/.test(currentCnic.trim())) {
+        throw new QuotationServiceError("Add a CNIC on the quotation before updating this customer from the profile.", 400, "invalid_customer");
+      }
       const clean = assertProfile(profile);
       const patch = {
         customer_name: clean.customerName,

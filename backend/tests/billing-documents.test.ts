@@ -107,17 +107,30 @@ test("direct agreement has no guarantors and the balance invoice closes at zero"
   assert.equal(reissued.invoices[0]?.status, "due");
 });
 
-test("installment agreement stores two guarantors and a received card updates the rest", async () => {
+test("installment agreement stores one optional guarantor and a received card updates the rest", async () => {
+  const emptyRepo = createMemoryDocumentsRepository([project("installments")]);
+  const withoutGuarantor = await emptyRepo.saveAgreement("project-1", {
+    dueDates: ["2026-11-01", "2026-12-01", "2027-01-01"],
+    guarantors: [],
+  });
+  assert.equal(withoutGuarantor.guarantors.length, 0);
+
   const repository = createMemoryDocumentsRepository([project("installments")]);
   await assert.rejects(
-    () => repository.saveAgreement("project-1", { dueDates: ["2026-11-01"], guarantors: [] }),
-    /both guarantors/,
+    () => repository.saveAgreement("project-1", {
+      dueDates: ["2026-11-01", "2026-12-01", "2027-01-01"],
+      guarantors: [guarantor("Ali Raza"), guarantor("Sara Khan")],
+    }),
+    /only one guarantor/i,
   );
+  const namedOnly = { ...guarantor("Ali Raza"), designation: "", occupation: "", contactNo: "", cnic: "", cnicFront: "", cnicBack: "" };
   const agreement = await repository.saveAgreement("project-1", {
     dueDates: ["2026-11-01", "2026-12-01", "2027-01-01"],
-    guarantors: [guarantor("Ali Raza"), guarantor("Sara Khan")],
+    guarantors: [namedOnly],
   });
-  assert.equal(agreement.guarantors.length, 2);
+  assert.equal(agreement.guarantors.length, 1);
+  assert.equal(agreement.guarantors[0]?.fullName, "Ali Raza");
+  assert.equal(agreement.guarantors[0]?.cnicFront, "");
   assert.equal(agreement.schedule.length, 3);
   const guarantors = await repository.listGuarantors();
   assert.equal(guarantors[0]?.customerName, "Sheikh Zain");
@@ -132,8 +145,9 @@ test("installment agreement stores two guarantors and a received card updates th
   const first = received.agreement?.schedule.find((line) => line.number === 1);
   assert.equal(first?.status, "paid");
   assert.equal(received.invoices.find((invoice) => invoice.installmentNumber === 1)?.status, "paid");
-  assert.equal(received.invoices.every((invoice) => invoice.schedule?.find((line) => line.number === 1)?.status === "paid"), true);
-  assert.equal(received.invoices.every((invoice) => invoice.schedule?.find((line) => line.number === 1)?.paidDate === "2026-11-01"), true);
+  const installmentInvoices = received.invoices.filter((invoice) => invoice.kind === "installment");
+  assert.equal(installmentInvoices.every((invoice) => invoice.schedule?.find((line) => line.number === 1)?.status === "paid"), true);
+  assert.equal(installmentInvoices.every((invoice) => invoice.schedule?.find((line) => line.number === 1)?.paidDate === "2026-11-01"), true);
   const unpaid = received.agreement?.schedule.filter((line) => line.status === "due") ?? [];
   assert.equal(unpaid.reduce((sum, line) => sum + line.amount, 0), 282000);
 
@@ -194,14 +208,14 @@ test("an installment invoice discount lowers that invoice without relabeling the
   const repository = createMemoryDocumentsRepository([project("installments")]);
   await repository.saveAgreement("project-1", {
     dueDates: ["2026-11-01", "2026-12-01", "2027-01-01"],
-    guarantors: [guarantor("Ali Raza"), guarantor("Sara Khan")],
+    guarantors: [guarantor("Ali Raza")],
   });
   const invoiceId = (await repository.listInvoices()).find((invoice) => invoice.installmentNumber === 1)?.id ?? "";
   const discounted = await repository.setInvoiceDiscount(invoiceId, 10000);
   assert.equal(discounted.agreement?.schedule.find((line) => line.number === 1)?.discountAmount, 10000);
   assert.equal(discounted.agreement?.schedule.find((line) => line.number === 2)?.amount, 141000);
   assert.equal(discounted.invoices.find((invoice) => invoice.installmentNumber === 1)?.balanceDue, 131000);
-  assert.equal(discounted.balance, 413000);
+  assert.equal(discounted.balance, 663000);
 
   const received = await repository.recordPayment("project-1", {
     kind: "installment",
@@ -212,7 +226,7 @@ test("an installment invoice discount lowers that invoice without relabeling the
     paymentMode: "cash",
   });
   assert.equal(received.agreement?.schedule.find((line) => line.number === 1)?.status, "paid");
-  assert.equal(received.balance, 282000);
+  assert.equal(received.balance, 532000);
   const unpaid = received.agreement?.schedule.filter((line) => line.status === "due") ?? [];
   assert.equal(unpaid.reduce((sum, line) => sum + line.amount, 0), 282000);
 });
@@ -242,7 +256,7 @@ test("a partial installment payment stays on that installment", async () => {
   const repository = createMemoryDocumentsRepository([quoted]);
   await repository.saveAgreement("project-1", {
     dueDates: ["2026-11-01", "2026-12-01"],
-    guarantors: [guarantor("Ali Raza"), guarantor("Sara Khan")],
+    guarantors: [guarantor("Ali Raza")],
   });
   const received = await repository.recordPayment("project-1", {
     kind: "installment",
@@ -349,4 +363,97 @@ test("a direct receipt can close the balance with cash plus a discount, and a fu
     () => forgiven.recordPayment("project-1", { kind: "direct", paidAmount: 0, discountAmount: 0, paymentDate: "2026-10-12", paymentMode: "cash" }),
     /paid amount or a discount/,
   );
+});
+
+test("installment invoices record the down payment in the ledger and keep the quotation installments", async () => {
+  const repository = createMemoryDocumentsRepository([project("installments")]);
+  await repository.saveAgreement("project-1", {
+    dueDates: ["2026-11-01", "2026-12-01", "2027-01-01"],
+    guarantors: [],
+    opening: { paidAmount: 250000, paymentDate: "2026-10-10", paymentMode: "cash" },
+  });
+  const created = await repository.listInvoices();
+  assert.equal(created.some((invoice) => invoice.kind === "advance"), false);
+  assert.equal(created.filter((invoice) => invoice.kind === "installment").length, 3);
+  assert.equal(created.every((invoice) => invoice.openingPayments?.[0]?.paidAmount === 250000), true);
+  const workspace = await repository.workspace("project-1");
+  assert.equal(workspace.balance, 423000);
+  assert.equal(workspace.payments.length, 1);
+  const ledger = await repository.listLedger();
+  assert.equal(ledger.length, 1);
+  assert.equal(ledger[0]?.paidAmount, 250000);
+  assert.equal(ledger[0]?.paymentKind, "down");
+  assert.equal(ledger[0]?.paymentMode, "cash");
+  assert.equal(ledger[0]?.installmentNumber, null);
+});
+
+test("a direct invoice records the advance on the same invoice and in the ledger", async () => {
+  const quoted = { ...project("direct"), downPayment: 200000 };
+  const repository = createMemoryDocumentsRepository([quoted]);
+  const issued = await repository.issueInvoice("project-1", {
+    paidAmount: 200000,
+    paymentDate: "2026-10-10",
+    paymentMode: "bank_transfer",
+  });
+  assert.equal(issued.invoices.length, 1);
+  assert.equal(issued.invoices[0]?.grandTotal, 673000);
+  assert.equal(issued.invoices[0]?.advancePaid, 200000);
+  assert.equal(issued.invoices[0]?.balanceDue, 473000);
+  assert.equal(issued.invoices[0]?.status, "partial");
+  assert.equal(issued.balance, 473000);
+  assert.equal(issued.invoices.some((invoice) => invoice.kind === "settlement"), false);
+  const ledger = await repository.listLedger();
+  assert.equal(ledger.length, 1);
+  assert.equal(ledger[0]?.paidAmount, 200000);
+  assert.equal(ledger[0]?.paymentKind, "direct");
+  assert.equal(ledger[0]?.paymentMode, "bank_transfer");
+  assert.equal(ledger[0]?.invoiceSerial, issued.invoices[0]?.serial);
+
+  const rest = await repository.recordPayment("project-1", {
+    kind: "direct",
+    paidAmount: 473000,
+    paymentDate: "2026-10-11",
+    paymentMode: "cash",
+  });
+  assert.equal(rest.balance, 0);
+  assert.equal(rest.invoices.length, 1);
+  assert.equal(rest.invoices[0]?.status, "paid");
+  assert.equal((await repository.listLedger()).length, 2);
+});
+
+test("a direct invoice can be created when no advance was received", async () => {
+  const quoted = { ...project("direct"), downPayment: 200000 };
+  const repository = createMemoryDocumentsRepository([quoted]);
+  const issued = await repository.issueInvoice("project-1", { paidAmount: 0, paymentDate: "", paymentMode: "cash" });
+  assert.equal(issued.invoices.length, 1);
+  assert.equal(issued.invoices[0]?.grandTotal, 673000);
+  assert.equal(issued.invoices[0]?.advancePaid, 0);
+  assert.equal(issued.invoices[0]?.balanceDue, 673000);
+  assert.equal(issued.payments.length, 0);
+  assert.equal((await repository.listLedger()).length, 0);
+});
+
+test("a down payment received before the invoices stays in the ledger and is not its own invoice", async () => {
+  const repository = createMemoryDocumentsRepository([project("installments")]);
+  const received = await repository.recordPayment("project-1", {
+    kind: "opening",
+    paidAmount: 100000,
+    paymentDate: "2026-10-10",
+    paymentMode: "cash",
+  });
+  assert.equal(received.invoices.length, 0);
+  assert.equal(received.balance, 573000);
+  assert.equal(received.payments[0]?.installmentNumber, null);
+  await repository.saveAgreement("project-1", {
+    dueDates: ["2026-11-01", "2026-12-01", "2027-01-01"],
+    guarantors: [],
+    opening: { paidAmount: 0, paymentDate: "2026-10-10", paymentMode: "cash" },
+  });
+  const invoices = await repository.listInvoices();
+  assert.equal(invoices.some((invoice) => invoice.kind === "advance"), false);
+  assert.equal(invoices.filter((invoice) => invoice.kind === "installment").length, 3);
+  assert.equal(invoices[0]?.openingPayments?.[0]?.paidAmount, 100000);
+  const ledger = await repository.listLedger();
+  assert.equal(ledger.length, 1);
+  assert.equal(ledger[0]?.paymentKind, "down");
 });

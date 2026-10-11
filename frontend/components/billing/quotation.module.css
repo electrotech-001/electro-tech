@@ -412,6 +412,15 @@
   flex-wrap: wrap;
 }
 
+.modal .formActions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin-top: 4px;
+  padding: 12px 0 max(4px, env(safe-area-inset-bottom));
+  background: #f4f1ea;
+}
+
 .error,
 .hint,
 .success {
@@ -480,13 +489,44 @@
 }
 
 .badge {
-  padding: 4px 8px;
+  flex: none;
+  padding: 4px 10px;
   border-radius: 999px;
   background: #101410;
   color: #f5c400;
   font-size: 0.72rem;
   font-weight: 750;
   letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.badgeLive {
+  background: #f2f2f2;
+  color: #171717;
+}
+
+.badgeDone {
+  background: #e8e8e8;
+  color: #171717;
+}
+
+.completedBlock {
+  display: grid;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.completedPill {
+  justify-self: start;
+  margin: 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: #e8e8e8;
+  color: #171717;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1;
   text-transform: uppercase;
 }
 
@@ -578,18 +618,27 @@
 .confirm {
   width: min(980px, 100%);
   max-height: min(92dvh, 1100px);
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
   background: #f4f1ea;
   border-radius: 18px;
   overflow: hidden;
 }
 
+.modalCard {
+  display: flex;
+  flex-direction: column;
+}
+
 .confirm {
-  width: min(460px, 100%);
-  grid-template-rows: auto;
+  width: min(480px, 100%);
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   padding: 22px;
+  overflow: auto;
+  background: #fff;
+}
+
+.confirm .formActions {
   background: #fff;
 }
 
@@ -604,18 +653,32 @@
 }
 
 .modalBar {
+  flex: none;
+  flex-wrap: wrap;
+  align-items: flex-start;
   padding: 14px 16px;
   background: #fff;
 }
 
+.modalBar h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .modalBar div {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
+  margin-left: auto;
 }
 
 .modalScroll {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
   padding: 16px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .letter {
@@ -954,6 +1017,235 @@
 .letterPaper {
   width: 794px;
   box-shadow: none;
+}
+
+.sheet {
+  width: 794px;
+  max-width: 100%;
+  padding: 8px 12px 10px;
+}
+
+.sheet .letterHead {
+  grid-template-columns: 78px minmax(0, 1fr) 118px;
+  gap: 8px;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e6e6e6;
+}
+
+.sheet .logo {
+  width: 72px;
+}
+
+.sheet .company {
+  gap: 0;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  color: #171717;
+}
+
+.sheet .company strong {
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+
+.sheet .docTitle {
+  display: grid;
+  justify-items: end;
+  gap: 0;
+  margin: 0;
+  color: #171717;
+  font-size: 1.28rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.contactLine {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.contactIcon {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+.sheet .parties {
+  grid-template-columns: minmax(0, 1fr) 250px;
+  margin-top: 8px;
+  gap: 8px;
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.sheet .parties strong {
+  font-size: 1em;
+}
+
+.sheet .parties strong,
+.sheet .parties span,
+.sheet .meta,
+.sheet .packageBlock p {
+  line-height: 1.35;
+}
+
+.sheet .blockLabel {
+  margin-bottom: 2px;
+  color: #171717;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.sheet .packageBlock {
+  margin: 4px 0;
+}
+
+.sheet .meta {
+  gap: 4px;
+}
+
+.sheet .meta dt,
+.sheet .meta dd {
+  color: #171717;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.sheet .tableWrap {
+  margin-top: 2px;
+}
+
+.sheet .tableWrap table {
+  min-width: 0;
+}
+
+.sheet th,
+.sheet td {
+  padding: 1px 4px;
+  line-height: 1.15;
+  font-size: 0.7rem;
+}
+
+.letter.sheet thead th {
+  padding: 6px 4px;
+  background: #f2f2f2;
+  color: #171717;
+  font-size: 0.64rem;
+  font-weight: 800;
+  line-height: 1.15;
+  border-bottom: 1px solid #e4e4e4;
+}
+
+.sheet tbody td {
+  padding: 4px;
+  border-bottom: 1px solid #ececec;
+  vertical-align: top;
+}
+
+.letter.sheet td small {
+  color: #171717;
+}
+
+.sheet .itemText {
+  white-space: pre-wrap;
+}
+
+.sheet .letterFoot {
+  margin-top: 4px;
+  gap: 8px;
+}
+
+.sheet .plan {
+  max-width: 280px;
+  padding: 8px 10px;
+  gap: 4px;
+  border: 0;
+  border-radius: 0;
+  background: #f2f2f2;
+  color: #171717;
+  line-height: 1.35;
+}
+
+.sheet .paymentInstructions {
+  max-width: 280px;
+  padding: 0;
+  gap: 1px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #171717;
+  line-height: 1.35;
+}
+
+.sheet .totals {
+  width: min(100%, 280px);
+}
+
+.sheet .totals th,
+.sheet .totals td {
+  padding: 4px 0;
+  border-bottom: 1px solid #e4e4e4;
+  background: transparent;
+  color: #171717;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.sheet .grand th,
+.sheet .grand td {
+  background: transparent;
+  color: #171717;
+  font-weight: 800;
+  border-top: 1px solid #171717;
+  border-bottom: 1px solid #171717;
+}
+
+.sheetClose {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.sheet .signature {
+  margin-top: 6px;
+  gap: 2px;
+}
+
+.sheet .signOff {
+  margin-top: 8px;
+  gap: 48px;
+}
+
+.sheet .signature img {
+  width: 108px;
+}
+
+.sheet .paidStamp {
+  top: 86px;
+  padding: 4px 8px;
+  font-size: 1rem;
+  border-width: 3px;
+}
+
+.terms {
+  margin-top: 8px;
+  font-size: 0.62rem;
+  line-height: 1.25;
+}
+
+.terms p {
+  margin: 0;
+  white-space: pre-wrap;
 }
 
 .letterHead,
@@ -1422,6 +1714,95 @@
     line-height: 1.25;
   }
 
+  :global(.print-host) .sheet {
+    width: 100% !important;
+    padding: 0 !important;
+    color: #171717 !important;
+  }
+
+  :global(.print-host) .sheet .letterHead {
+    grid-template-columns: 20mm minmax(0, 1fr) 28mm;
+    gap: 2mm;
+    align-items: center;
+  }
+
+  :global(.print-host) .sheet .logo {
+    width: 20mm;
+  }
+
+  :global(.print-host) .sheet .company {
+    font-size: 7.5pt;
+    line-height: 1.15;
+    gap: 0;
+  }
+
+  :global(.print-host) .sheet .company strong {
+    font-size: 10pt;
+    line-height: 1.05;
+  }
+
+  :global(.print-host) .sheet .docTitle {
+    font-size: 11pt;
+    line-height: 1;
+  }
+
+  :global(.print-host) .sheet .parties {
+    margin-top: 2mm;
+    gap: 2mm;
+    font-size: 9.5pt;
+  }
+
+  :global(.print-host) .sheet .packageBlock {
+    margin: 1.5mm 0;
+  }
+
+  :global(.print-host) .sheet th,
+  :global(.print-host) .sheet td {
+    padding: 1px 3px;
+    font-size: 7.5pt;
+    line-height: 1.15;
+  }
+
+  :global(.print-host) .sheet thead th {
+    background: #f2f2f2 !important;
+    color: #171717 !important;
+  }
+
+  :global(.print-host) .sheet .grand th,
+  :global(.print-host) .sheet .grand td {
+    background: transparent !important;
+    color: #171717 !important;
+    border-top: 1px solid #171717;
+    border-bottom: 1px solid #171717;
+  }
+
+  :global(.print-host) .sheet .plan {
+    background: #f2f2f2 !important;
+    color: #171717 !important;
+  }
+
+  :global(.print-host) .sheet .letterFoot,
+  :global(.print-host) .sheet .signature {
+    margin-top: 2mm;
+    gap: 1mm;
+  }
+
+  :global(.print-host) .sheet .signOff {
+    margin-top: 3mm;
+    gap: 14mm;
+  }
+
+  :global(.print-host) .sheet .signature img {
+    width: 28mm;
+  }
+
+  :global(.print-host) .sheet .terms {
+    margin-top: 2mm;
+    font-size: 6.5pt;
+    line-height: 1.2;
+    color: #171717 !important;
+  }
+
   :global(.print-host) .ledgerSheet thead th {
     background: #1f6b45 !important;
     color: #f4f1ea !important;
@@ -1522,15 +1903,20 @@
   .modalCard,
   .confirm {
     width: 100%;
-    max-height: 100dvh;
+    max-height: calc(100dvh - 8px);
     border-radius: 0;
   }
 
   .confirm {
     align-self: end;
-    max-height: 92dvh;
+    max-height: calc(100dvh - 12px);
     overflow: auto;
     border-radius: 18px 18px 0 0;
+  }
+
+  .modalBar div > button,
+  .formActions > button {
+    min-width: 0;
   }
 
   .modalBar,

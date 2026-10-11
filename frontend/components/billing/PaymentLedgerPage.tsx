@@ -16,7 +16,11 @@ function modeLabel(mode: LedgerEntry["paymentMode"]): string {
 }
 
 function detail(entry: LedgerEntry): string {
-  const kind = entry.installmentNumber == null ? "Direct payment" : `Installment ${entry.installmentNumber}`;
+  const kind = entry.paymentKind === "down"
+    ? "Down payment"
+    : entry.installmentNumber == null
+      ? "Direct payment"
+      : `Installment ${entry.installmentNumber}`;
   return entry.invoiceSerial ? `${kind} · ${entry.invoiceSerial}` : kind;
 }
 

@@ -3,6 +3,7 @@ import {
   BookOpen,
   FileSignature,
   FileText,
+  ScrollText,
   IdCard,
   LayoutDashboard,
   MessageCircle,
@@ -57,6 +58,7 @@ export const billingNav: BillingNavGroup[] = [
     items: [
       { href: "/billing/agreements", label: "Agreements", icon: FileSignature },
       { href: "/billing/guarantors", label: "Guarantors", icon: Users },
+      { href: "/billing/terms", label: "Terms & Conditions", icon: ScrollText },
     ],
   },
   {

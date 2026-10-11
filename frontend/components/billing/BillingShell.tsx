@@ -3,9 +3,11 @@
 import { Menu, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { getDocumentTerms } from "@/lib/billing/documents-api";
 import { billingNav, isBillingNavActive } from "@/lib/billing/navigation";
 import { currentAssuranceLevel, hasBillingAccess, needsAuthenticatorEnrollment, signOutBilling } from "@/lib/billing/mfa";
 import { billingSupabase } from "@/lib/billing/supabase";
+import { DocumentTermsProvider, publishDocumentTerms } from "./DocumentTerms";
 import styles from "./billing-shell.module.css";
 
 export function BillingShell({ children }: { children: ReactNode }) {
@@ -38,6 +40,19 @@ export function BillingShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!ready) return;
+    let active = true;
+    getDocumentTerms()
+      .then((body) => {
+        if (active) publishDocumentTerms(body);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [ready]);
 
   if (!ready) {
     return <p className={styles.loading}>Opening Billing CMS…</p>;
@@ -100,7 +115,7 @@ export function BillingShell({ children }: { children: ReactNode }) {
           </button>
           <span className={styles.topTitle}>Billing CMS</span>
         </header>
-        <div className={styles.content}>{children}</div>
+        <div className={styles.content}><DocumentTermsProvider>{children}</DocumentTermsProvider></div>
       </div>
     </div>
   );

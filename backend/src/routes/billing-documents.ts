@@ -1,6 +1,6 @@
 import { Router, type NextFunction, type RequestHandler, type Response } from "express";
 import { createAuthenticateBilling } from "../middleware/authenticate-billing.js";
-import { DocumentError } from "../services/billing/documents-math.js";
+import { DocumentError, type OpeningReceipt } from "../services/billing/documents-math.js";
 import { getDocumentsRepository, type DocumentsRepository } from "../services/billing/documents-store.js";
 import type { BankMode, GuarantorInput } from "../services/billing/documents-math.js";
 import { getQuotationRepository, QuotationServiceError, type QuotationRepository } from "../services/billing/quotation-store.js";
@@ -34,6 +34,22 @@ function discountAmount(value: unknown): number {
 
 function mode(value: unknown): BankMode {
   return value === "cash" ? "cash" : "bank_transfer";
+}
+
+function openingFrom(value: unknown): OpeningReceipt | null {
+  if (!value || typeof value !== "object") return null;
+  const source = value as Record<string, unknown>;
+  if (source.paidAmount == null || source.paidAmount === "") return null;
+  const paidAmount = amount(source.paidAmount);
+  if (!(paidAmount > 0)) return null;
+  if (source.paymentMode !== "cash" && source.paymentMode !== "bank_transfer") {
+    throw new DocumentError("Choose bank transfer or cash.");
+  }
+  return {
+    paidAmount,
+    paymentDate: text(source.paymentDate),
+    paymentMode: source.paymentMode,
+  };
 }
 
 function guarantors(value: unknown): GuarantorInput[] {
@@ -177,6 +193,7 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
         dueDates,
         guarantors: guarantors(body.guarantors),
         body: text(body.body),
+        opening: openingFrom(body.opening),
       });
       response.status(201).json({ agreement });
     } catch (error) {
@@ -194,7 +211,8 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
   });
   router.post("/projects/:id/invoice", async (request, response, next) => {
     try {
-      response.status(201).json({ project: await repository().issueInvoice(request.params.id ?? "") });
+      const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+      response.status(201).json({ project: await repository().issueInvoice(request.params.id ?? "", openingFrom(body)) });
     } catch (error) {
       sendFailure(error, response, next);
     }
@@ -211,13 +229,21 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
           paymentDate: text(body.paymentDate),
           paymentMode: mode(body.paymentMode),
         })
-        : await repository().recordPayment(request.params.id ?? "", {
-          kind: "direct",
-          paidAmount: amount(body.paidAmount),
-          discountAmount: discountAmount(body.discountAmount),
-          paymentDate: text(body.paymentDate),
-          paymentMode: mode(body.paymentMode),
-        });
+        : body.kind === "opening"
+          ? await repository().recordPayment(request.params.id ?? "", {
+            kind: "opening",
+            paidAmount: amount(body.paidAmount),
+            discountAmount: discountAmount(body.discountAmount),
+            paymentDate: text(body.paymentDate),
+            paymentMode: mode(body.paymentMode),
+          })
+          : await repository().recordPayment(request.params.id ?? "", {
+            kind: "direct",
+            paidAmount: amount(body.paidAmount),
+            discountAmount: discountAmount(body.discountAmount),
+            paymentDate: text(body.paymentDate),
+            paymentMode: mode(body.paymentMode),
+          });
       response.status(201).json({ project });
     } catch (error) {
       sendFailure(error, response, next);
