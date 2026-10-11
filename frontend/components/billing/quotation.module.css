@@ -57,18 +57,23 @@
   display: grid;
   gap: 16px;
   margin-top: 16px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .formGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .field {
   display: grid;
   gap: 6px;
   min-width: 0;
+  max-width: 100%;
 }
 
 .wide {
@@ -86,13 +91,32 @@
 .field select,
 .editTable input,
 .editTable textarea {
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   border: 1px solid rgba(16, 20, 16, 0.14);
   border-radius: 12px;
   background: #fff;
   color: #101410;
   font: inherit;
   padding: 10px 12px;
+}
+
+.field input[type="date"],
+.field input[type="time"],
+.field input[type="datetime-local"] {
+  display: block;
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+.field input[type="date"]::-webkit-datetime-edit,
+.field input[type="time"]::-webkit-datetime-edit,
+.field input[type="datetime-local"]::-webkit-datetime-edit {
+  min-width: 0;
+  padding: 0;
 }
 
 .field input:focus,
@@ -1162,10 +1186,19 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 14px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dateFilters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .dateFilters .field {
-  width: 180px;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .chip,
@@ -1541,9 +1574,23 @@
     max-width: none;
   }
 
+  .field input[type="date"],
+  .field input[type="time"],
+  .field input[type="datetime-local"] {
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  .dateFilters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .dateFilters .field,
-  .toolbar .field {
+  .toolbar .field,
+  .ledgerHero .field {
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .ledgerHero {

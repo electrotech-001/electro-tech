@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { DocumentApiError, listSummary, type BillingSummary, type LedgerEntry } from "@/lib/billing/documents-api";
 import { formatDisplayDate, formatRupees } from "@/lib/billing/quotation-math";
+import { listProjects } from "@/lib/billing/quotations-api";
 import styles from "./billing-shell.module.css";
 
 const steps = [
@@ -17,6 +18,7 @@ function modeLabel(mode: LedgerEntry["paymentMode"]): string {
 
 export function DashboardView() {
   const [summary, setSummary] = useState<BillingSummary | null>(null);
+  const [projectCounts, setProjectCounts] = useState<{ inProcess: number; completed: number } | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const today = new Intl.DateTimeFormat("en-PK", {
     weekday: "long",
@@ -27,22 +29,50 @@ export function DashboardView() {
 
   useEffect(() => {
     let cancelled = false;
-    listSummary()
-      .then((value) => {
-        if (!cancelled) setSummary(value);
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) setBanner(error instanceof DocumentApiError ? error.message : "The dashboard could not be loaded.");
-      });
+    async function load() {
+      const [summaryResult, projectsResult] = await Promise.allSettled([listSummary(), listProjects()]);
+      if (cancelled) return;
+      if (summaryResult.status === "fulfilled") setSummary(summaryResult.value);
+      if (projectsResult.status === "fulfilled") {
+        const projects = projectsResult.value;
+        setProjectCounts({
+          inProcess: projects.filter((project) => project.status !== "completed").length,
+          completed: projects.filter((project) => project.status === "completed").length,
+        });
+      }
+      if (summaryResult.status === "rejected" && projectsResult.status === "rejected") {
+        const error = summaryResult.reason;
+        setBanner(error instanceof DocumentApiError ? error.message : "The dashboard could not be loaded.");
+      }
+    }
+    void load();
+    function onVisible() {
+      if (document.visibilityState === "visible") void load();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", load);
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", load);
     };
   }, []);
 
+  const inProcess = projectCounts
+    ? String(projectCounts.inProcess)
+    : summary
+      ? String(summary.projectsInProcess)
+      : "—";
+  const completed = projectCounts
+    ? String(projectCounts.completed)
+    : summary
+      ? String(summary.projectsCompleted ?? 0)
+      : "—";
+
   const cards = [
     { href: "/billing/quotations", label: "Quotations", value: summary ? String(summary.quotations) : "—", hint: "Saved quotations", tone: "" },
-    { href: "/billing/projects", label: "Projects in process", value: summary ? String(summary.projectsInProcess) : "—", hint: "Still being delivered", tone: "" },
-    { href: "/billing/projects#completed", label: "Completed projects", value: summary ? String(summary.projectsCompleted ?? 0) : "—", hint: "Marked completed", tone: styles.statDone },
+    { href: "/billing/projects", label: "Projects in process", value: inProcess, hint: "Still being delivered", tone: "" },
+    { href: "/billing/projects#completed", label: "Completed projects", value: completed, hint: "Marked completed", tone: styles.statDone },
     { href: "/billing/invoices", label: "Open invoices", value: summary ? String(summary.openInvoices) : "—", hint: "Not fully paid", tone: "" },
     { href: "/billing/payments", label: "Overdue installments", value: summary ? String(summary.overdueInstallments) : "—", hint: "Due date has passed", tone: summary && summary.overdueInstallments > 0 ? styles.statAlert : "" },
     { href: "/billing/ledger", label: "Received", value: summary ? formatRupees(summary.receivedTotal) : "—", hint: summary ? `${summary.paymentCount} payment${summary.paymentCount === 1 ? "" : "s"}` : "Payments received", tone: styles.statMoney },

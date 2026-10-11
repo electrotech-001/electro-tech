@@ -66,6 +66,7 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
         repository().summary(),
         quotations().countQuotations(),
       ]);
+      response.setHeader("Cache-Control", "no-store");
       response.status(200).json({ ...documents, quotations: quotationsCount });
     } catch (error) {
       sendFailure(error, response, next);

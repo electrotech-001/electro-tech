@@ -366,6 +366,7 @@
 .panel {
   min-width: 0;
   max-width: 100%;
+  overflow: hidden;
   background: #fff;
   border: 1px solid rgba(16, 20, 16, 0.06);
   border-radius: 18px;
@@ -698,6 +699,8 @@
 .field {
   display: grid;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .field span {
@@ -708,13 +711,25 @@
 .field input,
 .field select,
 .field textarea {
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   border: 1px solid rgba(16, 20, 16, 0.12);
   border-radius: 12px;
   padding: 12px 14px;
   background: #fff;
   color: #172019;
   font: inherit;
+}
+
+.field input[type="date"],
+.field input[type="time"],
+.field input[type="datetime-local"] {
+  display: block;
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
 }
 
 .field textarea {

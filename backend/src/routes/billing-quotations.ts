@@ -115,6 +115,7 @@ export function createBillingProjectsRouter(dependencies: BillingQuotationsRoute
   router.use(auth);
   router.get("/", async (_request: Request, response, next) => {
     try {
+      response.setHeader("Cache-Control", "no-store");
       response.status(200).json({ projects: await repository().listProjects() });
     } catch (error) {
       sendFailure(error, response, next);

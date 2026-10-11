@@ -105,7 +105,7 @@ async function billingFetch(path: string, options: RequestInit = {}): Promise<Re
     headers.set("Content-Type", "application/json");
   }
   try {
-    return await fetch(apiUrl(path), { ...options, headers });
+    return await fetch(apiUrl(path), { ...options, headers, cache: "no-store" });
   } catch {
     throw new DocumentApiError("The billing API is not running. Start it, then try again.");
   }
