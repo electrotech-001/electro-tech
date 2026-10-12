@@ -1,8 +1,8 @@
 import type { AuthError, Session } from "@supabase/supabase-js";
 import { billingSupabase } from "./supabase";
 
-/** Billing sign-in requires the authenticator app. Verified devices stay enrolled. */
-export const billingMfaEnabled = true;
+/** Authenticator sign-in is off until a later deploy. Email and password are enough, including on the live site. Verified devices stay enrolled. */
+export const billingMfaEnabled = false;
 
 export type SecondFactor =
   | {
