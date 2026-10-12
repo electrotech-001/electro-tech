@@ -110,7 +110,7 @@ export function QuotationForm({
                 ...draft,
                 paymentMode,
                 downPayment: paymentMode === "installments" ? draft.downPayment ?? 0 : draft.downPayment,
-                planDiscount: paymentMode === "installments" ? draft.planDiscount ?? 0 : 0,
+                planDiscount: draft.planDiscount ?? 0,
                 installmentCount: paymentMode === "installments" ? draft.installmentCount ?? 1 : null,
               });
             }}
@@ -219,7 +219,14 @@ export function QuotationForm({
                 onChange={(amount) => set("downPayment", amount)}
               />
             </label>
-            <p>Remaining after advance payment <strong>{formatRupees(Math.max(0, totals.grandTotal - (draft.downPayment ?? 0)))}</strong></p>
+            <label className={styles.field}>
+              <span>Discount</span>
+              <AmountInput
+                value={draft.planDiscount ?? 0}
+                onChange={(amount) => set("planDiscount", amount ?? 0)}
+              />
+            </label>
+            <p>Remaining after advance payment and discount <strong>{formatRupees(Math.max(0, balance))}</strong></p>
           </div>
         ) : null}
         {draft.paymentMode === "installments" ? (

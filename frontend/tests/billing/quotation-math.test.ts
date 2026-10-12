@@ -30,6 +30,21 @@ describe("quotation field masks", () => {
     expect(quotationIssues(draft)).toEqual([]);
   });
 
+  it("keeps a direct discount and rejects one that exceeds the total", () => {
+    const draft = blankDraft();
+    draft.customerName = "Walk-in Customer";
+    draft.address = "Attock City";
+    draft.customerPackage = "MCB 63A";
+    draft.paymentMode = "direct";
+    draft.downPayment = 1000;
+    draft.planDiscount = 500;
+    draft.items = [{ description: "MCB 63A", qty: 2, unit: "Nos", price: 1500, taxPercent: 0 }];
+    expect(quotationIssues(draft)).toEqual([]);
+    expect(computeTotals(draft).grandTotal - (draft.downPayment ?? 0) - (draft.planDiscount ?? 0)).toBe(1500);
+    draft.planDiscount = 2500;
+    expect(quotationIssues(draft).some((issue) => issue.includes("discount"))).toBe(true);
+  });
+
   it("allows a blank CNIC and contact number, and rejects a partial one", () => {
     const draft = blankDraft();
     draft.customerName = "Sheikh Zain";

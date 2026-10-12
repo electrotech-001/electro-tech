@@ -95,11 +95,12 @@ export function QuotationLetter({
               ))}
             </ol>
           </div>
-        ) : (quotation.downPayment ?? 0) > 0 ? (
+        ) : (quotation.downPayment ?? 0) > 0 || discount > 0 ? (
           <div className={styles.plan}>
             <p className={styles.blockLabel}>Advance payment</p>
-            <p>Advance payment <strong>{formatRupees(quotation.downPayment ?? 0)}</strong></p>
-            <p>Remaining amount <strong>{formatRupees(Math.max(0, quotation.grandTotal - (quotation.downPayment ?? 0)))}</strong></p>
+            {(quotation.downPayment ?? 0) > 0 ? <p>Advance payment <strong>{formatRupees(quotation.downPayment ?? 0)}</strong></p> : null}
+            {discount > 0 ? <p>Discount <strong>{formatRupees(discount)}</strong></p> : null}
+            <p>Remaining amount <strong>{formatRupees(Math.max(0, quotation.grandTotal - (quotation.downPayment ?? 0) - discount))}</strong></p>
           </div>
         ) : <div />}
         <table className={styles.totals}>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createDirectSale, DocumentApiError, type BankMode, type ReceiveProject } from "@/lib/billing/documents-api";
-import { blankDraft, computeTotals, formatRupees, quotationIssues, todayIsoDate, type QuotationDraft } from "@/lib/billing/quotation-math";
+import { blankDraft, computeTotals, formatRupees, planDiscountOf, quotationIssues, roundMoney, todayIsoDate, type QuotationDraft } from "@/lib/billing/quotation-math";
 import { AmountInput, FancySelect } from "./FancyControls";
 import { QuotationForm } from "./QuotationForm";
 import styles from "./quotation.module.css";
@@ -29,8 +29,10 @@ export function DirectSaleForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const totals = computeTotals(draft);
+  const discount = planDiscountOf(draft);
+  const payable = Math.max(0, roundMoney(totals.grandTotal - discount));
   const received = Math.max(0, Number(paidAmount) || 0);
-  const balance = Math.max(0, totals.grandTotal - received);
+  const balance = Math.max(0, roundMoney(payable - received));
   const receiptLabel = draft.paymentMode === "installments" ? "Down payment received" : "Amount received";
 
   async function onSave() {
@@ -39,8 +41,8 @@ export function DirectSaleForm({
       setError(issues[0]);
       return;
     }
-    if (received > totals.grandTotal) {
-      setError("The amount received cannot be more than the total amount.");
+    if (received > payable) {
+      setError(discount > 0 ? "The amount received and the discount cannot be more than the total amount." : "The amount received cannot be more than the total amount.");
       return;
     }
     if (received > 0 && !paymentDate) {
@@ -64,6 +66,7 @@ export function DirectSaleForm({
       <div className={styles.form}>
         <p>Record cash or bank received on this sale. Enter 0 if the customer will pay later. The rest stays in pending invoices, receive payments, and the ledger.</p>
         <label className={styles.field}><span>Total</span><input readOnly value={formatRupees(totals.grandTotal)} /></label>
+        <label className={styles.field}><span>Discount</span><input readOnly value={formatRupees(discount)} /></label>
         <label className={styles.field}>
           <span>{receiptLabel}</span>
           <AmountInput value={paidAmount} onChange={(amount) => setPaidAmount(amount ?? 0)} />

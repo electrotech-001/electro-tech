@@ -371,8 +371,10 @@ export function issueDirectInvoice(workspace: Workspace, reservedSerial: number,
   if (workspace.project.status === "completed") throw new DocumentError("This project is already completed.", 409, "completed");
   if (workspace.invoices.length > 0) throw new DocumentError("An invoice is already created for this project.", 409, "already_invoiced");
   assertDate(invoiceDate, "invoice date");
-  const opening = readOpening(receipt, workspace.project.grandTotal, "Advance payment cannot be more than the total amount.");
-  const created = { ...blankInvoice(workspace.project, nextSerial([], reservedSerial), "advance"), invoiceDate };
+  const saleDiscount = planDiscountOf(workspace.project);
+  const payable = roundMoney(Math.max(0, workspace.project.grandTotal - saleDiscount));
+  const opening = readOpening(receipt, payable, saleDiscount > 0 ? "Advance payment and discount cannot be more than the total amount." : "Advance payment cannot be more than the total amount.");
+  const created = { ...blankInvoice(workspace.project, nextSerial([], reservedSerial), "advance"), invoiceDate, discountAmount: saleDiscount };
   const payment: PaymentRecord | null = opening ? {
     id: crypto.randomUUID(),
     projectId: workspace.project.id,

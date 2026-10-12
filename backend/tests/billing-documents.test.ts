@@ -504,3 +504,26 @@ test("a daily sale invoice is created without a quotation and payments go to the
   assert.equal(ledger[0]?.paymentKind, "direct");
   assert.equal(ledger[0]?.invoiceSerial, saved.invoices[0]?.serial);
 });
+
+test("a daily sale discount lowers the invoice balance", async () => {
+  const repository = createMemoryDocumentsRepository([]);
+  const saved = await repository.createDirectSale({
+    quotationDate: "2026-10-12",
+    customerName: "Walk-in Customer",
+    cnic: "",
+    address: "Attock City",
+    contactNo: "",
+    whatsappNo: "",
+    customerPackage: "MCB 63A",
+    paymentMode: "direct",
+    downPayment: null,
+    planDiscount: 500,
+    installmentCount: null,
+    items: [{ description: "MCB 63A", qty: 2, unit: "Nos", price: 1500, taxPercent: 0 }],
+  }, { paidAmount: 1000, paymentDate: "2026-10-12", paymentMode: "cash" });
+  assert.equal(saved.project.planDiscount, 500);
+  assert.equal(saved.invoices[0]?.discountAmount, 500);
+  assert.equal(saved.balance, 1500);
+  const discounts = await repository.listDiscounts();
+  assert.equal(discounts.some((entry) => entry.discountAmount === 500), true);
+});

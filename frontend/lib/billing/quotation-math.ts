@@ -35,8 +35,7 @@ export type QuotationDraft = {
   items: QuotationItemInput[];
 };
 
-export function planDiscountOf(draft: { paymentMode: PaymentMode; planDiscount?: number | null }): number {
-  if (draft.paymentMode !== "installments") return 0;
+export function planDiscountOf(draft: { planDiscount?: number | null }): number {
   const value = draft.planDiscount ?? 0;
   return Number.isFinite(value) ? roundMoney(Math.max(0, value)) : 0;
 }
@@ -182,9 +181,15 @@ export function quotationIssues(draft: QuotationDraft): string[] {
       issues.push("Enter the number of installments.");
     }
   }
-  if (draft.paymentMode === "direct" && draft.downPayment != null) {
-    if (draft.downPayment < 0 || Number.isNaN(draft.downPayment)) issues.push("Enter the advance payment.");
-    else if (draft.downPayment > grandTotal) issues.push("Advance payment cannot be more than the total amount.");
+  if (draft.paymentMode === "direct") {
+    const discount = planDiscountOf(draft);
+    if (draft.planDiscount != null && (draft.planDiscount < 0 || Number.isNaN(draft.planDiscount))) issues.push("Enter a discount of zero or more.");
+    else if (discount > grandTotal) issues.push("Discount cannot be more than the total amount.");
+    if (draft.downPayment != null) {
+      if (draft.downPayment < 0 || Number.isNaN(draft.downPayment)) issues.push("Enter the advance payment.");
+      else if (draft.downPayment > grandTotal) issues.push("Advance payment cannot be more than the total amount.");
+      else if (draft.downPayment + discount > grandTotal) issues.push("Advance payment and discount cannot be more than the total amount.");
+    }
   }
   return issues;
 }
