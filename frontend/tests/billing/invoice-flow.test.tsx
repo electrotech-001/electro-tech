@@ -186,7 +186,11 @@ test("an installment invoice lists the installments that are still unpaid", () =
       { number: 3, dueDate: "2027-01-01", amount: 141000, status: "paid", paidAmount: 141000, paidDate: "2026-10-01", paymentMode: "cash" },
     ],
   })} />);
-  expect(screen.getAllByText("Remaining installments").length).toBeGreaterThan(0);
+  expect(screen.getByText("Down payment")).toBeDefined();
+  expect(screen.getByText("Discount")).toBeDefined();
+  expect(screen.getByText("Remaining balance")).toBeDefined();
+  expect(screen.getByText("Installment breakdown")).toBeDefined();
   expect(screen.getByText(/Installment 2/)).toBeDefined();
-  expect(screen.queryByText(/Installment 3/)).toBeNull();
+  expect(screen.getByText(/Installment 3/)).toBeDefined();
+  expect(screen.getAllByText("Paid").length).toBeGreaterThan(0);
 });

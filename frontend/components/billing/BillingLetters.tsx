@@ -1,6 +1,6 @@
 import { agreementWording } from "@/lib/billing/agreement-wording";
 import type { AgreementRecord, GuarantorRecord, InvoiceRecord, PaymentRecord } from "@/lib/billing/documents-api";
-import { formatDisplayDate, formatRupees, letterhead, type QuotationRecord } from "@/lib/billing/quotation-math";
+import { formatDisplayDate, formatRupees, installmentBalance, letterhead, planDiscountOf, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { DocumentTermsNote } from "./DocumentTerms";
 import styles from "./quotation.module.css";
 
@@ -185,28 +185,28 @@ function GuarantorBlock({ guarantor }: { guarantor: GuarantorRecord }) {
   );
 }
 
-function remainingInstallmentLines(invoice: InvoiceRecord): Array<{ number: number; dueDate: string | null; amount: number }> {
-  if (invoice.installmentNumber == null) return [];
-  const current = invoice.installmentNumber;
-  if (invoice.schedule && invoice.schedule.length > 0) {
-    return invoice.schedule
-      .filter((line) => line.number !== current && line.status !== "paid")
-      .map((line) => ({ number: line.number, dueDate: line.dueDate, amount: line.amount }));
-  }
-  return invoice.project.installments
-    .filter((line) => line.number !== current)
-    .map((line) => ({ number: line.number, dueDate: null, amount: line.amount }));
-}
-
 export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceRecord; paper?: boolean }) {
   const project = invoice.project;
   const paid = invoice.status === "paid";
   const discount = discountOf(invoice);
   const paymentDiscount = invoice.payments.some((payment) => (payment.discountAmount ?? 0) > 0);
-  const remainingInstallments = remainingInstallmentLines(invoice);
-  const remainingInstallmentTotal = remainingInstallments.reduce((sum, line) => sum + line.amount, 0);
   const openingPayments = invoice.openingPayments ?? [];
   const openingPaid = openingPayments.reduce((sum, payment) => sum + payment.paidAmount + (payment.discountAmount ?? 0), 0);
+  const planDiscount = planDiscountOf(project);
+  const installments = project.paymentMode === "installments";
+  const downPayment = project.downPayment ?? 0;
+  const remainingBalance = installmentBalance(project.grandTotal, project.downPayment, planDiscount);
+  const breakdownLines = invoice.schedule && invoice.schedule.length > 0
+    ? invoice.schedule
+    : project.installments.map((line) => ({
+      number: line.number,
+      dueDate: "",
+      amount: line.amount,
+      status: "due" as const,
+      paidAmount: 0,
+      paidDate: null,
+      paymentMode: null,
+    }));
 
   return (
     <article className={`${styles.letter} ${styles.sheet} quotation-letter ${paper ? styles.letterPaper : ""}`}>
@@ -228,28 +228,6 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
         </dl>
       </section>
       {invoice.installmentNumber ? <p className={styles.packageBlock}>This invoice is for installment {invoice.installmentNumber}{invoice.dueDate ? `, due ${formatDisplayDate(invoice.dueDate)}` : ""}.</p> : null}
-      {openingPayments.length > 0 ? (
-        <div className={styles.plan}>
-          <p className={styles.blockLabel}>Down payment received</p>
-          {openingPayments.map((payment) => (
-            <p key={payment.id}>
-              {formatDisplayDate(payment.paymentDate)} · {modeLabel(payment.paymentMode)} <strong>{formatRupees(payment.paidAmount)}</strong>
-            </p>
-          ))}
-          <p>Balance after down payment <strong>{formatRupees(Math.max(0, project.grandTotal - openingPaid))}</strong></p>
-        </div>
-      ) : null}
-      {remainingInstallments.length > 0 ? (
-        <div className={styles.plan}>
-          <p className={styles.blockLabel}>Remaining installments</p>
-          {remainingInstallments.map((line) => (
-            <p key={line.number}>
-              Installment {line.number}{line.dueDate ? ` · due ${formatDisplayDate(line.dueDate)}` : ""} <strong>{formatRupees(line.amount)}</strong>
-            </p>
-          ))}
-          <p>Remaining amount <strong>{formatRupees(remainingInstallmentTotal)}</strong></p>
-        </div>
-      ) : null}
       {invoice.kind === "advance" && (project.downPayment ?? 0) > 0 && invoice.grandTotal <= (project.downPayment ?? 0) ? (
         <p className={styles.packageBlock}>{project.paymentMode === "installments" ? "This invoice is the down payment." : "This invoice is the advance payment."}</p>
       ) : null}
@@ -286,25 +264,6 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
           </tbody>
         </table>
       </div>
-      {invoice.installmentNumber == null && invoice.schedule && invoice.schedule.length > 0 ? (
-        <div className={styles.tableWrap}>
-          <table>
-            <thead><tr><th>Installment</th><th>Due date</th><th>Amount</th><th>Status</th><th>Paid on</th><th>Mode</th></tr></thead>
-            <tbody>
-              {invoice.schedule.map((line) => (
-                <tr key={line.number}>
-                  <td>{line.number}</td>
-                  <td>{formatDisplayDate(line.dueDate)}</td>
-                  <td className={styles.num}>{formatRupees(line.amount)}</td>
-                  <td>{line.status === "paid" ? "Paid" : line.paidAmount > 0 ? "Partial" : "Due"}</td>
-                  <td>{line.paidDate ? formatDisplayDate(line.paidDate) : ""}</td>
-                  <td>{modeLabel(line.paymentMode)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
       {invoice.payments.length > 0 ? (
         <div className={styles.tableWrap}>
           <table>
@@ -323,24 +282,69 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
         </div>
       ) : null}
       <div className={styles.letterFoot}>
-        <div />
+        {installments ? (
+          <div className={styles.plan}>
+            <p>Down payment <strong>{formatRupees(downPayment)}</strong></p>
+            <p>Discount <strong>{formatRupees(planDiscount)}</strong></p>
+            <p>Remaining balance <strong>{formatRupees(remainingBalance)}</strong></p>
+            {openingPayments.map((payment) => (
+              <p key={payment.id}>
+                Received {formatDisplayDate(payment.paymentDate)} · {modeLabel(payment.paymentMode)} <strong>{formatRupees(payment.paidAmount)}</strong>
+              </p>
+            ))}
+          </div>
+        ) : openingPayments.length > 0 ? (
+          <div className={styles.plan}>
+            <p className={styles.blockLabel}>Advance received</p>
+            {openingPayments.map((payment) => (
+              <p key={payment.id}>
+                {formatDisplayDate(payment.paymentDate)} · {modeLabel(payment.paymentMode)} <strong>{formatRupees(payment.paidAmount)}</strong>
+              </p>
+            ))}
+            <p>Balance after advance <strong>{formatRupees(Math.max(0, project.grandTotal - openingPaid))}</strong></p>
+          </div>
+        ) : <div />}
         <table className={styles.totals}>
           <tbody>
             <tr><th>Taxable amount</th><td>{formatRupees(project.taxableTotal)}</td></tr>
             <tr><th>Tax</th><td>{formatRupees(project.taxTotal)}</td></tr>
-            <tr className={styles.grand}><th>Total</th><td>{formatRupees(invoice.grandTotal)}</td></tr>
+            <tr className={styles.grand}><th>{invoice.installmentNumber ? "This invoice" : "Total"}</th><td>{formatRupees(invoice.grandTotal)}</td></tr>
             {discount > 0 ? <tr><th>Discount</th><td>{formatRupees(discount)}</td></tr> : null}
             <tr><th>Paid</th><td>{formatRupees(invoice.advancePaid)}</td></tr>
             <tr className={styles.grand}><th>Balance due</th><td>{formatRupees(invoice.balanceDue)}</td></tr>
             {invoice.kind === "advance" && project.grandTotal - invoice.grandTotal > 0 ? (
               <tr><th>Remaining amount</th><td>{formatRupees(project.grandTotal - invoice.grandTotal)}</td></tr>
             ) : null}
-            {remainingInstallments.length > 0 ? (
-              <tr><th>Remaining installments</th><td>{formatRupees(remainingInstallmentTotal)}</td></tr>
-            ) : null}
           </tbody>
         </table>
       </div>
+      {installments && breakdownLines.length > 0 ? (
+        <section className={styles.installmentBreakdown}>
+          <p className={styles.blockLabel}>Installment breakdown</p>
+          <div className={styles.tableWrap}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Installment</th>
+                  <th>Due date</th>
+                  <th className={styles.num}>Amount</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {breakdownLines.map((line) => (
+                  <tr key={line.number}>
+                    <td>Installment {line.number}</td>
+                    <td>{line.dueDate ? formatDisplayDate(line.dueDate) : ""}</td>
+                    <td className={styles.num}>{formatRupees(line.amount)}</td>
+                    <td>{line.number === invoice.installmentNumber && line.status !== "paid" ? "This invoice" : line.status === "paid" ? "Paid" : line.paidAmount > 0 ? "Partial" : "Due"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
       <div className={styles.sheetClose}>
         <div className={styles.paymentInstructions}>
           <strong>Payment Instructions</strong>

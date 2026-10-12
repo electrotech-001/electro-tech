@@ -189,11 +189,13 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
     try {
       const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
       const dueDates = Array.isArray(body.dueDates) ? body.dueDates.map((date) => text(date)) : [];
+      const planDiscount = body.planDiscount == null || body.planDiscount === "" ? undefined : discountAmount(body.planDiscount);
       const agreement = await repository().saveAgreement(request.params.id ?? "", {
         dueDates,
         guarantors: guarantors(body.guarantors),
         body: text(body.body),
         opening: openingFrom(body.opening),
+        ...(planDiscount == null ? {} : { planDiscount }),
       });
       response.status(201).json({ agreement });
     } catch (error) {

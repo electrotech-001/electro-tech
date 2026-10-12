@@ -4,7 +4,10 @@ import {
   computeTotals,
   customerProfileIssues,
   formatSerial,
+  installmentBalance,
+  planDiscountOf,
   quotationIssues,
+  roundMoney,
   type CustomerProfileInput,
   type InstallmentLine,
   type PaymentMode,
@@ -49,6 +52,7 @@ export type QuotationRepository = {
   approve(id: string): Promise<QuotationRecord>;
   disapprove(id: string): Promise<QuotationRecord>;
   disapproveProject(projectId: string): Promise<QuotationRecord>;
+  setPlanDiscount(projectId: string, planDiscount: number): Promise<QuotationRecord>;
   remove(id: string): Promise<void>;
   updateCustomer(currentCnic: string, profile: CustomerProfileInput): Promise<{ cnic: string; projectIds: string[] }>;
 };
@@ -75,6 +79,7 @@ type QuotationRow = {
   customer_package: string;
   payment_mode: PaymentMode;
   down_payment: number | string | null;
+  plan_discount?: number | string | null;
   installment_count: number | null;
   approved_at: string | null;
   source_quotation_id?: string | null;
@@ -98,6 +103,7 @@ function draftFromRow(row: QuotationRow, items: ItemRow[]): QuotationDraft {
     customerPackage: row.customer_package,
     paymentMode: row.payment_mode,
     downPayment: row.down_payment == null ? null : asNumber(row.down_payment),
+    planDiscount: asNumber(row.plan_discount),
     installmentCount: row.installment_count,
     items: [...items]
       .sort((a, b) => a.line_no - b.line_no)
@@ -167,6 +173,7 @@ function assertDraft(draft: QuotationDraft): QuotationDraft {
     downPayment: draft.paymentMode === "installments" || (draft.paymentMode === "direct" && draft.downPayment != null)
       ? draft.downPayment
       : null,
+    planDiscount: planDiscountOf(draft),
     installmentCount: draft.paymentMode === "installments" ? draft.installmentCount : null,
     items: draft.items.map((item) => ({
       description: item.description.trim(),
@@ -208,6 +215,7 @@ function parentPayload(draft: QuotationDraft, serialNumber: number) {
     customer_package: draft.customerPackage,
     payment_mode: draft.paymentMode,
     down_payment: draft.downPayment,
+    plan_discount: planDiscountOf(draft),
     installment_count: draft.installmentCount,
   };
 }
@@ -273,6 +281,7 @@ export function createMemoryQuotationRepository(): QuotationRepository {
         customer_package: clean.customerPackage,
         payment_mode: clean.paymentMode,
         down_payment: clean.downPayment,
+        plan_discount: clean.planDiscount ?? 0,
         installment_count: clean.installmentCount,
         billing_quotation_items: totals.items.map((item) => ({
           line_no: item.lineNo,
@@ -323,6 +332,25 @@ export function createMemoryQuotationRepository(): QuotationRepository {
       row.approved_at = null;
       return materialize(row, "quotation");
     },
+    async setPlanDiscount(projectId, planDiscount) {
+      const project = projects.find((entry) => entry.id === projectId);
+      if (!project) throw new QuotationServiceError("Project was not found.", 404, "not_found");
+      const discount = roundMoney(planDiscount);
+      if (!Number.isFinite(discount) || discount < 0) {
+        throw new QuotationServiceError("Enter a discount of zero or more.", 400, "invalid_discount");
+      }
+      const current = materialize(project, "project");
+      if (current.paymentMode !== "installments") {
+        throw new QuotationServiceError("A plan discount is only used for installments.", 400, "invalid_discount");
+      }
+      if (discount > installmentBalance(current.grandTotal, current.downPayment, 0)) {
+        throw new QuotationServiceError("Down payment and discount cannot be more than the total amount.", 400, "invalid_discount");
+      }
+      project.plan_discount = discount;
+      const source = quotations.find((entry) => entry.id === project.source_quotation_id);
+      if (source) source.plan_discount = discount;
+      return materialize(project, "project");
+    },
     async remove(id) {
       const index = quotations.findIndex((entry) => entry.id === id);
       if (index < 0) throw new QuotationServiceError("Quotation was not found.", 404, "not_found");
@@ -347,8 +375,8 @@ export function createMemoryQuotationRepository(): QuotationRepository {
   };
 }
 
-const QUOTATION_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, installment_count, approved_at, billing_quotation_items(line_no, description, qty, unit, price, tax_percent)";
-const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, installment_count, approved_at, source_quotation_id, status, billing_project_items(line_no, description, qty, unit, price, tax_percent)";
+const QUOTATION_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, approved_at, billing_quotation_items(line_no, description, qty, unit, price, tax_percent)";
+const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, approved_at, source_quotation_id, status, billing_project_items(line_no, description, qty, unit, price, tax_percent)";
 
 function storageFailure(error: { message: string }, action: string): QuotationServiceError {
   console.error(`Quotation could not be ${action}.`, error.message);
@@ -444,6 +472,7 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
           customer_package: clean.customerPackage,
           payment_mode: clean.paymentMode,
           down_payment: clean.downPayment,
+          plan_discount: clean.planDiscount ?? 0,
           installment_count: clean.installmentCount,
           updated_at: new Date().toISOString(),
         })
@@ -510,6 +539,31 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
         .eq("id", existing.id);
       if (stamped.error) throw storageFailure(stamped.error, "disapproved");
       return readQuotation(existing.id);
+    },
+    async setPlanDiscount(projectId, planDiscount) {
+      const discount = roundMoney(planDiscount);
+      if (!Number.isFinite(discount) || discount < 0) {
+        throw new QuotationServiceError("Enter a discount of zero or more.", 400, "invalid_discount");
+      }
+      const { data, error } = await client.from("billing_projects").select(PROJECT_SELECT).eq("id", projectId).maybeSingle();
+      if (error) throw storageFailure(error, "read");
+      if (!data) throw new QuotationServiceError("Project was not found.", 404, "not_found");
+      const current = toQuotationRecord(data as QuotationRow, "project");
+      if (current.paymentMode !== "installments") {
+        throw new QuotationServiceError("A plan discount is only used for installments.", 400, "invalid_discount");
+      }
+      if (discount > installmentBalance(current.grandTotal, current.downPayment, 0)) {
+        throw new QuotationServiceError("Down payment and discount cannot be more than the total amount.", 400, "invalid_discount");
+      }
+      const updated = await client.from("billing_projects").update({ plan_discount: discount }).eq("id", projectId);
+      if (updated.error) throw storageFailure(updated.error, "updated");
+      if (current.sourceQuotationId) {
+        const source = await client.from("billing_quotations").update({ plan_discount: discount, updated_at: new Date().toISOString() }).eq("id", current.sourceQuotationId);
+        if (source.error) throw storageFailure(source.error, "updated");
+      }
+      const { data: saved, error: readError } = await client.from("billing_projects").select(PROJECT_SELECT).eq("id", projectId).single();
+      if (readError || !saved) throw storageFailure(readError ?? { message: "Missing project." }, "read");
+      return toQuotationRecord(saved as QuotationRow, "project");
     },
     async disapproveProject(projectId) {
       const found = await client

@@ -1173,6 +1173,40 @@
   line-height: 1.35;
 }
 
+.sheet .plan p {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  font-size: 0.72rem;
+}
+
+.installmentBreakdown {
+  margin-top: 10px;
+  color: #171717;
+}
+
+.installmentBreakdown .blockLabel {
+  margin-bottom: 4px;
+}
+
+.sheet .installmentBreakdown {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+
+.sheet .installmentBreakdown .tableWrap {
+  margin-top: 0;
+}
+
+.sheet .installmentBreakdown th,
+.sheet .installmentBreakdown td {
+  padding: 3px 6px;
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+
 .sheet .paymentInstructions {
   max-width: 280px;
   padding: 0;
@@ -1774,6 +1808,21 @@
     color: #171717 !important;
     border-top: 1px solid #171717;
     border-bottom: 1px solid #171717;
+  }
+
+  :global(.print-host) .sheet .installmentBreakdown {
+    margin-top: 3mm;
+    font-size: 8pt;
+    line-height: 1.25;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  :global(.print-host) .sheet .installmentBreakdown th,
+  :global(.print-host) .sheet .installmentBreakdown td {
+    padding: 1px 4px;
+    font-size: 8pt;
+    line-height: 1.2;
   }
 
   :global(.print-host) .sheet .plan {

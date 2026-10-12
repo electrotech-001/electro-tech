@@ -4,7 +4,7 @@ import { useState } from "react";
 import { defaultAgreementWording } from "@/lib/billing/agreement-wording";
 import { DocumentApiError, issueDirectInvoice, readImageFile, saveAgreement, updateAgreementWording, recordPayment, type AgreementRecord, type BankMode, type GuarantorInput, type PaymentRecord } from "@/lib/billing/documents-api";
 import { printFromControl } from "@/lib/billing/print-letter";
-import { formatRupees, maskCnic, maskPhone, roundMoney, todayIsoDate, type QuotationRecord } from "@/lib/billing/quotation-math";
+import { formatRupees, maskCnic, maskPhone, roundMoney, splitInstallments, todayIsoDate, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { AgreementLetter } from "./BillingLetters";
 import { AmountInput, FancySelect, FilePicker } from "./FancyControls";
 import styles from "./quotation.module.css";
@@ -44,6 +44,10 @@ export function AgreementDialog({
   const [guarantor, setGuarantor] = useState<GuarantorInput>(emptyGuarantor);
   const [wording, setWording] = useState(() => defaultAgreementWording(project));
   const [downAmount, setDownAmount] = useState(0);
+  const [planDiscount, setPlanDiscount] = useState(project.planDiscount ?? 0);
+  const installmentFaces = installments && (project.installmentCount ?? 0) > 0
+    ? splitInstallments(Math.max(0, roundMoney(project.grandTotal - (project.downPayment ?? 0) - (Number(planDiscount) || 0))), project.installmentCount ?? 0)
+    : project.installments;
   const [downDate, setDownDate] = useState(todayIsoDate());
   const [downMode, setDownMode] = useState<BankMode>("cash");
   const [saving, setSaving] = useState(false);
@@ -80,6 +84,13 @@ export function AgreementDialog({
     setError(null);
     try {
       const received = roundMoney(Math.max(0, Number(downAmount) || 0));
+      const discount = roundMoney(Math.max(0, Number(planDiscount) || 0));
+      const afterDown = roundMoney(Math.max(0, project.grandTotal - (project.downPayment ?? 0)));
+      if (installments && discount > afterDown) {
+        setError("Down payment and discount cannot be more than the total amount.");
+        setSaving(false);
+        return;
+      }
       if (installments && received > (project.downPayment ?? 0)) {
         setError("Down payment cannot be more than the down payment on the quotation.");
         setSaving(false);
@@ -95,6 +106,7 @@ export function AgreementDialog({
         guarantors: installments && guarantorFilled(guarantor) ? [guarantor] : [],
         body: wording,
         opening: installments ? { paidAmount: received, paymentDate: downDate, paymentMode: downMode } : undefined,
+        planDiscount: installments ? roundMoney(Math.max(0, Number(planDiscount) || 0)) : undefined,
       });
       onSaved();
     } catch (caught) {
@@ -135,8 +147,12 @@ export function AgreementDialog({
                   </div>
                 </>
               ) : null}
-              <p>Balance after down payment <strong>{formatRupees(Math.max(0, roundMoney(project.grandTotal - (Number(downAmount) || 0))))}</strong></p>
-              <p>Installments on the quotation <strong>{formatRupees(project.installments.reduce((sum, line) => sum + line.amount, 0))}</strong></p>
+              <label className={styles.field}>
+                <span>Discount after down payment</span>
+                <AmountInput value={planDiscount} onChange={(amount) => setPlanDiscount(amount ?? 0)} />
+              </label>
+              <p>Balance after down payment and discount <strong>{formatRupees(Math.max(0, roundMoney(project.grandTotal - (project.downPayment ?? 0) - (Number(planDiscount) || 0))))}</strong></p>
+              <p>This balance is divided across the installment months.</p>
             </fieldset>
           ) : null}
           <label className={styles.field}>
@@ -145,7 +161,7 @@ export function AgreementDialog({
           </label>
           {installments ? dueDates.map((date, index) => (
             <label className={styles.field} key={index}>
-              <span>Installment {index + 1} due date · {formatRupees(project.installments[index]?.amount ?? 0)}</span>
+              <span>Installment {index + 1} due date · {formatRupees(installmentFaces[index]?.amount ?? 0)}</span>
               <input type="date" value={date} onChange={(event) => setDueDates((current) => current.map((value, dateIndex) => dateIndex === index ? event.target.value : value))} />
             </label>
           )) : null}

@@ -1,4 +1,4 @@
-import { roundMoney } from "./quotation-math.js";
+import { installmentBalance, planDiscountOf, roundMoney, splitInstallments } from "./quotation-math.js";
 import type { QuotationRecord } from "./quotation-store.js";
 
 export type BankMode = "bank_transfer" | "cash";
@@ -690,9 +690,22 @@ export function setAgreementBody(workspace: Workspace, body: string): Workspace 
   return { ...workspace, agreement: { ...workspace.agreement, body: text } };
 }
 
+function projectWithPlanDiscount(project: QuotationRecord, planDiscount: number | undefined): QuotationRecord {
+  if (project.paymentMode !== "installments") return project;
+  const discount = roundMoney(Math.max(0, planDiscount ?? planDiscountOf(project)));
+  const room = installmentBalance(project.grandTotal, project.downPayment, 0);
+  if (discount > room) throw new DocumentError("Down payment and discount cannot be more than the total amount.");
+  const count = project.installmentCount ?? 0;
+  return {
+    ...project,
+    planDiscount: discount,
+    installments: count > 0 ? splitInstallments(installmentBalance(project.grandTotal, project.downPayment, discount), count) : [],
+  };
+}
+
 export function createAgreement(
   workspace: Workspace,
-  input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string; opening?: OpeningReceipt | null },
+  input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string; opening?: OpeningReceipt | null; planDiscount?: number },
   reservedSerial: number,
 ): Workspace {
   if (workspace.agreement) throw new DocumentError("An agreement is already saved for this project.", 409, "agreement_exists");
@@ -718,27 +731,29 @@ export function createAgreement(
       },
     };
   }
-  const schedule = buildSchedule(workspace.project, input.dueDates);
+  const project = projectWithPlanDiscount(workspace.project, input.planDiscount);
+  const schedule = buildSchedule(project, input.dueDates);
   const guarantors: GuarantorRecord[] = people.map((guarantor) => ({
     ...guarantor,
     id: crypto.randomUUID(),
     agreementId,
-    projectId: workspace.project.id,
-    customerName: workspace.project.customerName,
+    projectId: project.id,
+    customerName: project.customerName,
     slot: 1 as const,
   }));
   const next: Workspace = {
     ...workspace,
+    project,
     agreement: {
       id: agreementId,
-      projectId: workspace.project.id,
-      serial: agreementSerial(workspace.project),
+      projectId: project.id,
+      serial: agreementSerial(project),
       paymentMode: "installments",
       schedule,
       guarantors,
       body: agreementBody(input.body),
       createdAt: new Date().toISOString(),
-      project: workspace.project,
+      project,
     },
   };
   return syncWithOpening(applyInstallmentOpening(next, input.opening), schedule, reservedSerial);

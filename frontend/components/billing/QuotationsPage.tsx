@@ -24,6 +24,7 @@ function toDraft(record: QuotationRecord): QuotationDraft {
     customerPackage: record.customerPackage,
     paymentMode: record.paymentMode,
     downPayment: record.downPayment,
+    planDiscount: record.planDiscount ?? 0,
     installmentCount: record.installmentCount,
     items: record.items.map((item) => ({
       description: item.description,

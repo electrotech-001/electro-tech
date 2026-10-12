@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from "lucide-react";
-import { computeTotals, formatRupees, maskCnic, maskPhone, quotationIssues, type PaymentMode, type QuotationDraft, type QuotationItemInput } from "@/lib/billing/quotation-math";
+import { computeTotals, formatRupees, installmentBalance, maskCnic, maskPhone, planDiscountOf, quotationIssues, type PaymentMode, type QuotationDraft, type QuotationItemInput } from "@/lib/billing/quotation-math";
 import { AmountInput, FancySelect } from "./FancyControls";
 import styles from "./quotation.module.css";
 
@@ -31,7 +31,7 @@ export function QuotationForm({
 }) {
   const totals = computeTotals(draft);
   const issues = quotationIssues(draft);
-  const balance = totals.grandTotal - (draft.downPayment ?? 0);
+  const balance = installmentBalance(totals.grandTotal, draft.downPayment, planDiscountOf(draft));
 
   function set<K extends keyof QuotationDraft>(key: K, value: QuotationDraft[K]) {
     onChange({ ...draft, [key]: value });
@@ -104,6 +104,7 @@ export function QuotationForm({
                 ...draft,
                 paymentMode,
                 downPayment: paymentMode === "installments" ? draft.downPayment ?? 0 : draft.downPayment,
+                planDiscount: paymentMode === "installments" ? draft.planDiscount ?? 0 : 0,
                 installmentCount: paymentMode === "installments" ? draft.installmentCount ?? 1 : null,
               });
             }}
@@ -225,6 +226,13 @@ export function QuotationForm({
               />
             </label>
             <label className={styles.field}>
+              <span>Discount</span>
+              <AmountInput
+                value={draft.planDiscount ?? 0}
+                onChange={(amount) => set("planDiscount", amount ?? 0)}
+              />
+            </label>
+            <label className={styles.field}>
               <span>Total number of installments</span>
               <AmountInput
                 integer
@@ -234,7 +242,7 @@ export function QuotationForm({
               />
             </label>
             <div className={styles.breakdown}>
-              <p>Remaining amount <strong>{formatRupees(Math.max(0, balance))}</strong></p>
+              <p>Remaining after down payment and discount <strong>{formatRupees(Math.max(0, balance))}</strong></p>
               <ol>
                 {totals.installments.map((line) => (
                   <li key={line.number}>

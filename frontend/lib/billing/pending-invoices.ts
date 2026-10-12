@@ -11,13 +11,13 @@ export function plannedInvoice(invoice: InvoiceRecord): boolean {
 
 function balanceInvoice(
   project: QuotationRecord,
-  input: { id: string; serial: string; kind: InvoiceRecord["kind"]; amount: number; installmentNumber: number | null },
+  input: { id: string; serial: string; serialNumber: number; kind: InvoiceRecord["kind"]; amount: number; installmentNumber: number | null },
 ): InvoiceRecord {
   return {
     id: input.id,
     projectId: project.id,
     serial: input.serial,
-    serialNumber: 0,
+    serialNumber: input.serialNumber,
     kind: input.kind,
     status: "due",
     invoiceDate: project.quotationDate,
@@ -34,7 +34,12 @@ function balanceInvoice(
   };
 }
 
+function invoiceSerial(serialNumber: number): string {
+  return `INV-${String(serialNumber).padStart(3, "0")}`;
+}
+
 export function outstandingBalances(projects: QuotationRecord[], invoices: InvoiceRecord[]): InvoiceRecord[] {
+  let serialNumber = invoices.reduce((highest, invoice) => Math.max(highest, invoice.serialNumber), 0);
   const extras: InvoiceRecord[] = [];
   for (const project of projects) {
     if (project.status === "completed") continue;
@@ -42,18 +47,22 @@ export function outstandingBalances(projects: QuotationRecord[], invoices: Invoi
     if (project.paymentMode === "installments") {
       for (const line of project.installments) {
         if (mine.some((invoice) => invoice.installmentNumber === line.number)) continue;
+        serialNumber += 1;
         extras.push(balanceInvoice(project, {
           id: `plan-${project.id}-${line.number}`,
-          serial: `${project.serial} installment ${line.number}`,
+          serial: invoiceSerial(serialNumber),
+          serialNumber,
           kind: "installment",
           amount: line.amount,
           installmentNumber: line.number,
         }));
       }
     } else if (mine.length === 0 && project.grandTotal > 0) {
+      serialNumber += 1;
       extras.push(balanceInvoice(project, {
         id: `plan-${project.id}-balance`,
-        serial: `${project.serial} invoice`,
+        serial: invoiceSerial(serialNumber),
+        serialNumber,
         kind: "advance",
         amount: project.grandTotal,
         installmentNumber: null,

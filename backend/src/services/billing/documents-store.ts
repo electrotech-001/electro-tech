@@ -40,7 +40,7 @@ export type DocumentsRepository = {
   listInvoices(): Promise<InvoiceRecord[]>;
   listReceiveProjects(): Promise<ReceiveProject[]>;
   workspace(projectId: string): Promise<ReceiveProject>;
-  saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string; opening?: OpeningReceipt | null }): Promise<AgreementRecord>;
+  saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string; opening?: OpeningReceipt | null; planDiscount?: number }): Promise<AgreementRecord>;
   updateAgreementWording(agreementId: string, body: string): Promise<AgreementRecord>;
   issueInvoice(projectId: string, opening?: OpeningReceipt | null): Promise<ReceiveProject>;
   deleteInvoice(invoiceId: string): Promise<ReceiveProject>;
@@ -192,7 +192,7 @@ type DirectPayment = { kind: "direct"; paidAmount: number; discountAmount?: numb
 type OpeningPayment = { kind: "opening"; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode };
 type InstallmentPayment = { kind: "installment"; installmentNumber: number; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode };
 
-const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, installment_count, approved_at, source_quotation_id, status, billing_project_items(line_no, description, qty, unit, price, tax_percent)";
+const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, approved_at, source_quotation_id, status, billing_project_items(line_no, description, qty, unit, price, tax_percent)";
 
 function discountRelief(workspace: Workspace): number {
   if (workspace.project.paymentMode === "installments") {
@@ -795,6 +795,14 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
     async saveAgreement(projectId, input) {
       const current = await loadWorkspace(projectId);
       const next = createAgreement(current, input, await reservedSerial());
+      if ((next.project.planDiscount ?? 0) !== (current.project.planDiscount ?? 0)) {
+        const savedDiscount = await client.from("billing_projects").update({ plan_discount: next.project.planDiscount ?? 0 }).eq("id", projectId);
+        if (savedDiscount.error) throw storageFailure(savedDiscount.error, "saved");
+        if (next.project.sourceQuotationId) {
+          const source = await client.from("billing_quotations").update({ plan_discount: next.project.planDiscount ?? 0, updated_at: new Date().toISOString() }).eq("id", next.project.sourceQuotationId);
+          if (source.error) throw storageFailure(source.error, "saved");
+        }
+      }
       await persist(current, next, true);
       if (!next.agreement) throw new DocumentError("The agreement could not be saved.");
       return next.agreement;

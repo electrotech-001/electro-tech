@@ -238,7 +238,7 @@ export function updateCustomerProfile(input: CustomerProfileUpdate): Promise<{ c
     .then((payload) => payload as { cnic: string });
 }
 
-export function saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string; opening?: { paidAmount: number; paymentDate: string; paymentMode: BankMode } }): Promise<AgreementRecord> {
+export function saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string; opening?: { paidAmount: number; paymentDate: string; paymentMode: BankMode }; planDiscount?: number }): Promise<AgreementRecord> {
   return billingFetch(`/api/billing/projects/${projectId}/agreement`, { method: "POST", body: JSON.stringify(input) })
     .then((response) => expectOk(response, "The agreement could not be saved."))
     .then((payload) => (payload as { agreement: AgreementRecord }).agreement);

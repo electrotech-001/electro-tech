@@ -73,6 +73,14 @@ export async function deleteQuotation(id: string): Promise<void> {
   await expectOk(await billingFetch(`/api/billing/quotations/${id}`, { method: "DELETE" }), "The quotation could not be deleted.");
 }
 
+export async function setPlanDiscount(projectId: string, planDiscount: number): Promise<QuotationRecord> {
+  const payload = await expectOk(await billingFetch(`/api/billing/projects/${projectId}/plan-discount`, {
+    method: "PATCH",
+    body: JSON.stringify({ planDiscount }),
+  }), "The discount could not be saved.");
+  return (payload as { project: QuotationRecord }).project;
+}
+
 export async function listProjects(): Promise<QuotationRecord[]> {
   const payload = await expectOk(await billingFetch("/api/billing/projects"), "Projects could not be loaded.");
   return (payload as { projects: QuotationRecord[] }).projects;

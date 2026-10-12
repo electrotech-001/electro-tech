@@ -1,5 +1,5 @@
 import type { QuotationRecord } from "@/lib/billing/quotation-math";
-import { formatDisplayDate, formatRupees } from "@/lib/billing/quotation-math";
+import { formatDisplayDate, formatRupees, installmentBalance, planDiscountOf } from "@/lib/billing/quotation-math";
 import { printFromControl } from "@/lib/billing/print-letter";
 import { Letterhead } from "./BillingLetters";
 import { DocumentTermsNote } from "./DocumentTerms";
@@ -13,7 +13,8 @@ export function QuotationLetter({
   paper?: boolean;
 }) {
   const installments = quotation.paymentMode === "installments";
-  const balance = quotation.grandTotal - (quotation.downPayment ?? 0);
+  const discount = planDiscountOf(quotation);
+  const balance = installmentBalance(quotation.grandTotal, quotation.downPayment, discount);
 
   return (
     <article className={`${styles.letter} ${styles.sheet} quotation-letter ${paper ? styles.letterPaper : ""}`}>
@@ -83,7 +84,8 @@ export function QuotationLetter({
           <div className={styles.plan}>
             <p className={styles.blockLabel}>Installment breakdown</p>
             <p>Down payment <strong>{formatRupees(quotation.downPayment ?? 0)}</strong></p>
-            <p>Remaining amount <strong>{formatRupees(balance)}</strong></p>
+            {discount > 0 ? <p>Discount <strong>{formatRupees(discount)}</strong></p> : null}
+            <p>Remaining after down payment and discount <strong>{formatRupees(balance)}</strong></p>
             <ol>
               {quotation.installments.map((line) => (
                 <li key={line.number}>
@@ -114,6 +116,12 @@ export function QuotationLetter({
               <th>Total</th>
               <td>{formatRupees(quotation.grandTotal)}</td>
             </tr>
+            {discount > 0 ? (
+              <tr>
+                <th>Discount</th>
+                <td>{formatRupees(discount)}</td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>

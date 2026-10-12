@@ -30,9 +30,20 @@ export type QuotationDraft = {
   customerPackage: string;
   paymentMode: PaymentMode;
   downPayment: number | null;
+  planDiscount?: number | null;
   installmentCount: number | null;
   items: QuotationItemInput[];
 };
+
+export function planDiscountOf(draft: { paymentMode: PaymentMode; planDiscount?: number | null }): number {
+  if (draft.paymentMode !== "installments") return 0;
+  const value = draft.planDiscount ?? 0;
+  return Number.isFinite(value) ? roundMoney(Math.max(0, value)) : 0;
+}
+
+export function installmentBalance(grandTotal: number, downPayment: number | null, planDiscount: number): number {
+  return roundMoney(Math.max(0, grandTotal - (downPayment ?? 0) - planDiscount));
+}
 
 export type CustomerProfileInput = {
   customerName: string;
@@ -88,8 +99,9 @@ export function computeTotals(draft: QuotationDraft): QuotationTotals & { items:
   const taxableTotal = roundMoney(items.reduce((sum, item) => sum + item.taxableAmount, 0));
   const taxTotal = roundMoney(items.reduce((sum, item) => sum + item.taxAmount, 0));
   const grandTotal = roundMoney(items.reduce((sum, item) => sum + item.lineTotal, 0));
+  const discount = planDiscountOf(draft);
   const installments = draft.paymentMode === "installments" && draft.installmentCount
-    ? splitInstallments(grandTotal - (draft.downPayment ?? 0), draft.installmentCount)
+    ? splitInstallments(installmentBalance(grandTotal, draft.downPayment, discount), draft.installmentCount)
     : [];
   return { items, taxableTotal, taxTotal, grandTotal, installments };
 }
@@ -121,8 +133,11 @@ export function quotationIssues(draft: QuotationDraft): string[] {
 
   const { grandTotal } = computeTotals(draft);
   if (draft.paymentMode === "installments") {
+    const discount = planDiscountOf(draft);
+    if (draft.planDiscount != null && (draft.planDiscount < 0 || Number.isNaN(draft.planDiscount))) issues.push("Enter a discount of zero or more.");
     if (draft.downPayment == null || draft.downPayment < 0) issues.push("Enter the down payment.");
     else if (draft.downPayment > grandTotal) issues.push("Down payment cannot be more than the total amount.");
+    else if (draft.downPayment + discount > grandTotal) issues.push("Down payment and discount cannot be more than the total amount.");
     if (draft.installmentCount == null || !Number.isInteger(draft.installmentCount) || draft.installmentCount < 1) {
       issues.push("Enter the number of installments.");
     }

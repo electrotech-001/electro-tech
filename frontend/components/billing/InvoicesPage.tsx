@@ -7,7 +7,7 @@ import { outstandingBalances, plannedInvoice, stillOpen } from "@/lib/billing/pe
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { printBillingLetter, printFromControl } from "@/lib/billing/print-letter";
 import { formatDisplayDate, formatRupees, type QuotationRecord } from "@/lib/billing/quotation-math";
-import { listProjects } from "@/lib/billing/quotations-api";
+import { listProjects, QuotationApiError, setPlanDiscount } from "@/lib/billing/quotations-api";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import { InvoiceLetter } from "./BillingLetters";
 import { AmountInput } from "./FancyControls";
@@ -92,7 +92,7 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
   }
 
   function openInvoice(invoice: InvoiceRecord) {
-    setDiscount(invoice.discountAmount ?? 0);
+    setDiscount(plannedInvoice(invoice) ? invoice.project.planDiscount ?? 0 : invoice.discountAmount ?? 0);
     setViewing(invoice);
   }
 
@@ -101,6 +101,18 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
     setBusy(true);
     setBanner(null);
     try {
+      if (plannedInvoice(viewing)) {
+        const saved = await setPlanDiscount(viewing.project.id, Number(discount) || 0);
+        const projectRows = projects.map((project) => project.id === saved.id ? saved : project);
+        setProjects(projectRows);
+        const next = outstandingBalances(projectRows, invoices).find((invoice) => invoice.id === viewing.id) ?? null;
+        if (next) {
+          setViewing(next);
+          setDiscount(next.project.planDiscount ?? 0);
+        }
+        setBanner({ tone: "ok", text: `Discount saved. The balance is divided across the installment months.` });
+        return;
+      }
       const saved = await updateInvoiceDiscount(viewing.id, Number(discount) || 0);
       const next = saved.invoices.find((invoice) => invoice.id === viewing.id) ?? null;
       setInvoices((rows) => {
@@ -113,7 +125,7 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
       }
       setBanner({ tone: "ok", text: `Discount saved on ${viewing.serial}.` });
     } catch (error) {
-      setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The discount could not be saved." });
+      setBanner({ tone: "bad", text: error instanceof DocumentApiError || error instanceof QuotationApiError ? error.message : "The discount could not be saved." });
     } finally {
       setBusy(false);
     }
@@ -225,10 +237,10 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
               </div>
             </div>
             <div className={styles.modalScroll}>
-              {plannedInvoice(viewing) ? null : (
+              {plannedInvoice(viewing) && viewing.project.paymentMode !== "installments" ? null : (
                 <div className={styles.discountBar}>
                   <label className={styles.field}>
-                    <span>Discount amount</span>
+                    <span>{plannedInvoice(viewing) ? "Discount after down payment" : "Discount amount"}</span>
                     <AmountInput value={discount} onChange={(amount) => setDiscount(amount ?? 0)} />
                   </label>
                   <button className={styles.primaryButton} type="button" onClick={() => void saveDiscount()} disabled={busy}>Save discount</button>

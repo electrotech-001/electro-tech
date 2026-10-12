@@ -34,6 +34,7 @@ function readDraft(body: unknown): QuotationDraft {
     customerPackage: String(source.customerPackage ?? ""),
     paymentMode: String(source.paymentMode ?? "") as PaymentMode,
     downPayment: source.downPayment == null || source.downPayment === "" ? null : numberValue(source.downPayment),
+    planDiscount: source.planDiscount == null || source.planDiscount === "" ? 0 : numberValue(source.planDiscount),
     installmentCount: source.installmentCount == null || source.installmentCount === "" ? null : numberValue(source.installmentCount),
     items: items.map((item): QuotationItemInput => {
       const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
@@ -117,6 +118,24 @@ export function createBillingProjectsRouter(dependencies: BillingQuotationsRoute
     try {
       response.setHeader("Cache-Control", "no-store");
       response.status(200).json({ projects: await repository().listProjects() });
+    } catch (error) {
+      sendFailure(error, response, next);
+    }
+  });
+  router.patch("/:id/plan-discount", async (request, response, next) => {
+    try {
+      const id = request.params.id ?? "";
+      if (await getDocumentsRepository().projectHasDocuments(id)) {
+        response.status(409).json({
+          code: "has_documents",
+          message: "Invoices are already created, so change the discount on the quotation before creating them.",
+        });
+        return;
+      }
+      const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+      const raw = body.planDiscount;
+      const planDiscount = raw == null || raw === "" ? 0 : numberValue(raw);
+      response.status(200).json({ project: await repository().setPlanDiscount(id, planDiscount) });
     } catch (error) {
       sendFailure(error, response, next);
     }

@@ -107,6 +107,21 @@ test("direct agreement has no guarantors and the balance invoice closes at zero"
   assert.equal(reissued.invoices[0]?.status, "due");
 });
 
+test("a discount after the down payment is divided across the installment invoices", async () => {
+  const repository = createMemoryDocumentsRepository([project("installments")]);
+  const agreement = await repository.saveAgreement("project-1", {
+    dueDates: ["2026-11-01", "2026-12-01", "2027-01-01"],
+    guarantors: [],
+    planDiscount: 45000,
+  });
+  assert.equal(agreement.schedule.reduce((sum, line) => sum + line.amount, 0), 378000);
+  assert.equal(agreement.schedule.every((line) => line.amount === 126000), true);
+  assert.equal(agreement.project.planDiscount, 45000);
+  const invoices = await repository.listInvoices();
+  assert.equal(invoices.every((invoice) => invoice.serial.startsWith("INV-")), true);
+  assert.equal(invoices.some((invoice) => invoice.serial.startsWith("QT-")), false);
+});
+
 test("installment agreement stores one optional guarantor and a received card updates the rest", async () => {
   const emptyRepo = createMemoryDocumentsRepository([project("installments")]);
   const withoutGuarantor = await emptyRepo.saveAgreement("project-1", {

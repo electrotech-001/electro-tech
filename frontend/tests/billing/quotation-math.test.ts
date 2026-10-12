@@ -24,6 +24,10 @@ describe("quotation field masks", () => {
     expect(totals.taxTotal).toBe(0);
     expect(totals.installments.map((line) => line.amount).reduce((sum, amount) => sum + amount, 0)).toBe(423000);
     expect(quotationIssues(draft)).toEqual([]);
+    draft.planDiscount = 45000;
+    const discounted = computeTotals(draft);
+    expect(discounted.installments.map((line) => line.amount).reduce((sum, amount) => sum + amount, 0)).toBe(378000);
+    expect(quotationIssues(draft)).toEqual([]);
   });
 
   it("allows a blank CNIC and contact number, and rejects a partial one", () => {

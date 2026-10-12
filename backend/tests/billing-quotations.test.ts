@@ -61,6 +61,9 @@ test("installments split the balance after down payment without losing paisa", (
   assert.equal(totals.grandTotal, 673000);
   assert.equal(totals.installments.length, 3);
   assert.equal(totals.installments.reduce((sum, line) => sum + line.amount, 0), 423000);
+  const discounted = computeTotals(sample({ planDiscount: 45000 }));
+  assert.equal(discounted.installments.reduce((sum, line) => sum + line.amount, 0), 378000);
+  assert.equal(discounted.installments[0]?.amount, 126000);
 });
 
 test("saved quotations keep a copy when approved and serials increment", async () => {
