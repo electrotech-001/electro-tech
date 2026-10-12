@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BookOpen,
+  FilePlus,
   FileSignature,
   FileText,
   ScrollText,
@@ -35,6 +36,12 @@ export const billingNav: BillingNavGroup[] = [
       { href: "/billing", label: "Dashboard", icon: LayoutDashboard, exact: true },
       { href: "/billing/quotations", label: "Quotations", icon: FileText },
       { href: "/billing/projects", label: "Projects in Process", icon: SunMedium },
+    ],
+  },
+  {
+    label: "Direct Invoices",
+    items: [
+      { href: "/billing/direct-invoices", label: "Direct Invoices", icon: FilePlus, exact: true },
     ],
   },
   {

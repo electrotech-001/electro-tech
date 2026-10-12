@@ -32,7 +32,7 @@ function invoicePill(invoice: InvoiceRecord): string {
   return "Pending";
 }
 
-export function InvoicesPage({ completed = false }: { completed?: boolean }) {
+export function InvoicesPage({ completed = false, direct = false }: { completed?: boolean; direct?: boolean }) {
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [projects, setProjects] = useState<QuotationRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -179,10 +179,12 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
     };
   }, []);
 
-  const pendingBalances = completed ? [] : outstandingBalances(projects, invoices);
-  const visible = completed
-    ? invoices.filter((invoice) => !stillOpen(invoice))
-    : [...invoices.filter(stillOpen), ...pendingBalances];
+  const pendingBalances = completed || direct ? [] : outstandingBalances(projects, invoices);
+  const visible = direct
+    ? invoices.filter((invoice) => isDirectSale(invoice.project) && stillOpen(invoice))
+    : completed
+      ? invoices.filter((invoice) => !stillOpen(invoice))
+      : [...invoices.filter((invoice) => stillOpen(invoice) && !isDirectSale(invoice.project)), ...pendingBalances];
   const directInvoices = visible.filter((invoice) => isDirectSale(invoice.project));
   const projectInvoices = visible.filter((invoice) => !isDirectSale(invoice.project));
 
@@ -215,7 +217,7 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
     );
   }
 
-  if (creating && !completed) {
+  if (creating && direct) {
     return (
       <>
         <header className={shell.pageHeader}>
@@ -246,14 +248,16 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
       <header className={shell.pageHeader}>
         <div>
           <p className={shell.kicker}>Billing CMS</p>
-          <h1 className={shell.title}>{completed ? "Completed Invoices" : "Pending Invoices"}</h1>
+          <h1 className={shell.title}>{direct ? "Direct Invoices" : completed ? "Completed Invoices" : "Pending Invoices"}</h1>
           <p className={shell.summary}>
-            {completed
-              ? "Fully paid invoices stay here. You can view, edit the discount, print, or delete them."
-              : "Unpaid invoices stay here until the balance is received. Direct invoices are daily sales made without a quotation or a project in process."}
+            {direct
+              ? "Daily sales made without a quotation or a project in process. Open invoices stay here until the balance is received."
+              : completed
+                ? "Fully paid invoices stay here. You can view, edit the discount, print, or delete them."
+                : "Unpaid project invoices stay here until the balance is received."}
           </p>
         </div>
-        {completed ? null : (
+        {direct ? (
           <button
             className={styles.primaryButton}
             type="button"
@@ -264,19 +268,19 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
           >
             <Plus size={16} /> Direct invoice
           </button>
-        )}
+        ) : null}
       </header>
       {banner ? <p className={banner.tone === "ok" ? styles.success : styles.error}>{banner.text}</p> : null}
       {loading ? <p className={styles.hint}>Loading invoices…</p> : null}
       {!loading && visible.length === 0 ? (
         <section className={`${shell.panel} ${shell.empty}`}>
-          <h2>{completed ? "No completed invoices" : "No pending invoices"}</h2>
-          <p>{completed ? "An invoice moves here once it is fully paid." : "Create a direct invoice for a daily sale, or create an invoice from a project in process."}</p>
+          <h2>{direct ? "No direct invoices" : completed ? "No completed invoices" : "No pending invoices"}</h2>
+          <p>{direct ? "Create a direct invoice for a daily sale. It does not need a quotation or a project in process." : completed ? "An invoice moves here once it is fully paid." : "Create an invoice from a project in process."}</p>
         </section>
       ) : null}
       {directInvoices.length > 0 ? (
         <section className={styles.invoiceGroup}>
-          <h2>Direct Invoices</h2>
+          {direct ? null : <h2>Direct Invoices</h2>}
           <div className={styles.cards}>{directInvoices.map(invoiceCard)}</div>
         </section>
       ) : null}

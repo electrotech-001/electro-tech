@@ -77,6 +77,13 @@ const finished = record({
   approvedAt: "2026-10-02T00:00:00.000Z",
 });
 
+test("sidebar has a direct invoices category", () => {
+  const direct = billingNav.find((group) => group.label === "Direct Invoices");
+  expect(direct?.items.map((item) => [item.label, item.href])).toEqual([
+    ["Direct Invoices", "/billing/direct-invoices"],
+  ]);
+});
+
 test("sidebar customers group lists profiles and the payment ledger", () => {
   const customers = billingNav.find((group) => group.label === "Customers");
   expect(customers?.items.map((item) => [item.label, item.href])).toEqual([

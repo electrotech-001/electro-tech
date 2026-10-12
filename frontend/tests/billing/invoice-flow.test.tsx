@@ -206,7 +206,7 @@ test("an installment invoice lists the installments that are still unpaid", () =
   expect(screen.getAllByText("Paid").length).toBeGreaterThan(0);
 });
 
-test("pending invoices keep daily sales in a Direct Invoices group", async () => {
+test("direct invoices page lists daily sales away from pending invoices", async () => {
   const sale = project({ id: "sale-1", serial: "DS-001", origin: "direct_sale" });
   api.listProjects.mockResolvedValue([]);
   api.listInvoices.mockResolvedValue([invoice(sale, {
@@ -215,8 +215,13 @@ test("pending invoices keep daily sales in a Direct Invoices group", async () =>
     grandTotal: 673000,
     balanceDue: 673000,
   })]);
-  render(<InvoicesPage />);
-  expect(await screen.findByText("Direct Invoices")).toBeDefined();
+  const { unmount } = render(<InvoicesPage direct />);
+  expect(await screen.findByRole("heading", { name: "Direct Invoices" })).toBeDefined();
   expect(screen.getByText("INV-040")).toBeDefined();
   expect(screen.getByRole("button", { name: /direct invoice/i })).toBeDefined();
+  unmount();
+  render(<InvoicesPage />);
+  expect(await screen.findByRole("heading", { name: "Pending Invoices" })).toBeDefined();
+  await waitFor(() => expect(screen.queryByText("Loading invoices…")).toBeNull());
+  expect(screen.queryByText("INV-040")).toBeNull();
 });
