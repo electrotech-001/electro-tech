@@ -1,4 +1,4 @@
-import type { QuotationRecord } from "./quotation-math";
+import type { QuotationDraft, QuotationRecord } from "./quotation-math";
 import { billingFetch as requestBilling } from "./billing-fetch";
 
 export type BankMode = "bank_transfer" | "cash";
@@ -125,6 +125,21 @@ export function listGuarantors(): Promise<GuarantorRecord[]> {
 
 export function listInvoices(): Promise<InvoiceRecord[]> {
   return billingFetch("/api/billing/invoices").then((response) => expectOk(response, "Invoices could not be loaded.")).then((payload) => (payload as { invoices: InvoiceRecord[] }).invoices);
+}
+
+export function nextDirectSaleSerial(): Promise<string> {
+  return billingFetch("/api/billing/direct-invoices/next-serial")
+    .then((response) => expectOk(response, "The next invoice number could not be reserved."))
+    .then((payload) => (payload as { serial: string }).serial);
+}
+
+export function createDirectSale(
+  draft: QuotationDraft,
+  opening?: { paidAmount: number; paymentDate: string; paymentMode: BankMode },
+): Promise<ReceiveProject> {
+  return billingFetch("/api/billing/direct-invoices", { method: "POST", body: JSON.stringify({ ...draft, opening }) })
+    .then((response) => expectOk(response, "The invoice could not be created."))
+    .then((payload) => (payload as { project: ReceiveProject }).project);
 }
 
 export function listReceiveProjects(): Promise<ReceiveProject[]> {

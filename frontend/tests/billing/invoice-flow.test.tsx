@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { InvoiceLetter } from "@/components/billing/BillingLetters";
+import { InvoicesPage } from "@/components/billing/InvoicesPage";
 import { ProjectsPage } from "@/components/billing/ProjectsPage";
 import type { InvoiceRecord } from "@/lib/billing/documents-api";
 import { letterhead, type QuotationRecord } from "@/lib/billing/quotation-math";
@@ -13,11 +14,17 @@ const api = vi.hoisted(() => ({
   issueDirectInvoice: vi.fn(),
   completeProject: vi.fn(),
   disapproveProject: vi.fn(),
+  nextDirectSaleSerial: vi.fn(),
+  createDirectSale: vi.fn(),
+  updateInvoiceDiscount: vi.fn(),
+  deleteInvoice: vi.fn(),
+  setPlanDiscount: vi.fn(),
 }));
 
 vi.mock("@/lib/billing/quotations-api", () => ({
   listProjects: api.listProjects,
   disapproveProject: api.disapproveProject,
+  setPlanDiscount: api.setPlanDiscount,
   QuotationApiError: class QuotationApiError extends Error {},
 }));
 
@@ -26,6 +33,10 @@ vi.mock("@/lib/billing/documents-api", () => ({
   listInvoices: api.listInvoices,
   issueDirectInvoice: api.issueDirectInvoice,
   completeProject: api.completeProject,
+  nextDirectSaleSerial: api.nextDirectSaleSerial,
+  createDirectSale: api.createDirectSale,
+  updateInvoiceDiscount: api.updateInvoiceDiscount,
+  deleteInvoice: api.deleteInvoice,
   DocumentApiError: class DocumentApiError extends Error {},
 }));
 
@@ -193,4 +204,19 @@ test("an installment invoice lists the installments that are still unpaid", () =
   expect(screen.getByText(/Installment 2/)).toBeDefined();
   expect(screen.getByText(/Installment 3/)).toBeDefined();
   expect(screen.getAllByText("Paid").length).toBeGreaterThan(0);
+});
+
+test("pending invoices keep daily sales in a Direct Invoices group", async () => {
+  const sale = project({ id: "sale-1", serial: "DS-001", origin: "direct_sale" });
+  api.listProjects.mockResolvedValue([]);
+  api.listInvoices.mockResolvedValue([invoice(sale, {
+    serial: "INV-040",
+    kind: "advance",
+    grandTotal: 673000,
+    balanceDue: 673000,
+  })]);
+  render(<InvoicesPage />);
+  expect(await screen.findByText("Direct Invoices")).toBeDefined();
+  expect(screen.getByText("INV-040")).toBeDefined();
+  expect(screen.getByRole("button", { name: /direct invoice/i })).toBeDefined();
 });

@@ -7,6 +7,7 @@ import {
   deleteInvoice,
   discountTotal,
   issueDirectInvoice,
+  issueDirectSale,
   keepInstallmentAmounts,
   setAgreementBody,
   setInvoiceDiscount,
@@ -27,7 +28,8 @@ import {
   type ScheduleLine,
   type Workspace,
 } from "./documents-math.js";
-import { toQuotationRecord, type QuotationRecord } from "./quotation-store.js";
+import { buildDirectSaleRecord, getQuotationRepository, toQuotationRecord, type QuotationRecord } from "./quotation-store.js";
+import type { QuotationDraft } from "./quotation-math.js";
 
 export type ReceiveProject = Workspace & {
   paidTotal: number;
@@ -39,6 +41,7 @@ export type DocumentsRepository = {
   listGuarantors(): Promise<GuarantorRecord[]>;
   listInvoices(): Promise<InvoiceRecord[]>;
   listReceiveProjects(): Promise<ReceiveProject[]>;
+  createDirectSale(draft: QuotationDraft, opening?: OpeningReceipt | null): Promise<ReceiveProject>;
   workspace(projectId: string): Promise<ReceiveProject>;
   saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string; opening?: OpeningReceipt | null; planDiscount?: number }): Promise<AgreementRecord>;
   updateAgreementWording(agreementId: string, body: string): Promise<AgreementRecord>;
@@ -169,7 +172,9 @@ export function summarizeDocuments(workspaces: Workspace[], today = todayIso()):
   let openInvoices = 0;
   let overdueInstallments = 0;
   for (const workspace of workspaces) {
-    if (workspace.project.status === "completed") projectsCompleted += 1;
+    if (workspace.project.origin === "direct_sale") {
+      // Daily sales are invoices, not projects in process.
+    } else if (workspace.project.status === "completed") projectsCompleted += 1;
     else projectsInProcess += 1;
     openInvoices += workspace.invoices.filter((invoice) => invoice.status !== "paid").length;
     for (const line of workspace.agreement?.schedule ?? []) {
@@ -192,7 +197,7 @@ type DirectPayment = { kind: "direct"; paidAmount: number; discountAmount?: numb
 type OpeningPayment = { kind: "opening"; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode };
 type InstallmentPayment = { kind: "installment"; installmentNumber: number; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode };
 
-const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, approved_at, source_quotation_id, status, billing_project_items(line_no, description, qty, unit, price, tax_percent)";
+const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, approved_at, source_quotation_id, status, origin, billing_project_items(line_no, description, qty, unit, price, tax_percent)";
 
 function discountRelief(workspace: Workspace): number {
   if (workspace.project.paymentMode === "installments") {
@@ -243,6 +248,18 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
     },
     async listReceiveProjects() {
       return [...workspaces.values()].filter((workspace) => workspace.project.status !== "completed").map(present);
+    },
+    async createDirectSale(draft, opening) {
+      const serialNumber = [...workspaces.values()]
+        .filter((workspace) => workspace.project.origin === "direct_sale")
+        .reduce((highest, workspace) => Math.max(highest, workspace.project.serialNumber), 0) + 1;
+      const empty: Workspace = {
+        project: buildDirectSaleRecord(draft, serialNumber),
+        agreement: null,
+        invoices: [],
+        payments: [],
+      };
+      return remember(issueDirectSale(empty, maxSerial([...workspaces.values()]), opening));
     },
     async workspace(projectId) {
       return present(requireWorkspace(projectId));
@@ -789,6 +806,13 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
     async listReceiveProjects() {
       return (await listedWorkspaces("none")).filter((workspace) => workspace.project.status !== "completed").map(present);
     },
+    async createDirectSale(draft, opening) {
+      const project = await getQuotationRepository().createDirectSale(draft);
+      const current: Workspace = { project, agreement: null, invoices: [], payments: [] };
+      const next = issueDirectSale(current, await reservedSerial(), opening);
+      await persist(current, next, Boolean(next.agreement));
+      return present(next);
+    },
     async workspace(projectId) {
       return present(await loadWorkspace(projectId));
     },
@@ -895,7 +919,7 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
     async summary() {
       const today = todayIso();
       const [projectResult, invoiceResult, agreementResult, entries] = await Promise.all([
-        client.from("billing_projects").select("status"),
+        client.from("billing_projects").select("status, origin"),
         client.from("billing_invoices").select("status"),
         client.from("billing_agreements").select("schedule"),
         listLedgerRows(),
@@ -903,7 +927,7 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       if (projectResult.error) throw storageFailure(projectResult.error, "listed");
       if (invoiceResult.error) throw storageFailure(invoiceResult.error, "listed");
       if (agreementResult.error) throw storageFailure(agreementResult.error, "listed");
-      const projects = (projectResult.data ?? []) as Array<{ status: string | null }>;
+      const projects = (projectResult.data ?? []) as Array<{ status: string | null; origin?: string | null }>;
       const invoices = (invoiceResult.data ?? []) as Array<{ status: string | null }>;
       const agreements = (agreementResult.data ?? []) as Array<{ schedule: ScheduleLine[] | null }>;
       let overdueInstallments = 0;
@@ -914,8 +938,8 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       }
       const receivedTotal = Math.round(entries.reduce((sum, entry) => sum + entry.paidAmount, 0) * 100) / 100;
       return {
-        projectsInProcess: projects.filter((project) => project.status !== "completed").length,
-        projectsCompleted: projects.filter((project) => project.status === "completed").length,
+        projectsInProcess: projects.filter((project) => project.origin !== "direct_sale" && project.status !== "completed").length,
+        projectsCompleted: projects.filter((project) => project.origin !== "direct_sale" && project.status === "completed").length,
         openInvoices: invoices.filter((invoice) => invoice.status !== "paid").length,
         overdueInstallments,
         receivedTotal,

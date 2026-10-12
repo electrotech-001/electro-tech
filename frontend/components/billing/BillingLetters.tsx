@@ -223,7 +223,7 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
         <dl className={styles.meta}>
           <div><dt>Invoice#</dt><dd>{invoice.serial}</dd></div>
           <div><dt>Invoice date</dt><dd>{formatDisplayDate(invoice.invoiceDate)}</dd></div>
-          <div><dt>Quotation</dt><dd>{project.serial}</dd></div>
+          <div><dt>{project.origin === "direct_sale" ? "Sale" : "Quotation"}</dt><dd>{project.serial}</dd></div>
           <div><dt>Status</dt><dd>{invoice.status === "partial" ? "Partially paid" : invoice.status === "paid" ? "Paid" : "Due"}</dd></div>
         </dl>
       </section>

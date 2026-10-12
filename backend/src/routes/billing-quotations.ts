@@ -21,7 +21,7 @@ function numberValue(value: unknown): number {
   return typeof value === "number" ? value : Number(value);
 }
 
-function readDraft(body: unknown): QuotationDraft {
+export function readQuotationDraft(body: unknown): QuotationDraft {
   const source = body && typeof body === "object" ? body as Record<string, unknown> : {};
   const items = Array.isArray(source.items) ? source.items : [];
   return {
@@ -71,14 +71,14 @@ export function createBillingQuotationsRouter(dependencies: BillingQuotationsRou
   });
   router.post("/", async (request, response, next) => {
     try {
-      response.status(201).json({ quotation: await repository().create(readDraft(request.body)) });
+      response.status(201).json({ quotation: await repository().create(readQuotationDraft(request.body)) });
     } catch (error) {
       sendFailure(error, response, next);
     }
   });
   router.put("/:id", async (request, response, next) => {
     try {
-      response.status(200).json({ quotation: await repository().update(request.params.id ?? "", readDraft(request.body)) });
+      response.status(200).json({ quotation: await repository().update(request.params.id ?? "", readQuotationDraft(request.body)) });
     } catch (error) {
       sendFailure(error, response, next);
     }

@@ -17,6 +17,9 @@ export function QuotationForm({
   draft,
   saving,
   error,
+  serialLabel = "Quotation serial no",
+  dateLabel = "Quotation date",
+  submitLabel = "Save quotation",
   onChange,
   onCancel,
   onSubmit,
@@ -25,6 +28,9 @@ export function QuotationForm({
   draft: QuotationDraft;
   saving: boolean;
   error: string | null;
+  serialLabel?: string;
+  dateLabel?: string;
+  submitLabel?: string;
   onChange: (draft: QuotationDraft) => void;
   onCancel: () => void;
   onSubmit: () => void;
@@ -47,11 +53,11 @@ export function QuotationForm({
     >
       <div className={styles.formGrid}>
         <label className={styles.field}>
-          <span>Quotation serial no</span>
+          <span>{serialLabel}</span>
           <input value={serial} readOnly />
         </label>
         <label className={styles.field}>
-          <span>Quotation date</span>
+          <span>{dateLabel}</span>
           <input type="date" value={draft.quotationDate} onChange={(event) => set("quotationDate", event.target.value)} required />
         </label>
         <label className={styles.field}>
@@ -277,7 +283,7 @@ export function QuotationForm({
       <div className={styles.formActions}>
         <button className={styles.secondaryButton} type="button" onClick={onCancel} disabled={saving}>Cancel</button>
         <button className={styles.primaryButton} type="submit" disabled={saving || issues.length > 0}>
-          {saving ? "Saving…" : "Save quotation"}
+          {saving ? "Saving…" : submitLabel}
         </button>
       </div>
     </form>

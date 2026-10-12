@@ -1,15 +1,16 @@
 "use client";
 
-import { Eye, MessageCircle, Pencil, Printer, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { deleteInvoice, DocumentApiError, listInvoices, updateInvoiceDiscount, type InvoiceRecord } from "@/lib/billing/documents-api";
+import { Eye, MessageCircle, Pencil, Plus, Printer, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { deleteInvoice, DocumentApiError, listInvoices, nextDirectSaleSerial, updateInvoiceDiscount, type InvoiceRecord } from "@/lib/billing/documents-api";
 import { outstandingBalances, plannedInvoice, stillOpen } from "@/lib/billing/pending-invoices";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { printBillingLetter, printFromControl } from "@/lib/billing/print-letter";
-import { formatDisplayDate, formatRupees, type QuotationRecord } from "@/lib/billing/quotation-math";
+import { formatDisplayDate, formatRupees, isDirectSale, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { listProjects, QuotationApiError, setPlanDiscount } from "@/lib/billing/quotations-api";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import { InvoiceLetter } from "./BillingLetters";
+import { DirectSaleForm } from "./DirectSaleForm";
 import { AmountInput } from "./FancyControls";
 import shell from "./billing-shell.module.css";
 import styles from "./quotation.module.css";
@@ -21,6 +22,11 @@ function invoicePill(invoice: InvoiceRecord): string {
     return invoice.project.paymentMode === "installments" ? "Down payment" : "Advance payment";
   }
   if (invoice.kind === "settlement" || invoice.installmentNumber) return "Balance";
+  if (invoice.project.origin === "direct_sale") {
+    if (invoice.status === "partial") return "Direct · Partial";
+    if (invoice.status === "paid") return "Direct · Paid";
+    return "Direct invoice";
+  }
   if (invoice.status === "partial") return "Partially paid";
   if (invoice.status === "paid") return "Paid";
   return "Pending";
@@ -36,6 +42,8 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
   const [deleting, setDeleting] = useState<InvoiceRecord | null>(null);
   const [busy, setBusy] = useState(false);
   const [capture, setCapture] = useState<InvoiceRecord | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [saleSerial, setSaleSerial] = useState("DS-001");
   const captureRef = useRef<HTMLDivElement>(null);
 
   async function sendInvoice(invoice: InvoiceRecord) {
@@ -175,6 +183,63 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
   const visible = completed
     ? invoices.filter((invoice) => !stillOpen(invoice))
     : [...invoices.filter(stillOpen), ...pendingBalances];
+  const directInvoices = visible.filter((invoice) => isDirectSale(invoice.project));
+  const projectInvoices = visible.filter((invoice) => !isDirectSale(invoice.project));
+
+  function invoiceCard(invoice: InvoiceRecord): ReactNode {
+    return (
+      <article
+        className={`${styles.card} ${invoice.status === "paid" ? styles.cardPaid : invoice.status === "partial" ? styles.cardPartial : styles.cardDue}`}
+        key={invoice.id}
+      >
+        <div className={styles.cardTop}>
+          <strong>{invoice.serial}</strong>
+          <span className={`${styles.badge} ${invoice.status === "paid" ? "" : styles.badgeLive}`}>{invoicePill(invoice)}</span>
+        </div>
+        <h2>{invoice.project.customerName}</h2>
+        <p>{formatDisplayDate(invoice.invoiceDate)}{invoice.installmentNumber ? ` · Installment ${invoice.installmentNumber}` : ""}</p>
+        <p className={styles.total}>{formatRupees(invoice.grandTotal)}</p>
+        <div className={styles.moneySplit}>
+          <p className={styles.moneyPaid}><span>Paid</span><strong>{formatRupees(invoice.advancePaid)}</strong></p>
+          <p className={styles.moneyPending}><span>Pending</span><strong>{formatRupees(invoice.balanceDue)}</strong></p>
+        </div>
+        {(invoice.discountAmount ?? 0) > 0 ? <p>Discount {formatRupees(invoice.discountAmount ?? 0)}</p> : null}
+        <div className={styles.cardActions}>
+          <button type="button" onClick={() => openInvoice(invoice)}><Eye size={15} /> View</button>
+          {completed ? <button type="button" onClick={() => openInvoice(invoice)}><Pencil size={15} /> Edit</button> : null}
+          {completed ? <button type="button" onClick={() => void printInvoice(invoice)} disabled={busy}><Printer size={15} /> Print</button> : null}
+          <button type="button" onClick={() => void sendInvoice(invoice)} disabled={busy}><MessageCircle size={15} /> WhatsApp</button>
+          {plannedInvoice(invoice) ? null : <button className={styles.danger} type="button" onClick={() => setDeleting(invoice)} disabled={busy}><Trash2 size={15} /> Delete</button>}
+        </div>
+      </article>
+    );
+  }
+
+  if (creating && !completed) {
+    return (
+      <>
+        <header className={shell.pageHeader}>
+          <div>
+            <p className={shell.kicker}>Billing CMS</p>
+            <h1 className={shell.title}>New direct invoice</h1>
+            <p className={shell.summary}>Create a daily-sale invoice without a quotation or a project in process. The same fields as a quotation are used.</p>
+          </div>
+        </header>
+        {banner ? <p className={banner.tone === "ok" ? styles.success : styles.error}>{banner.text}</p> : null}
+        <section className={shell.panel}>
+          <DirectSaleForm
+            serial={saleSerial}
+            onCancel={() => setCreating(false)}
+            onCreated={async (saved) => {
+              setCreating(false);
+              await refresh();
+              setBanner({ tone: "ok", text: `${saved.invoices[0]?.serial ?? "Invoice"} was created for ${saved.project.customerName}.` });
+            }}
+          />
+        </section>
+      </>
+    );
+  }
 
   return (
     <>
@@ -185,46 +250,42 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
           <p className={shell.summary}>
             {completed
               ? "Fully paid invoices stay here. You can view, edit the discount, print, or delete them."
-              : "Unpaid invoices stay here until the balance is received. An advance or down payment is recorded on the remaining balance and in the payment ledger, not as its own invoice."}
+              : "Unpaid invoices stay here until the balance is received. Direct invoices are daily sales made without a quotation or a project in process."}
           </p>
         </div>
+        {completed ? null : (
+          <button
+            className={styles.primaryButton}
+            type="button"
+            onClick={() => {
+              void nextDirectSaleSerial().then(setSaleSerial).catch(() => setSaleSerial("DS-001"));
+              setCreating(true);
+            }}
+          >
+            <Plus size={16} /> Direct invoice
+          </button>
+        )}
       </header>
       {banner ? <p className={banner.tone === "ok" ? styles.success : styles.error}>{banner.text}</p> : null}
       {loading ? <p className={styles.hint}>Loading invoices…</p> : null}
       {!loading && visible.length === 0 ? (
         <section className={`${shell.panel} ${shell.empty}`}>
           <h2>{completed ? "No completed invoices" : "No pending invoices"}</h2>
-          <p>{completed ? "An invoice moves here once it is fully paid." : "Approve an installment project, or create an invoice from a project card. Each remaining installment is listed here."}</p>
+          <p>{completed ? "An invoice moves here once it is fully paid." : "Create a direct invoice for a daily sale, or create an invoice from a project in process."}</p>
         </section>
       ) : null}
-      <div className={styles.cards}>
-        {visible.map((invoice) => (
-          <article
-            className={`${styles.card} ${invoice.status === "paid" ? styles.cardPaid : invoice.status === "partial" ? styles.cardPartial : styles.cardDue}`}
-            key={invoice.id}
-          >
-            <div className={styles.cardTop}>
-              <strong>{invoice.serial}</strong>
-              <span className={`${styles.badge} ${invoice.status === "paid" ? "" : styles.badgeLive}`}>{invoicePill(invoice)}</span>
-            </div>
-            <h2>{invoice.project.customerName}</h2>
-            <p>{formatDisplayDate(invoice.invoiceDate)}{invoice.installmentNumber ? ` · Installment ${invoice.installmentNumber}` : ""}</p>
-            <p className={styles.total}>{formatRupees(invoice.grandTotal)}</p>
-            <div className={styles.moneySplit}>
-              <p className={styles.moneyPaid}><span>Paid</span><strong>{formatRupees(invoice.advancePaid)}</strong></p>
-              <p className={styles.moneyPending}><span>Pending</span><strong>{formatRupees(invoice.balanceDue)}</strong></p>
-            </div>
-            {(invoice.discountAmount ?? 0) > 0 ? <p>Discount {formatRupees(invoice.discountAmount ?? 0)}</p> : null}
-            <div className={styles.cardActions}>
-              <button type="button" onClick={() => openInvoice(invoice)}><Eye size={15} /> View</button>
-              {completed ? <button type="button" onClick={() => openInvoice(invoice)}><Pencil size={15} /> Edit</button> : null}
-              {completed ? <button type="button" onClick={() => void printInvoice(invoice)} disabled={busy}><Printer size={15} /> Print</button> : null}
-              <button type="button" onClick={() => void sendInvoice(invoice)} disabled={busy}><MessageCircle size={15} /> WhatsApp</button>
-              {plannedInvoice(invoice) ? null : <button className={styles.danger} type="button" onClick={() => setDeleting(invoice)} disabled={busy}><Trash2 size={15} /> Delete</button>}
-            </div>
-          </article>
-        ))}
-      </div>
+      {directInvoices.length > 0 ? (
+        <section className={styles.invoiceGroup}>
+          <h2>Direct Invoices</h2>
+          <div className={styles.cards}>{directInvoices.map(invoiceCard)}</div>
+        </section>
+      ) : null}
+      {projectInvoices.length > 0 ? (
+        <section className={styles.invoiceGroup}>
+          {directInvoices.length > 0 ? <h2>Project invoices</h2> : null}
+          <div className={styles.cards}>{projectInvoices.map(invoiceCard)}</div>
+        </section>
+      ) : null}
       {viewing ? (
         <div className={styles.modal} role="presentation" onClick={() => setViewing(null)}>
           <div className={styles.modalCard} role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>

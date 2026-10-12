@@ -444,6 +444,18 @@
   color: #1f6b45;
 }
 
+.invoiceGroup {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.invoiceGroup h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+}
+
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

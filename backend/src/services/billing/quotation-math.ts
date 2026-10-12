@@ -72,6 +72,14 @@ export function formatSerial(serialNumber: number): string {
   return `QT-${String(serialNumber).padStart(3, "0")}`;
 }
 
+export function formatDirectSaleSerial(serialNumber: number): string {
+  return `DS-${String(serialNumber).padStart(3, "0")}`;
+}
+
+export function isDirectSale(record: { origin?: string | null }): boolean {
+  return record.origin === "direct_sale";
+}
+
 export function computeItem(input: QuotationItemInput, lineNo: number): QuotationItem {
   const taxableAmount = roundMoney(input.qty * input.price);
   const taxAmount = roundMoney((taxableAmount * input.taxPercent) / 100);

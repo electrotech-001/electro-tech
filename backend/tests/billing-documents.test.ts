@@ -472,3 +472,35 @@ test("a down payment received before the invoices stays in the ledger and is not
   assert.equal(ledger.length, 1);
   assert.equal(ledger[0]?.paymentKind, "down");
 });
+
+test("a daily sale invoice is created without a quotation and payments go to the ledger", async () => {
+  const repository = createMemoryDocumentsRepository([]);
+  const saved = await repository.createDirectSale({
+    quotationDate: "2026-10-12",
+    customerName: "Walk-in Customer",
+    cnic: "",
+    address: "Attock City",
+    contactNo: "0300-5607350",
+    whatsappNo: "",
+    customerPackage: "MCB 63A",
+    paymentMode: "direct",
+    downPayment: null,
+    installmentCount: null,
+    items: [{ description: "MCB 63A", qty: 2, unit: "Nos", price: 1500, taxPercent: 0 }],
+  }, { paidAmount: 1000, paymentDate: "2026-10-12", paymentMode: "cash" });
+  assert.equal(saved.project.origin, "direct_sale");
+  assert.match(saved.project.serial, /^DS-/);
+  assert.equal(saved.invoices.length, 1);
+  assert.match(saved.invoices[0]?.serial ?? "", /^INV-/);
+  assert.equal(saved.payments.length, 1);
+  assert.equal(saved.balance, 2000);
+  const invoices = await repository.listInvoices();
+  assert.equal(invoices.length, 1);
+  const receivable = await repository.listReceiveProjects();
+  assert.equal(receivable.some((row) => row.project.id === saved.project.id), true);
+  const ledger = await repository.listLedger();
+  assert.equal(ledger.length, 1);
+  assert.equal(ledger[0]?.paidAmount, 1000);
+  assert.equal(ledger[0]?.paymentKind, "direct");
+  assert.equal(ledger[0]?.invoiceSerial, saved.invoices[0]?.serial);
+});

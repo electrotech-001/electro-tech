@@ -113,11 +113,22 @@ export class DocumentError extends Error {
 }
 
 export function agreementSerial(project: QuotationRecord): string {
+  if (project.origin === "direct_sale") return `AG-DS-${String(project.serialNumber).padStart(3, "0")}`;
   return `AG-${String(project.serialNumber).padStart(3, "0")}`;
 }
 
 export function invoiceSerial(serialNumber: number): string {
   return `INV-${String(serialNumber).padStart(3, "0")}`;
+}
+
+export function installmentDueDates(startDate: string, count: number): string[] {
+  assertDate(startDate, "invoice date");
+  if (!Number.isInteger(count) || count < 1) throw new DocumentError("Enter the number of installments.");
+  const [year, month, day] = startDate.split("-").map(Number);
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(Date.UTC(year || 2026, (month || 1) - 1 + index + 1, day || 1));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+  });
 }
 
 function assertDate(value: string, label: string): void {
@@ -339,6 +350,17 @@ function syncWithOpening(workspace: Workspace, schedule: ScheduleLine[], reserve
   return attachOpeningInvoice({
     ...workspace,
     invoices: opening ? [...installmentInvoices, opening] : installmentInvoices,
+  }, reservedSerial);
+}
+
+export function issueDirectSale(workspace: Workspace, reservedSerial: number, receipt?: OpeningReceipt | null): Workspace {
+  if (workspace.project.paymentMode === "direct") {
+    return issueDirectInvoice(workspace, reservedSerial, workspace.project.quotationDate, receipt);
+  }
+  return createAgreement(workspace, {
+    dueDates: installmentDueDates(workspace.project.quotationDate, workspace.project.installmentCount ?? 0),
+    guarantors: [],
+    ...(receipt === undefined ? {} : { opening: receipt }),
   }, reservedSerial);
 }
 

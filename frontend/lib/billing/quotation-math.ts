@@ -66,6 +66,7 @@ export type QuotationRecord = Omit<QuotationDraft, "items"> & {
   installments: InstallmentLine[];
   kind: "quotation" | "project";
   status?: "in_process" | "completed";
+  origin?: "project" | "direct_sale";
 };
 
 export const letterhead = {
@@ -107,6 +108,14 @@ export function formatDisplayDate(iso: string): string {
 
 export function formatRupees(value: number): string {
   return `Rs ${roundMoney(value).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+export function formatDirectSaleSerial(serialNumber: number): string {
+  return `DS-${String(serialNumber).padStart(3, "0")}`;
+}
+
+export function isDirectSale(record: { origin?: string | null }): boolean {
+  return record.origin === "direct_sale";
 }
 
 export function computeItem(input: QuotationItemInput, lineNo: number): QuotationItem {

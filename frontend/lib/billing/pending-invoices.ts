@@ -42,7 +42,7 @@ export function outstandingBalances(projects: QuotationRecord[], invoices: Invoi
   let serialNumber = invoices.reduce((highest, invoice) => Math.max(highest, invoice.serialNumber), 0);
   const extras: InvoiceRecord[] = [];
   for (const project of projects) {
-    if (project.status === "completed") continue;
+    if (project.status === "completed" || project.origin === "direct_sale") continue;
     const mine = invoices.filter((invoice) => invoice.projectId === project.id);
     if (project.paymentMode === "installments") {
       for (const line of project.installments) {

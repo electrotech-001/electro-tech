@@ -1,10 +1,11 @@
 "use client";
 
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { DocumentApiError, listReceiveProjects, recordPayment, saveAgreement, updateDueDate, updatePayment, type BankMode, type PaymentRecord, type ReceiveProject } from "@/lib/billing/documents-api";
+import { DocumentApiError, listReceiveProjects, nextDirectSaleSerial, recordPayment, saveAgreement, updateDueDate, updatePayment, type BankMode, type PaymentRecord, type ReceiveProject } from "@/lib/billing/documents-api";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
-import { formatDisplayDate, formatRupees, todayIsoDate } from "@/lib/billing/quotation-math";
+import { formatDisplayDate, formatRupees, isDirectSale, todayIsoDate } from "@/lib/billing/quotation-math";
+import { DirectSaleForm } from "./DirectSaleForm";
 import { printFromControl } from "@/lib/billing/print-letter";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import { PaymentSlip } from "./BillingLetters";
@@ -130,6 +131,8 @@ export function ReceivePaymentsPage() {
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [capture, setCapture] = useState<PaymentRecord | null>(null);
   const [draftDueDates, setDraftDueDates] = useState<Record<string, string>>({});
+  const [creating, setCreating] = useState(false);
+  const [saleSerial, setSaleSerial] = useState("DS-001");
   const captureRef = useRef<HTMLDivElement>(null);
 
   function draftDueDate(projectId: string, number: number, index: number): string {
@@ -163,6 +166,32 @@ export function ReceivePaymentsPage() {
   }, []);
 
   const current = projects.find((row) => row.project.id === projectId) ?? null;
+
+  if (creating) {
+    return (
+      <>
+        <header className={shell.pageHeader}>
+          <div>
+            <p className={shell.kicker}>Billing CMS</p>
+            <h1 className={shell.title}>New direct invoice</h1>
+            <p className={shell.summary}>Create a daily-sale invoice without a quotation or a project in process, then receive its payments here.</p>
+          </div>
+        </header>
+        {banner ? <p className={banner.tone === "ok" ? styles.success : styles.error}>{banner.text}</p> : null}
+        <section className={shell.panel}>
+          <DirectSaleForm
+            serial={saleSerial}
+            onCancel={() => setCreating(false)}
+            onCreated={(saved) => {
+              setCreating(false);
+              setBanner({ tone: "ok", text: `${saved.invoices[0]?.serial ?? "Invoice"} was created. Receive any remaining balance here.` });
+              void refresh(saved.project.id);
+            }}
+          />
+        </section>
+      </>
+    );
+  }
 
   async function saveOpening(amount: number) {
     if (!current) return;
@@ -254,15 +283,25 @@ export function ReceivePaymentsPage() {
         <div>
           <p className={shell.kicker}>Billing CMS</p>
           <h1 className={shell.title}>Receive Payments</h1>
-          <p className={shell.summary}>Choose a customer whose project is still in process. Direct payments and installment cards are recorded here, and each receipt can be edited.</p>
+          <p className={shell.summary}>Choose a customer whose project is still in process, or a direct invoice from daily sales. Direct payments and installment cards are recorded here, and each receipt can be edited.</p>
         </div>
+        <button
+          className={styles.primaryButton}
+          type="button"
+          onClick={() => {
+            void nextDirectSaleSerial().then(setSaleSerial).catch(() => setSaleSerial("DS-001"));
+            setCreating(true);
+          }}
+        >
+          <Plus size={16} /> Direct invoice
+        </button>
       </header>
       {banner ? <p className={banner.tone === "ok" ? styles.success : styles.error}>{banner.text}</p> : null}
       {loading ? <p className={styles.hint}>Loading customers…</p> : null}
       {!loading && projects.length === 0 ? (
         <section className={`${shell.panel} ${shell.empty}`}>
-          <h2>No projects in process</h2>
-          <p>Approve a quotation before recording a payment.</p>
+          <h2>No invoices to receive</h2>
+          <p>Create a direct invoice for a daily sale, or approve a quotation before recording a payment.</p>
         </section>
       ) : null}
       {projects.length > 0 ? (
@@ -274,7 +313,7 @@ export function ReceivePaymentsPage() {
               value={projectId}
               options={projects.map((row) => ({
                 value: row.project.id,
-                label: `${row.project.customerName} · ${row.project.serial} · ${row.project.paymentMode === "installments" ? "Installments" : "Direct"}`,
+                label: `${row.project.customerName} · ${row.project.serial} · ${isDirectSale(row.project) ? "Direct invoice" : row.project.paymentMode === "installments" ? "Installments" : "Direct"}`,
               }))}
               onChange={setProjectId}
             />

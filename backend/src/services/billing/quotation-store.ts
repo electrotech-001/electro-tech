@@ -3,6 +3,7 @@ import { getSupabaseClient } from "../supabase.js";
 import {
   computeTotals,
   customerProfileIssues,
+  formatDirectSaleSerial,
   formatSerial,
   installmentBalance,
   planDiscountOf,
@@ -28,6 +29,7 @@ export type QuotationRecord = Omit<QuotationDraft, "items"> & {
   installments: InstallmentLine[];
   kind: "quotation" | "project";
   status?: "in_process" | "completed";
+  origin?: "project" | "direct_sale";
 };
 
 export class QuotationServiceError extends Error {
@@ -47,7 +49,9 @@ export type QuotationRepository = {
   countQuotations(): Promise<number>;
   listProjects(): Promise<QuotationRecord[]>;
   nextSerial(): Promise<string>;
+  nextDirectSaleSerial(): Promise<string>;
   create(draft: QuotationDraft): Promise<QuotationRecord>;
+  createDirectSale(draft: QuotationDraft): Promise<QuotationRecord>;
   update(id: string, draft: QuotationDraft): Promise<QuotationRecord>;
   approve(id: string): Promise<QuotationRecord>;
   disapprove(id: string): Promise<QuotationRecord>;
@@ -84,6 +88,7 @@ type QuotationRow = {
   approved_at: string | null;
   source_quotation_id?: string | null;
   status?: string | null;
+  origin?: string | null;
   billing_quotation_items?: ItemRow[];
   billing_project_items?: ItemRow[];
 };
@@ -133,7 +138,12 @@ export function toQuotationRecord(
     approvedAt: row.approved_at,
     sourceQuotationId: row.source_quotation_id ?? null,
     kind,
-    ...(kind === "project" ? { status: row.status === "completed" ? "completed" as const : "in_process" as const } : {}),
+    ...(kind === "project"
+      ? {
+        status: row.status === "completed" ? "completed" as const : "in_process" as const,
+        origin: row.origin === "direct_sale" ? "direct_sale" as const : "project" as const,
+      }
+      : {}),
   };
 }
 
@@ -224,6 +234,27 @@ function isUniqueViolation(error: { code?: string } | null): boolean {
   return error?.code === "23505";
 }
 
+function maxDirectSaleNumber(rows: QuotationRow[]): number {
+  return rows.reduce((highest, row) => (row.origin === "direct_sale" ? Math.max(highest, row.serial_number) : highest), 0);
+}
+
+export function buildDirectSaleRecord(draft: QuotationDraft, serialNumber: number, id = crypto.randomUUID()): QuotationRecord {
+  const clean = assertDraft(draft);
+  const totals = computeTotals(clean);
+  return {
+    ...clean,
+    ...totals,
+    id,
+    serial: formatDirectSaleSerial(serialNumber),
+    serialNumber,
+    approvedAt: new Date().toISOString(),
+    sourceQuotationId: null,
+    kind: "project",
+    status: "in_process",
+    origin: "direct_sale",
+  };
+}
+
 export function createMemoryQuotationRepository(): QuotationRepository {
   const quotations: QuotationRow[] = [];
   const projects: QuotationRow[] = [];
@@ -240,11 +271,47 @@ export function createMemoryQuotationRepository(): QuotationRepository {
       return quotations.length;
     },
     async listProjects() {
-      return projects.map((row) => materialize(row, "project")).reverse();
+      return projects.filter((row) => row.origin !== "direct_sale").map((row) => materialize(row, "project")).reverse();
     },
     async nextSerial() {
       const max = quotations.reduce((highest, row) => Math.max(highest, row.serial_number), 0);
       return formatSerial(max + 1);
+    },
+    async nextDirectSaleSerial() {
+      return formatDirectSaleSerial(maxDirectSaleNumber(projects) + 1);
+    },
+    async createDirectSale(draft) {
+      const record = buildDirectSaleRecord(draft, maxDirectSaleNumber(projects) + 1);
+      const totals = computeTotals(record);
+      projects.push({
+        id: record.id,
+        serial: record.serial,
+        serial_number: record.serialNumber,
+        quotation_date: record.quotationDate,
+        customer_name: record.customerName,
+        cnic: record.cnic,
+        address: record.address,
+        contact_no: record.contactNo,
+        whatsapp_no: record.whatsappNo,
+        customer_package: record.customerPackage,
+        payment_mode: record.paymentMode,
+        down_payment: record.downPayment,
+        plan_discount: record.planDiscount ?? 0,
+        installment_count: record.installmentCount,
+        approved_at: record.approvedAt,
+        source_quotation_id: null,
+        status: "in_process",
+        origin: "direct_sale",
+        billing_project_items: totals.items.map((item) => ({
+          line_no: item.lineNo,
+          description: item.description,
+          qty: item.qty,
+          unit: item.unit,
+          price: item.price,
+          tax_percent: item.taxPercent,
+        })),
+      });
+      return record;
     },
     async create(draft) {
       const clean = assertDraft(draft);
@@ -376,7 +443,7 @@ export function createMemoryQuotationRepository(): QuotationRepository {
 }
 
 const QUOTATION_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, approved_at, billing_quotation_items(line_no, description, qty, unit, price, tax_percent)";
-const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, approved_at, source_quotation_id, status, billing_project_items(line_no, description, qty, unit, price, tax_percent)";
+const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, approved_at, source_quotation_id, status, origin, billing_project_items(line_no, description, qty, unit, price, tax_percent)";
 
 function storageFailure(error: { message: string }, action: string): QuotationServiceError {
   console.error(`Quotation could not be ${action}.`, error.message);
@@ -424,12 +491,65 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
       const { data, error } = await client
         .from("billing_projects")
         .select(PROJECT_SELECT)
+        .eq("origin", "project")
         .order("created_at", { ascending: false });
       if (error) throw storageFailure(error, "listed");
       return ((data ?? []) as QuotationRow[]).map((row) => toQuotationRecord(row, "project"));
     },
     async nextSerial() {
       return formatSerial((await maxSerial()) + 1);
+    },
+    async nextDirectSaleSerial() {
+      const { data, error } = await client
+        .from("billing_projects")
+        .select("serial_number")
+        .eq("origin", "direct_sale")
+        .order("serial_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw storageFailure(error, "listed");
+      return formatDirectSaleSerial((typeof data?.serial_number === "number" ? data.serial_number : Number(data?.serial_number ?? 0)) + 1);
+    },
+    async createDirectSale(draft) {
+      const clean = assertDraft(draft);
+      const totals = computeTotals(clean);
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const latest = await client
+          .from("billing_projects")
+          .select("serial_number")
+          .eq("origin", "direct_sale")
+          .order("serial_number", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (latest.error) throw storageFailure(latest.error, "listed");
+        const serialNumber = (typeof latest.data?.serial_number === "number" ? latest.data.serial_number : Number(latest.data?.serial_number ?? 0)) + 1;
+        const inserted = await client
+          .from("billing_projects")
+          .insert({
+            ...parentPayload(clean, serialNumber),
+            serial: formatDirectSaleSerial(serialNumber),
+            source_quotation_id: null,
+            origin: "direct_sale",
+            approved_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+        if (inserted.error) {
+          if (isUniqueViolation(inserted.error) && attempt < 3) continue;
+          throw storageFailure(inserted.error, "saved");
+        }
+        const items = await client
+          .from("billing_project_items")
+          .insert(itemPayload(inserted.data.id, totals.items, "project_id"));
+        if (items.error) {
+          await client.from("billing_projects").delete().eq("id", inserted.data.id);
+          throw storageFailure(items.error, "saved");
+        }
+        const { data, error } = await client.from("billing_projects").select(PROJECT_SELECT).eq("id", inserted.data.id).single();
+        if (error || !data) throw storageFailure(error ?? { message: "Missing sale." }, "saved");
+        return toQuotationRecord(data as QuotationRow, "project");
+      }
+      throw new QuotationServiceError("The sale number could not be reserved. Try again.", 409, "serial_conflict");
     },
     async create(draft) {
       const clean = assertDraft(draft);

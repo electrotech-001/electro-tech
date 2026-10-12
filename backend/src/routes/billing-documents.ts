@@ -4,6 +4,7 @@ import { DocumentError, type OpeningReceipt } from "../services/billing/document
 import { getDocumentsRepository, type DocumentsRepository } from "../services/billing/documents-store.js";
 import type { BankMode, GuarantorInput } from "../services/billing/documents-math.js";
 import { getQuotationRepository, QuotationServiceError, type QuotationRepository } from "../services/billing/quotation-store.js";
+import type { PaymentMode, QuotationDraft, QuotationItemInput } from "../services/billing/quotation-math.js";
 
 type Dependencies = {
   authMiddleware?: RequestHandler;
@@ -34,6 +35,34 @@ function discountAmount(value: unknown): number {
 
 function mode(value: unknown): BankMode {
   return value === "cash" ? "cash" : "bank_transfer";
+}
+
+function saleDraft(body: unknown): QuotationDraft {
+  const source = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  const items = Array.isArray(source.items) ? source.items : [];
+  return {
+    quotationDate: text(source.quotationDate),
+    customerName: text(source.customerName),
+    cnic: text(source.cnic),
+    address: text(source.address),
+    contactNo: text(source.contactNo),
+    whatsappNo: text(source.whatsappNo),
+    customerPackage: text(source.customerPackage),
+    paymentMode: text(source.paymentMode) as PaymentMode,
+    downPayment: source.downPayment == null || source.downPayment === "" ? null : amount(source.downPayment),
+    planDiscount: source.planDiscount == null || source.planDiscount === "" ? 0 : amount(source.planDiscount),
+    installmentCount: source.installmentCount == null || source.installmentCount === "" ? null : amount(source.installmentCount),
+    items: items.map((item): QuotationItemInput => {
+      const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
+      return {
+        description: text(row.description),
+        qty: amount(row.qty),
+        unit: text(row.unit),
+        price: amount(row.price),
+        taxPercent: row.taxPercent == null || row.taxPercent === "" ? 0 : amount(row.taxPercent),
+      };
+    }),
+  };
 }
 
 function openingFrom(value: unknown): OpeningReceipt | null {
@@ -152,6 +181,23 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
   router.get("/invoices", async (_request, response, next) => {
     try {
       response.status(200).json({ invoices: await repository().listInvoices() });
+    } catch (error) {
+      sendFailure(error, response, next);
+    }
+  });
+  router.get("/direct-invoices/next-serial", async (_request, response, next) => {
+    try {
+      response.status(200).json({ serial: await quotations().nextDirectSaleSerial() });
+    } catch (error) {
+      sendFailure(error, response, next);
+    }
+  });
+  router.post("/direct-invoices", async (request, response, next) => {
+    try {
+      const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+      response.status(201).json({
+        project: await repository().createDirectSale(saleDraft(body), openingFrom(body.opening)),
+      });
     } catch (error) {
       sendFailure(error, response, next);
     }
