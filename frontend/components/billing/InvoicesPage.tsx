@@ -2,7 +2,7 @@
 
 import { Eye, MessageCircle, Pencil, Plus, Printer, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { deleteInvoice, DocumentApiError, listInvoices, nextDirectSaleSerial, updateInvoiceDiscount, type InvoiceRecord } from "@/lib/billing/documents-api";
+import { deleteInvoice, DocumentApiError, listInvoices, nextDirectSaleSerial, updateDueDate, updateInvoiceDiscount, type InvoiceRecord } from "@/lib/billing/documents-api";
 import { outstandingBalances, plannedInvoice, stillOpen } from "@/lib/billing/pending-invoices";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { printBillingLetter, printFromControl } from "@/lib/billing/print-letter";
@@ -15,6 +15,25 @@ import { AmountInput } from "./FancyControls";
 import shell from "./billing-shell.module.css";
 import styles from "./quotation.module.css";
 import "./quotation-print.css";
+
+function directDueDates(invoice: InvoiceRecord): { number: number; dueDate: string }[] | null {
+  if (!isDirectSale(invoice.project) || invoice.project.paymentMode !== "installments") return null;
+  if (invoice.schedule && invoice.schedule.length > 0) {
+    return invoice.schedule.map((line) => ({ number: line.number, dueDate: line.dueDate }));
+  }
+  if (invoice.installmentNumber != null) {
+    return [{ number: invoice.installmentNumber, dueDate: invoice.dueDate ?? "" }];
+  }
+  return null;
+}
+
+function patchDueDate(invoice: InvoiceRecord, installmentNumber: number, dueDate: string): InvoiceRecord {
+  return {
+    ...invoice,
+    dueDate: invoice.installmentNumber === installmentNumber ? dueDate : invoice.dueDate,
+    schedule: invoice.schedule?.map((line) => line.number === installmentNumber ? { ...line, dueDate } : line),
+  };
+}
 
 function invoicePill(invoice: InvoiceRecord): string {
   const opening = invoice.project.downPayment ?? 0;
@@ -102,6 +121,31 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
   function openInvoice(invoice: InvoiceRecord) {
     setDiscount(plannedInvoice(invoice) ? invoice.project.planDiscount ?? 0 : invoice.discountAmount ?? 0);
     setViewing(invoice);
+  }
+
+  async function saveDueDate(installmentNumber: number, dueDate: string) {
+    if (!viewing || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return;
+    const previous = viewing;
+    setViewing(patchDueDate(viewing, installmentNumber, dueDate));
+    setInvoices((rows) => rows.map((invoice) => invoice.projectId === viewing.projectId ? patchDueDate(invoice, installmentNumber, dueDate) : invoice));
+    setBusy(true);
+    setBanner(null);
+    try {
+      const saved = await updateDueDate(viewing.project.id, installmentNumber, dueDate);
+      setInvoices((rows) => {
+        const others = rows.filter((invoice) => invoice.projectId !== saved.project.id);
+        return [...saved.invoices, ...others];
+      });
+      const next = saved.invoices.find((invoice) => invoice.id === viewing.id) ?? null;
+      if (next) setViewing(next);
+      setBanner({ tone: "ok", text: `Installment ${installmentNumber} due date was saved.` });
+    } catch (error) {
+      setViewing(previous);
+      setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The due date could not be saved." });
+      void refresh();
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function saveDiscount() {
@@ -199,7 +243,7 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
           <span className={`${styles.badge} ${invoice.status === "paid" ? "" : styles.badgeLive}`}>{invoicePill(invoice)}</span>
         </div>
         <h2>{invoice.project.customerName}</h2>
-        <p>{formatDisplayDate(invoice.invoiceDate)}{invoice.installmentNumber ? ` · Installment ${invoice.installmentNumber}` : ""}</p>
+        <p>{formatDisplayDate(invoice.invoiceDate)}{invoice.installmentNumber ? ` · Installment ${invoice.installmentNumber}` : ""}{invoice.dueDate ? ` · Due ${formatDisplayDate(invoice.dueDate)}` : ""}</p>
         <p className={styles.total}>{formatRupees(invoice.grandTotal)}</p>
         <div className={styles.moneySplit}>
           <p className={styles.moneyPaid}><span>Paid</span><strong>{formatRupees(invoice.advancePaid)}</strong></p>
@@ -242,6 +286,8 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
       </>
     );
   }
+
+  const editableDueDates = viewing ? directDueDates(viewing) : null;
 
   return (
     <>
@@ -302,6 +348,24 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
               </div>
             </div>
             <div className={styles.modalScroll}>
+              {editableDueDates ? (
+                <div className={styles.discountBar}>
+                  {editableDueDates.map((line) => (
+                    <label className={styles.field} key={line.number}>
+                      <span>Installment {line.number} due date</span>
+                      <input
+                        type="date"
+                        value={line.dueDate}
+                        disabled={busy}
+                        onChange={(event) => {
+                          const dueDate = event.target.value;
+                          if (dueDate) void saveDueDate(line.number, dueDate);
+                        }}
+                      />
+                    </label>
+                  ))}
+                </div>
+              ) : null}
               {plannedInvoice(viewing) && viewing.project.paymentMode !== "installments" ? null : (
                 <div className={styles.discountBar}>
                   <label className={styles.field}>

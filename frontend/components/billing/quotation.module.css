@@ -374,6 +374,15 @@
   gap: 12px;
 }
 
+.dueDateLine {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.dueDateLine label {
+  flex: 1 0 100%;
+}
+
 .summary,
 .totals {
   width: 100%;

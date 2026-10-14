@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { InvoiceLetter } from "@/components/billing/BillingLetters";
@@ -17,6 +17,7 @@ const api = vi.hoisted(() => ({
   nextDirectSaleSerial: vi.fn(),
   createDirectSale: vi.fn(),
   updateInvoiceDiscount: vi.fn(),
+  updateDueDate: vi.fn(),
   deleteInvoice: vi.fn(),
   setPlanDiscount: vi.fn(),
 }));
@@ -36,6 +37,7 @@ vi.mock("@/lib/billing/documents-api", () => ({
   nextDirectSaleSerial: api.nextDirectSaleSerial,
   createDirectSale: api.createDirectSale,
   updateInvoiceDiscount: api.updateInvoiceDiscount,
+  updateDueDate: api.updateDueDate,
   deleteInvoice: api.deleteInvoice,
   DocumentApiError: class DocumentApiError extends Error {},
 }));
@@ -204,6 +206,55 @@ test("an installment invoice lists the installments that are still unpaid", () =
   expect(screen.getByText(/Installment 2/)).toBeDefined();
   expect(screen.getByText(/Installment 3/)).toBeDefined();
   expect(screen.getAllByText("Paid").length).toBeGreaterThan(0);
+});
+
+test("a direct installment invoice can change its due date after it is created", async () => {
+  const sale = project({
+    id: "sale-1",
+    serial: "DS-001",
+    origin: "direct_sale",
+    paymentMode: "installments",
+    downPayment: 1000,
+    installmentCount: 2,
+    installments: [{ number: 1, amount: 1000 }, { number: 2, amount: 1000 }],
+  });
+  const created = invoice(sale, {
+    serial: "INV-041",
+    kind: "installment",
+    installmentNumber: 1,
+    dueDate: "2026-11-15",
+    grandTotal: 1000,
+    balanceDue: 1000,
+    schedule: [
+      { number: 1, dueDate: "2026-11-15", amount: 1000, status: "due", paidAmount: 0, paidDate: null, paymentMode: null },
+      { number: 2, dueDate: "2027-02-01", amount: 1000, status: "due", paidAmount: 0, paidDate: null, paymentMode: null },
+    ],
+  });
+  api.listProjects.mockResolvedValue([]);
+  api.listInvoices.mockResolvedValue([created]);
+  api.updateDueDate.mockImplementation(async (_projectId: string, number: number, dueDate: string) => ({
+    project: sale,
+    invoices: [{
+      ...created,
+      dueDate: number === 1 ? dueDate : created.dueDate,
+      schedule: created.schedule?.map((line) => line.number === number ? { ...line, dueDate } : line),
+    }],
+    payments: [],
+    agreement: null,
+    paidTotal: 0,
+    balance: 2000,
+  }));
+  const user = userEvent.setup();
+  render(<InvoicesPage direct />);
+  await user.click(await screen.findByRole("button", { name: /view/i }));
+  const first = screen.getByLabelText("Installment 1 due date");
+  const second = screen.getByLabelText("Installment 2 due date");
+  expect((first as HTMLInputElement).value).toBe("2026-11-15");
+  expect((first as HTMLInputElement).disabled).toBe(false);
+  expect((second as HTMLInputElement).value).toBe("2027-02-01");
+  fireEvent.change(first, { target: { value: "2026-12-20" } });
+  await waitFor(() => expect(api.updateDueDate).toHaveBeenCalledWith("sale-1", 1, "2026-12-20"));
+  await waitFor(() => expect((screen.getByLabelText("Installment 1 due date") as HTMLInputElement).value).toBe("2026-12-20"));
 });
 
 test("direct invoices page lists daily sales away from pending invoices", async () => {

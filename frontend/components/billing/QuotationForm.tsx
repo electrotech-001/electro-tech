@@ -20,6 +20,8 @@ export function QuotationForm({
   serialLabel = "Quotation serial no",
   dateLabel = "Quotation date",
   submitLabel = "Save quotation",
+  installmentDueDates,
+  onInstallmentDueDate,
   onChange,
   onCancel,
   onSubmit,
@@ -31,6 +33,8 @@ export function QuotationForm({
   serialLabel?: string;
   dateLabel?: string;
   submitLabel?: string;
+  installmentDueDates?: string[];
+  onInstallmentDueDate?: (index: number, value: string) => void;
   onChange: (draft: QuotationDraft) => void;
   onCancel: () => void;
   onSubmit: () => void;
@@ -257,10 +261,20 @@ export function QuotationForm({
             <div className={styles.breakdown}>
               <p>Remaining after down payment and discount <strong>{formatRupees(Math.max(0, balance))}</strong></p>
               <ol>
-                {totals.installments.map((line) => (
-                  <li key={line.number}>
+                {totals.installments.map((line, index) => (
+                  <li key={line.number} className={onInstallmentDueDate ? styles.dueDateLine : undefined}>
                     <span>Installment {line.number}</span>
                     <strong>{formatRupees(line.amount)}</strong>
+                    {onInstallmentDueDate ? (
+                      <label className={styles.field}>
+                        <span>Installment {line.number} due date</span>
+                        <input
+                          type="date"
+                          value={installmentDueDates?.[index] ?? ""}
+                          onChange={(event) => onInstallmentDueDate(index, event.target.value)}
+                        />
+                      </label>
+                    ) : null}
                   </li>
                 ))}
               </ol>

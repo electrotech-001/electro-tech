@@ -505,6 +505,44 @@ test("a daily sale invoice is created without a quotation and payments go to the
   assert.equal(ledger[0]?.invoiceSerial, saved.invoices[0]?.serial);
 });
 
+test("a direct installment invoice keeps the due dates the user chose and can change them later", async () => {
+  const repository = createMemoryDocumentsRepository([]);
+  const saved = await repository.createDirectSale({
+    quotationDate: "2026-10-12",
+    customerName: "Walk-in Customer",
+    cnic: "",
+    address: "Attock City",
+    contactNo: "",
+    whatsappNo: "",
+    customerPackage: "MCB 63A",
+    paymentMode: "installments",
+    downPayment: 1000,
+    installmentCount: 2,
+    items: [{ description: "MCB 63A", qty: 2, unit: "Nos", price: 1500, taxPercent: 0 }],
+  }, null, ["2026-11-15", "2027-02-01"]);
+  assert.equal(saved.invoices.find((invoice) => invoice.installmentNumber === 1)?.dueDate, "2026-11-15");
+  assert.equal(saved.invoices.find((invoice) => invoice.installmentNumber === 2)?.dueDate, "2027-02-01");
+  const edited = await repository.updateDueDate(saved.project.id, 1, "2026-12-20");
+  assert.equal(edited.invoices.find((invoice) => invoice.installmentNumber === 1)?.dueDate, "2026-12-20");
+  assert.equal(edited.invoices.find((invoice) => invoice.installmentNumber === 2)?.dueDate, "2027-02-01");
+  await assert.rejects(
+    () => repository.createDirectSale({
+      quotationDate: "2026-10-12",
+      customerName: "Walk-in Customer",
+      cnic: "",
+      address: "Attock City",
+      contactNo: "",
+      whatsappNo: "",
+      customerPackage: "MCB 63A",
+      paymentMode: "installments",
+      downPayment: 0,
+      installmentCount: 2,
+      items: [{ description: "MCB 63A", qty: 1, unit: "Nos", price: 1500, taxPercent: 0 }],
+    }, null, []),
+    /due date/,
+  );
+});
+
 test("a daily sale discount lowers the invoice balance", async () => {
   const repository = createMemoryDocumentsRepository([]);
   const saved = await repository.createDirectSale({

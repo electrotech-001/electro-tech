@@ -25,6 +25,7 @@ export function DirectSaleForm({
   const [paidAmount, setPaidAmount] = useState(0);
   const [paymentDate, setPaymentDate] = useState(todayIsoDate());
   const [paymentMode, setPaymentMode] = useState<BankMode>("cash");
+  const [dueDates, setDueDates] = useState<string[]>([]);
   const [step, setStep] = useState<"form" | "receipt">("form");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,11 +35,22 @@ export function DirectSaleForm({
   const received = Math.max(0, Number(paidAmount) || 0);
   const balance = Math.max(0, roundMoney(payable - received));
   const receiptLabel = draft.paymentMode === "installments" ? "Down payment received" : "Amount received";
+  const installmentCount = draft.paymentMode === "installments" ? draft.installmentCount ?? 0 : 0;
+  const installmentDueDates = Array.from({ length: installmentCount }, (_, index) => dueDates[index] ?? "");
+
+  function missingDueDate(): boolean {
+    return installmentCount > 0 && installmentDueDates.some((date) => !/^\d{4}-\d{2}-\d{2}$/.test(date));
+  }
 
   async function onSave() {
     const issues = quotationIssues(draft);
     if (issues[0]) {
       setError(issues[0]);
+      return;
+    }
+    if (missingDueDate()) {
+      setError("Choose a due date for each installment.");
+      setStep("form");
       return;
     }
     if (received > payable) {
@@ -52,7 +64,11 @@ export function DirectSaleForm({
     setSaving(true);
     setError(null);
     try {
-      const saved = await createDirectSale(draft, { paidAmount: received, paymentDate, paymentMode });
+      const saved = await createDirectSale(
+        draft,
+        { paidAmount: received, paymentDate, paymentMode },
+        installmentCount > 0 ? installmentDueDates : undefined,
+      );
       onCreated(saved);
     } catch (caught) {
       setError(caught instanceof DocumentApiError ? caught.message : "The invoice could not be created.");
@@ -102,12 +118,25 @@ export function DirectSaleForm({
       serialLabel="Sale serial no"
       dateLabel="Invoice date"
       submitLabel="Continue"
+      installmentDueDates={installmentDueDates}
+      onInstallmentDueDate={installmentCount > 0 ? (index, value) => {
+        setError(null);
+        setDueDates((current) => {
+          const next = Array.from({ length: installmentCount }, (_, dateIndex) => current[dateIndex] ?? "");
+          next[index] = value;
+          return next;
+        });
+      } : undefined}
       onChange={setDraft}
       onCancel={onCancel}
       onSubmit={() => {
         const issues = quotationIssues(draft);
         if (issues[0]) {
           setError(issues[0]);
+          return;
+        }
+        if (missingDueDate()) {
+          setError("Choose a due date for each installment.");
           return;
         }
         setError(null);

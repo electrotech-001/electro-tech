@@ -41,7 +41,7 @@ export type DocumentsRepository = {
   listGuarantors(): Promise<GuarantorRecord[]>;
   listInvoices(): Promise<InvoiceRecord[]>;
   listReceiveProjects(): Promise<ReceiveProject[]>;
-  createDirectSale(draft: QuotationDraft, opening?: OpeningReceipt | null): Promise<ReceiveProject>;
+  createDirectSale(draft: QuotationDraft, opening?: OpeningReceipt | null, dueDates?: string[]): Promise<ReceiveProject>;
   workspace(projectId: string): Promise<ReceiveProject>;
   saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string; opening?: OpeningReceipt | null; planDiscount?: number }): Promise<AgreementRecord>;
   updateAgreementWording(agreementId: string, body: string): Promise<AgreementRecord>;
@@ -249,7 +249,7 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
     async listReceiveProjects() {
       return [...workspaces.values()].filter((workspace) => workspace.project.status !== "completed").map(present);
     },
-    async createDirectSale(draft, opening) {
+    async createDirectSale(draft, opening, dueDates = []) {
       const serialNumber = [...workspaces.values()]
         .filter((workspace) => workspace.project.origin === "direct_sale")
         .reduce((highest, workspace) => Math.max(highest, workspace.project.serialNumber), 0) + 1;
@@ -259,7 +259,7 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
         invoices: [],
         payments: [],
       };
-      return remember(issueDirectSale(empty, maxSerial([...workspaces.values()]), opening));
+      return remember(issueDirectSale(empty, maxSerial([...workspaces.values()]), opening, dueDates));
     },
     async workspace(projectId) {
       return present(requireWorkspace(projectId));
@@ -806,10 +806,10 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
     async listReceiveProjects() {
       return (await listedWorkspaces("none")).filter((workspace) => workspace.project.status !== "completed").map(present);
     },
-    async createDirectSale(draft, opening) {
+    async createDirectSale(draft, opening, dueDates = []) {
       const project = await getQuotationRepository().createDirectSale(draft);
       const current: Workspace = { project, agreement: null, invoices: [], payments: [] };
-      const next = issueDirectSale(current, await reservedSerial(), opening);
+      const next = issueDirectSale(current, await reservedSerial(), opening, dueDates);
       await persist(current, next, Boolean(next.agreement));
       return present(next);
     },

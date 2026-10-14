@@ -136,8 +136,9 @@ export function nextDirectSaleSerial(): Promise<string> {
 export function createDirectSale(
   draft: QuotationDraft,
   opening?: { paidAmount: number; paymentDate: string; paymentMode: BankMode },
+  dueDates?: string[],
 ): Promise<ReceiveProject> {
-  return billingFetch("/api/billing/direct-invoices", { method: "POST", body: JSON.stringify({ ...draft, opening }) })
+  return billingFetch("/api/billing/direct-invoices", { method: "POST", body: JSON.stringify({ ...draft, opening, ...(dueDates ? { dueDates } : {}) }) })
     .then((response) => expectOk(response, "The invoice could not be created."))
     .then((payload) => (payload as { project: ReceiveProject }).project);
 }

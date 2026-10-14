@@ -195,8 +195,9 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
   router.post("/direct-invoices", async (request, response, next) => {
     try {
       const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+      const dueDates = Array.isArray(body.dueDates) ? body.dueDates.map((date) => text(date)) : [];
       response.status(201).json({
-        project: await repository().createDirectSale(saleDraft(body), openingFrom(body.opening)),
+        project: await repository().createDirectSale(saleDraft(body), openingFrom(body.opening), dueDates),
       });
     } catch (error) {
       sendFailure(error, response, next);
