@@ -44,7 +44,8 @@ export function outstandingBalances(projects: QuotationRecord[], invoices: Invoi
   for (const project of projects) {
     if (project.status === "completed" || project.origin === "direct_sale") continue;
     const mine = invoices.filter((invoice) => invoice.projectId === project.id);
-    if (project.paymentMode === "installments") {
+    const saved = mine.filter((invoice) => !invoice.id.startsWith("plan-"));
+    if (project.paymentMode === "installments" && saved.length === 0 && (project.installmentCount ?? 0) > 0) {
       for (const line of project.installments) {
         if (mine.some((invoice) => invoice.installmentNumber === line.number)) continue;
         serialNumber += 1;
@@ -57,16 +58,6 @@ export function outstandingBalances(projects: QuotationRecord[], invoices: Invoi
           installmentNumber: line.number,
         }));
       }
-    } else if (mine.length === 0 && project.grandTotal > 0) {
-      serialNumber += 1;
-      extras.push(balanceInvoice(project, {
-        id: `plan-${project.id}-balance`,
-        serial: invoiceSerial(serialNumber),
-        serialNumber,
-        kind: "advance",
-        amount: project.grandTotal,
-        installmentNumber: null,
-      }));
     }
   }
   return extras;

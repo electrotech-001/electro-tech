@@ -374,7 +374,7 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
             saving={busy}
             error={banner?.tone === "bad" ? banner.text : null}
             serialLabel="Invoice serial no"
-            dateLabel="Invoice date"
+            showDate={false}
             submitLabel="Save invoice"
             onChange={setEditDraft}
             onCancel={() => { setEditing(null); setEditDraft(null); setBanner(null); }}
@@ -513,7 +513,7 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
         <div className={styles.modal} role="presentation" onClick={() => { if (!busy) setDeleting(null); }}>
           <div className={styles.confirm} role="dialog" aria-modal="true" aria-labelledby="delete-invoice-title" onClick={(event) => event.stopPropagation()}>
             <h2 id="delete-invoice-title">Delete {deleting.serial}?</h2>
-            <p>This removes the invoice{deleting.payments.length > 0 ? " and the payments recorded on it" : ""}. Approving the quotation again creates a new one.</p>
+            <p>This removes the invoice{deleting.payments.length > 0 ? " and the payments recorded on it" : ""}. The quotation stays.</p>
             <div className={styles.formActions}>
               <button className={styles.secondaryButton} type="button" onClick={() => setDeleting(null)} disabled={busy}>Cancel</button>
               <button className={styles.dangerButton} type="button" onClick={() => void onDelete()} disabled={busy}>{busy ? "Deleting…" : "Delete"}</button>

@@ -196,6 +196,12 @@ function applyProfile(row: QuotationRow, profile: CustomerProfileInput): void {
   row.whatsapp_no = profile.whatsappNo;
 }
 
+function projectDate(incoming: string, stored?: string | null): string {
+  const candidate = String(incoming ?? "").slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(candidate) && !Number.isNaN(Date.parse(`${candidate}T00:00:00`))) return candidate;
+  return String(stored ?? "").slice(0, 10);
+}
+
 function assertDraft(draft: QuotationDraft): QuotationDraft {
   const normalized: QuotationDraft = {
     ...draft,
@@ -391,9 +397,9 @@ export function createMemoryQuotationRepository(): QuotationRepository {
       return materialize(row, "quotation");
     },
     async updateProject(id, draft) {
-      const clean = assertDraft(draft);
       const row = projects.find((entry) => entry.id === id);
       if (!row) throw new QuotationServiceError("Invoice was not found.", 404, "not_found");
+      const clean = assertDraft({ ...draft, quotationDate: projectDate(draft.quotationDate, row.quotation_date) });
       const totals = computeTotals(clean);
       Object.assign(row, {
         quotation_date: clean.quotationDate,
@@ -677,10 +683,13 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
       return readQuotation(existing.id);
     },
     async updateProject(id, draft) {
-      const clean = assertDraft(draft);
       const found = await client.from("billing_projects").select(PROJECT_SELECT).eq("id", id).maybeSingle();
       if (found.error) throw storageFailure(found.error, "read");
       if (!found.data) throw new QuotationServiceError("Invoice was not found.", 404, "not_found");
+      const clean = assertDraft({
+        ...draft,
+        quotationDate: projectDate(draft.quotationDate, (found.data as QuotationRow).quotation_date),
+      });
       const totals = computeTotals(clean);
       const updated = await client
         .from("billing_projects")

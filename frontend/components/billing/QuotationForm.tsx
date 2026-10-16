@@ -24,6 +24,7 @@ export function QuotationForm({
   error,
   serialLabel = "Quotation serial no",
   dateLabel = "Quotation date",
+  showDate = true,
   submitLabel = "Save quotation",
   installmentDueDates,
   onInstallmentDueDate,
@@ -37,6 +38,7 @@ export function QuotationForm({
   error: string | null;
   serialLabel?: string;
   dateLabel?: string;
+  showDate?: boolean;
   submitLabel?: string;
   installmentDueDates?: string[];
   onInstallmentDueDate?: (index: number, value: string) => void;
@@ -45,7 +47,7 @@ export function QuotationForm({
   onSubmit: () => void;
 }) {
   const totals = computeTotals(draft);
-  const issues = quotationIssues(draft);
+  const issues = quotationIssues(draft).filter((issue) => showDate || issue !== "Choose a quotation date.");
   const balance = installmentBalance(totals.grandTotal, draft.downPayment, planDiscountOf(draft));
   const draftRef = useRef(draft);
   const lookupRef = useRef(0);
@@ -101,10 +103,12 @@ export function QuotationForm({
           <span>{serialLabel}</span>
           <input value={serial} readOnly />
         </label>
-        <label className={styles.field}>
-          <span>{dateLabel}</span>
-          <input type="date" value={draft.quotationDate} onChange={(event) => set("quotationDate", event.target.value)} required />
-        </label>
+        {showDate ? (
+          <label className={styles.field}>
+            <span>{dateLabel}</span>
+            <input type="date" value={draft.quotationDate} onChange={(event) => set("quotationDate", event.target.value)} required />
+          </label>
+        ) : null}
         <label className={styles.field}>
           <span>Customer name</span>
           <input value={draft.customerName} onChange={(event) => set("customerName", event.target.value)} required />

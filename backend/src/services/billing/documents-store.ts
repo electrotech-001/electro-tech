@@ -889,7 +889,14 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       if (typeof projectId !== "string") throw new DocumentError("Invoice was not found.", 404, "not_found");
       const current = await loadWorkspace(projectId);
       const next = deleteInvoice(current, invoiceId);
+      if (next.project.paymentMode === "installments" && next.invoices.length === 0) {
+        next.project = { ...next.project, installmentCount: 0, installments: [] };
+      }
       await persist(current, next, false);
+      if (next.project.paymentMode === "installments" && next.invoices.length === 0) {
+        const cleared = await client.from("billing_projects").update({ installment_count: 0 }).eq("id", next.project.id);
+        if (cleared.error) throw storageFailure(cleared.error, "updated");
+      }
       return present(next);
     },
     async setInvoiceDiscount(invoiceId, discountAmount) {
