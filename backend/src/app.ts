@@ -137,6 +137,7 @@ export function createApp(dependencies: AppDependencies) {
   );
   app.use(
     "/api/billing/projects",
+    express.json({ limit: "1mb" }),
     dependencies.billingProjectsRouter ?? createBillingProjectsRouter(),
   );
   app.use(

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import express from "express";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, test } from "node:test";
@@ -255,4 +256,26 @@ test("missing Resend configuration fails safely while health remains available",
       else process.env[name] = value;
     }
   }
+});
+
+test("PUT /api/billing/projects reads the JSON body, including an already filled customer name", async () => {
+  const router = express.Router();
+  router.put("/:id", (request, response) => {
+    const body = request.body && typeof request.body === "object" ? request.body as { customerName?: string } : {};
+    response.status(200).json({ customerName: body.customerName ?? "" });
+  });
+  const server = createApp({
+    config: { nodeEnv: "test", frontendOrigin: "" },
+    billingProjectsRouter: router,
+  }).listen(0, "127.0.0.1");
+  servers.add(server);
+  await new Promise<void>((resolve) => server.once("listening", resolve));
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const response = await fetch(`${baseUrl}/api/billing/projects/invoice-1`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ customerName: "Sheikh Zain" }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).customerName, "Sheikh Zain");
 });
