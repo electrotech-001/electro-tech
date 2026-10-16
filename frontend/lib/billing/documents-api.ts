@@ -198,6 +198,8 @@ export type BillingSummary = {
   openInvoices: number;
   overdueInstallments: number;
   receivedTotal: number;
+  pendingTotal: number;
+  discountTotal: number;
   paymentCount: number;
   recent: LedgerEntry[];
 };

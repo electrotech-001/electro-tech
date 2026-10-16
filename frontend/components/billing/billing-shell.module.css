@@ -331,6 +331,27 @@
   background: #f5c400;
 }
 
+.statPending::before {
+  background: #b42318;
+}
+
+.statValuePending,
+.statValueDiscount {
+  font-size: 1.35rem;
+}
+
+.statValuePending {
+  color: #b42318;
+}
+
+.statDiscount::before {
+  background: #9a6700;
+}
+
+.statValueDiscount {
+  color: #9a6700;
+}
+
 .statDone::before {
   background: #0f6f8a;
 }

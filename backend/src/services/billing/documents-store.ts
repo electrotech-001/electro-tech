@@ -65,6 +65,8 @@ export type BillingSummary = {
   openInvoices: number;
   overdueInstallments: number;
   receivedTotal: number;
+  pendingTotal: number;
+  discountTotal: number;
   paymentCount: number;
   recent: LedgerEntry[];
 };
@@ -182,12 +184,16 @@ export function summarizeDocuments(workspaces: Workspace[], today = todayIso()):
     }
   }
   const receivedTotal = Math.round(entries.reduce((sum, entry) => sum + entry.paidAmount, 0) * 100) / 100;
+  const pendingTotal = Math.round(workspaces.reduce((sum, workspace) => sum + present(workspace).balance, 0) * 100) / 100;
+  const discountTotal = Math.round(toDiscounts(workspaces).reduce((sum, entry) => sum + entry.discountAmount, 0) * 100) / 100;
   return {
     projectsInProcess,
     projectsCompleted,
     openInvoices,
     overdueInstallments,
     receivedTotal,
+    pendingTotal,
+    discountTotal,
     paymentCount: entries.length,
     recent: entries.slice(-5).reverse(),
   };
@@ -917,35 +923,7 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       return listDiscountRows();
     },
     async summary() {
-      const today = todayIso();
-      const [projectResult, invoiceResult, agreementResult, entries] = await Promise.all([
-        client.from("billing_projects").select("status, origin"),
-        client.from("billing_invoices").select("status"),
-        client.from("billing_agreements").select("schedule"),
-        listLedgerRows(),
-      ]);
-      if (projectResult.error) throw storageFailure(projectResult.error, "listed");
-      if (invoiceResult.error) throw storageFailure(invoiceResult.error, "listed");
-      if (agreementResult.error) throw storageFailure(agreementResult.error, "listed");
-      const projects = (projectResult.data ?? []) as Array<{ status: string | null; origin?: string | null }>;
-      const invoices = (invoiceResult.data ?? []) as Array<{ status: string | null }>;
-      const agreements = (agreementResult.data ?? []) as Array<{ schedule: ScheduleLine[] | null }>;
-      let overdueInstallments = 0;
-      for (const agreement of agreements) {
-        for (const line of Array.isArray(agreement.schedule) ? agreement.schedule : []) {
-          if (line.status === "due" && line.dueDate < today) overdueInstallments += 1;
-        }
-      }
-      const receivedTotal = Math.round(entries.reduce((sum, entry) => sum + entry.paidAmount, 0) * 100) / 100;
-      return {
-        projectsInProcess: projects.filter((project) => project.origin !== "direct_sale" && project.status !== "completed").length,
-        projectsCompleted: projects.filter((project) => project.origin !== "direct_sale" && project.status === "completed").length,
-        openInvoices: invoices.filter((invoice) => invoice.status !== "paid").length,
-        overdueInstallments,
-        receivedTotal,
-        paymentCount: entries.length,
-        recent: entries.slice(-5).reverse(),
-      };
+      return summarizeDocuments(await listedWorkspaces("none"));
     },
     async renameCustomer(projectIds, customerName) {
       const name = customerName.trim();

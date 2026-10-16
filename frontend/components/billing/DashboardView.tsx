@@ -75,7 +75,9 @@ export function DashboardView() {
     { href: "/billing/projects#completed", label: "Completed projects", value: completed, hint: "Marked completed", tone: styles.statDone },
     { href: "/billing/invoices", label: "Open invoices", value: summary ? String(summary.openInvoices) : "—", hint: "Not fully paid", tone: "" },
     { href: "/billing/payments", label: "Overdue installments", value: summary ? String(summary.overdueInstallments) : "—", hint: "Due date has passed", tone: summary && summary.overdueInstallments > 0 ? styles.statAlert : "" },
-    { href: "/billing/ledger", label: "Received", value: summary ? formatRupees(summary.receivedTotal) : "—", hint: summary ? `${summary.paymentCount} payment${summary.paymentCount === 1 ? "" : "s"}` : "Payments received", tone: styles.statMoney },
+    { href: "/billing/invoices", label: "Pending amount", value: summary ? formatRupees(summary.pendingTotal) : "—", hint: "Still to be received", tone: styles.statPending },
+    { href: "/billing/ledger", label: "Received amount", value: summary ? formatRupees(summary.receivedTotal) : "—", hint: summary ? `${summary.paymentCount} payment${summary.paymentCount === 1 ? "" : "s"}` : "Payments received", tone: styles.statMoney },
+    { href: "/billing/discounts", label: "Discount amount", value: summary ? formatRupees(summary.discountTotal) : "—", hint: "Given on invoices and payments", tone: styles.statDiscount },
   ];
 
   return (
@@ -84,16 +86,16 @@ export function DashboardView() {
         <div>
           <p className={styles.kicker}>Electro Tech</p>
           <h1 className={styles.title}>Dashboard</h1>
-          <p className={styles.summary}>Live counts from quotations, projects, invoices, and payments received.</p>
+          <p className={styles.summary}>Live counts from quotations, projects, and invoices, with the pending, received, and discount amounts.</p>
         </div>
         <p className={styles.date}>{today}</p>
       </header>
       {banner ? <p className={styles.banner}>{banner}</p> : null}
       <section className={styles.stats} aria-label="Billing summary">
         {cards.map((card) => (
-          <a className={`${styles.stat} ${card.tone}`} href={card.href} key={card.href}>
+          <a className={`${styles.stat} ${card.tone}`} href={card.href} key={card.label}>
             <span className={styles.statLabel}>{card.label}</span>
-            <span className={`${styles.statValue} ${card.tone === styles.statMoney ? styles.statValueMoney : ""}`}>{card.value}</span>
+            <span className={`${styles.statValue} ${card.tone === styles.statMoney ? styles.statValueMoney : ""} ${card.tone === styles.statPending ? styles.statValuePending : ""} ${card.tone === styles.statDiscount ? styles.statValueDiscount : ""}`}>{card.value}</span>
             <span className={styles.statHint}>{card.hint}</span>
           </a>
         ))}

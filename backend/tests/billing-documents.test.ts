@@ -213,6 +213,10 @@ test("a discount on the invoice and on the payment both reduce the balance", asy
   assert.equal(paid.invoices[0]?.discountAmount, 10000);
   assert.equal(paid.invoices[0]?.balanceDue, 408000);
   assert.equal(paid.balance, 408000);
+  const summary = await repository.summary();
+  assert.equal(summary.pendingTotal, 408000);
+  assert.equal(summary.receivedTotal, 250000);
+  assert.equal(summary.discountTotal, 15000);
   await assert.rejects(
     () => repository.setInvoiceDiscount(invoiceId, 500000),
     /remaining balance/,
@@ -242,6 +246,10 @@ test("an installment invoice discount lowers that invoice without relabeling the
   });
   assert.equal(received.agreement?.schedule.find((line) => line.number === 1)?.status, "paid");
   assert.equal(received.balance, 532000);
+  const summary = await repository.summary();
+  assert.equal(summary.pendingTotal, 532000);
+  assert.equal(summary.receivedTotal, 131000);
+  assert.equal(summary.discountTotal, 10000);
   const unpaid = received.agreement?.schedule.filter((line) => line.status === "due") ?? [];
   assert.equal(unpaid.reduce((sum, line) => sum + line.amount, 0), 282000);
 });
