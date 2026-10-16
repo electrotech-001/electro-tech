@@ -11,6 +11,10 @@ vi.mock("@/lib/billing/documents-api", () => ({
   DocumentApiError: class DocumentApiError extends Error {},
 }));
 
+vi.mock("@/lib/billing/quotations-api", () => ({
+  findCustomerByCnic: vi.fn(),
+}));
+
 afterEach(() => {
   cleanup();
 });

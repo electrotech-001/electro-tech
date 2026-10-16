@@ -1,7 +1,11 @@
 import { Plus, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
 import { computeTotals, formatRupees, installmentBalance, maskCnic, maskPhone, planDiscountOf, quotationIssues, type PaymentMode, type QuotationDraft, type QuotationItemInput } from "@/lib/billing/quotation-math";
+import { findCustomerByCnic } from "@/lib/billing/quotations-api";
 import { AmountInput, FancySelect } from "./FancyControls";
 import styles from "./quotation.module.css";
+
+const completeCnic = /^\d{5}-\d{7}-\d$/;
 
 const paymentModes: { value: PaymentMode; label: string }[] = [
   { value: "installments", label: "Installments" },
@@ -42,9 +46,45 @@ export function QuotationForm({
   const totals = computeTotals(draft);
   const issues = quotationIssues(draft);
   const balance = installmentBalance(totals.grandTotal, draft.downPayment, planDiscountOf(draft));
+  const draftRef = useRef(draft);
+  const lookupRef = useRef(0);
+  const [knownCustomer, setKnownCustomer] = useState<string | null>(null);
+  draftRef.current = draft;
 
   function set<K extends keyof QuotationDraft>(key: K, value: QuotationDraft[K]) {
     onChange({ ...draft, [key]: value });
+  }
+
+  function onCnic(value: string) {
+    const cnic = maskCnic(value);
+    const next = { ...draftRef.current, cnic };
+    draftRef.current = next;
+    onChange(next);
+    const request = ++lookupRef.current;
+    if (!completeCnic.test(cnic)) {
+      setKnownCustomer(null);
+      return;
+    }
+    void findCustomerByCnic(cnic).then((customer) => {
+      if (request !== lookupRef.current) return;
+      if (!customer) {
+        setKnownCustomer(null);
+        return;
+      }
+      const filled = {
+        ...draftRef.current,
+        cnic,
+        customerName: customer.customerName,
+        address: customer.address,
+        contactNo: customer.contactNo,
+        whatsappNo: customer.whatsappNo,
+      };
+      draftRef.current = filled;
+      onChange(filled);
+      setKnownCustomer(customer.customerName);
+    }).catch(() => {
+      if (request === lookupRef.current) setKnownCustomer(null);
+    });
   }
 
   return (
@@ -72,10 +112,11 @@ export function QuotationForm({
           <span>CNIC number (optional)</span>
           <input
             value={draft.cnic}
-            onChange={(event) => set("cnic", maskCnic(event.target.value))}
+            onChange={(event) => onCnic(event.target.value)}
             inputMode="numeric"
             placeholder="00000-0000000-0"
           />
+          {knownCustomer ? <small className={styles.hint}>Saved customer: {knownCustomer}</small> : null}
         </label>
         <label className={`${styles.field} ${styles.wide}`}>
           <span>Address</span>

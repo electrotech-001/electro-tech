@@ -14,14 +14,16 @@ const bankModes: { value: BankMode; label: string }[] = [
 
 export function DirectSaleForm({
   serial,
+  initialDraft,
   onCancel,
   onCreated,
 }: {
   serial: string;
+  initialDraft?: QuotationDraft;
   onCancel: () => void;
   onCreated: (saved: ReceiveProject) => void;
 }) {
-  const [draft, setDraft] = useState<QuotationDraft>(blankDraft(serial));
+  const [draft, setDraft] = useState<QuotationDraft>(initialDraft ?? blankDraft(serial));
   const [paidAmount, setPaidAmount] = useState(0);
   const [paymentDate, setPaymentDate] = useState(todayIsoDate());
   const [paymentMode, setPaymentMode] = useState<BankMode>("cash");

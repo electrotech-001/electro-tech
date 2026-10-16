@@ -66,6 +66,26 @@ test("installments split the balance after down payment without losing paisa", (
   assert.equal(discounted.installments[0]?.amount, 126000);
 });
 
+test("a cnic lookup returns the latest saved customer, including a direct sale", async () => {
+  const repository = createMemoryQuotationRepository();
+  await repository.create(sample());
+  await repository.createDirectSale(sample({
+    quotationDate: "2026-10-12",
+    customerName: "Sheikh Zain Ali",
+    address: "Attock City",
+    contactNo: "0300-1111111",
+    whatsappNo: "0300-2222222",
+    paymentMode: "direct",
+    downPayment: null,
+    installmentCount: null,
+  }));
+  const found = await repository.findCustomerByCnic("3710112345671");
+  assert.equal(found?.customerName, "Sheikh Zain Ali");
+  assert.equal(found?.address, "Attock City");
+  assert.equal(found?.contactNo, "0300-1111111");
+  assert.equal(await repository.findCustomerByCnic("37101-0000000-0"), null);
+});
+
 test("saved quotations keep a copy when approved and serials increment", async () => {
   const repository = createMemoryQuotationRepository();
   assert.equal(await repository.nextSerial(), "QT-001");

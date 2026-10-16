@@ -257,6 +257,28 @@ test("a direct installment invoice can change its due date after it is created",
   await waitFor(() => expect((screen.getByLabelText("Installment 1 due date") as HTMLInputElement).value).toBe("2026-12-20"));
 });
 
+test("duplicating an invoice creates a new unpaid copy", async () => {
+  const sale = project({ id: "sale-1", serial: "DS-001", origin: "direct_sale", paymentMode: "direct" });
+  api.listProjects.mockResolvedValue([]);
+  api.listInvoices.mockResolvedValue([invoice(sale, { serial: "INV-040", balanceDue: 673000 })]);
+  api.createDirectSale.mockResolvedValue({
+    project: sale,
+    invoices: [{ serial: "INV-041" }],
+    payments: [],
+    agreement: null,
+    paidTotal: 0,
+    balance: 673000,
+  });
+  const user = userEvent.setup();
+  render(<InvoicesPage direct />);
+  await user.click(await screen.findByRole("button", { name: /duplicate/i }));
+  await waitFor(() => expect(api.createDirectSale).toHaveBeenCalledWith(
+    expect.objectContaining({ customerName: "Sheikh Zain", paymentMode: "direct" }),
+    expect.objectContaining({ paidAmount: 0 }),
+    undefined,
+  ));
+});
+
 test("direct invoices page lists daily sales away from pending invoices", async () => {
   const sale = project({ id: "sale-1", serial: "DS-001", origin: "direct_sale" });
   api.listProjects.mockResolvedValue([]);

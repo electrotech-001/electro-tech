@@ -44,10 +44,35 @@ export class QuotationServiceError extends Error {
   }
 }
 
+export type SavedCustomer = {
+  customerName: string;
+  cnic: string;
+  address: string;
+  contactNo: string;
+  whatsappNo: string;
+};
+
+export function matchCustomer(rows: QuotationRow[], cnic: string): SavedCustomer | null {
+  const digits = cnic.replace(/\D/g, "");
+  if (digits.length !== 13) return null;
+  const matches = rows.filter((row) => row.cnic.replace(/\D/g, "") === digits);
+  matches.sort((left, right) => right.quotation_date.localeCompare(left.quotation_date));
+  const row = matches[0];
+  if (!row) return null;
+  return {
+    customerName: row.customer_name,
+    cnic: row.cnic,
+    address: row.address,
+    contactNo: row.contact_no,
+    whatsappNo: row.whatsapp_no,
+  };
+}
+
 export type QuotationRepository = {
   listQuotations(): Promise<QuotationRecord[]>;
   countQuotations(): Promise<number>;
   listProjects(): Promise<QuotationRecord[]>;
+  findCustomerByCnic(cnic: string): Promise<SavedCustomer | null>;
   nextSerial(): Promise<string>;
   nextDirectSaleSerial(): Promise<string>;
   create(draft: QuotationDraft): Promise<QuotationRecord>;
@@ -273,6 +298,9 @@ export function createMemoryQuotationRepository(): QuotationRepository {
     async listProjects() {
       return projects.filter((row) => row.origin !== "direct_sale").map((row) => materialize(row, "project")).reverse();
     },
+    async findCustomerByCnic(cnic) {
+      return matchCustomer([...quotations, ...projects], cnic);
+    },
     async nextSerial() {
       const max = quotations.reduce((highest, row) => Math.max(highest, row.serial_number), 0);
       return formatSerial(max + 1);
@@ -495,6 +523,19 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
         .order("created_at", { ascending: false });
       if (error) throw storageFailure(error, "listed");
       return ((data ?? []) as QuotationRow[]).map((row) => toQuotationRecord(row, "project"));
+    },
+    async findCustomerByCnic(cnic) {
+      const digits = cnic.replace(/\D/g, "");
+      if (digits.length !== 13) return null;
+      const keys = [...new Set([cnic.trim(), digits])];
+      const columns = "customer_name, cnic, address, contact_no, whatsapp_no, quotation_date";
+      const [quotationsResult, projectsResult] = await Promise.all([
+        client.from("billing_quotations").select(columns).in("cnic", keys),
+        client.from("billing_projects").select(columns).in("cnic", keys),
+      ]);
+      if (quotationsResult.error) throw storageFailure(quotationsResult.error, "listed");
+      if (projectsResult.error) throw storageFailure(projectsResult.error, "listed");
+      return matchCustomer([...(quotationsResult.data ?? []), ...(projectsResult.data ?? [])] as QuotationRow[], cnic);
     },
     async nextSerial() {
       return formatSerial((await maxSerial()) + 1);

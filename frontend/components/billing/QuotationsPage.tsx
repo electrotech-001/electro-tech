@@ -1,9 +1,9 @@
 "use client";
 
-import { Check, Eye, MessageCircle, Pencil, Printer, Plus, Trash2, Undo2 } from "lucide-react";
+import { Check, Copy, Eye, MessageCircle, Pencil, Printer, Plus, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
-import { blankDraft, formatDisplayDate, formatRupees, type QuotationDraft, type QuotationRecord } from "@/lib/billing/quotation-math";
+import { blankDraft, formatDisplayDate, formatRupees, todayIsoDate, type QuotationDraft, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { approveQuotation, deleteQuotation, disapproveQuotation, listQuotations, nextQuotationSerial, QuotationApiError, saveQuotation } from "@/lib/billing/quotations-api";
 import { printBillingLetter } from "@/lib/billing/print-letter";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
@@ -50,7 +50,7 @@ export function QuotationsPage() {
   const [approving, setApproving] = useState<QuotationRecord | null>(null);
   const [disapproving, setDisapproving] = useState<QuotationRecord | null>(null);
   const [deleting, setDeleting] = useState<QuotationRecord | null>(null);
-  const [busy, setBusy] = useState<{ id: string; action: "whatsapp" | "approve" | "disapprove" | "delete" } | null>(null);
+  const [busy, setBusy] = useState<{ id: string; action: "whatsapp" | "approve" | "disapprove" | "delete" | "duplicate" } | null>(null);
   const [capture, setCapture] = useState<QuotationRecord | null>(null);
   const captureRef = useRef<HTMLDivElement>(null);
 
@@ -124,6 +124,20 @@ export function QuotationsPage() {
       setFormError(error instanceof QuotationApiError ? error.message : "The quotation could not be saved.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function onDuplicate(quotation: QuotationRecord) {
+    setBusy({ id: quotation.id, action: "duplicate" });
+    setBanner(null);
+    try {
+      const saved = await saveQuotation({ ...toDraft(quotation), quotationDate: todayIsoDate() });
+      await refresh();
+      setBanner({ tone: "ok", text: `${saved.serial} was created as a copy of ${quotation.serial}.` });
+    } catch (error) {
+      setBanner({ tone: "bad", text: error instanceof QuotationApiError ? error.message : "The quotation could not be duplicated." });
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -277,6 +291,9 @@ export function QuotationsPage() {
             <div className={styles.cardActions}>
               <button type="button" onClick={() => setViewing(quotation)}><Eye size={15} /> View</button>
               <button type="button" onClick={() => startEdit(quotation)}><Pencil size={15} /> Edit</button>
+              <button type="button" onClick={() => void onDuplicate(quotation)} disabled={busy?.id === quotation.id}>
+                <Copy size={15} /> {busy?.id === quotation.id && busy.action === "duplicate" ? "Copying…" : "Duplicate"}
+              </button>
               <button type="button" onClick={() => onPrint(quotation)}><Printer size={15} /> Print</button>
               <button type="button" onClick={() => void onWhatsApp(quotation)} disabled={busy?.id === quotation.id}>
                 <MessageCircle size={15} /> {busy?.id === quotation.id && busy.action === "whatsapp" ? "Sending…" : "WhatsApp"}

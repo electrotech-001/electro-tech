@@ -36,6 +36,22 @@ async function expectOk(response: Response, fallback: string): Promise<unknown> 
   return payload;
 }
 
+export type SavedCustomer = {
+  customerName: string;
+  cnic: string;
+  address: string;
+  contactNo: string;
+  whatsappNo: string;
+};
+
+export async function findCustomerByCnic(cnic: string): Promise<SavedCustomer | null> {
+  const payload = await expectOk(
+    await billingFetch(`/api/billing/quotations/lookup?cnic=${encodeURIComponent(cnic)}`),
+    "The customer could not be looked up.",
+  );
+  return (payload as { customer: SavedCustomer | null }).customer;
+}
+
 export async function listQuotations(): Promise<QuotationRecord[]> {
   const payload = await expectOk(await billingFetch("/api/billing/quotations"), "Quotations could not be loaded.");
   return (payload as { quotations: QuotationRecord[] }).quotations;

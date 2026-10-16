@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DocumentApiError, listSummary, type BillingSummary, type LedgerEntry } from "@/lib/billing/documents-api";
-import { formatDisplayDate, formatRupees } from "@/lib/billing/quotation-math";
+import { DocumentApiError, listDiscounts, listInvoices, listSummary, type BillingSummary, type LedgerEntry } from "@/lib/billing/documents-api";
+import { outstandingBalances, stillOpen } from "@/lib/billing/pending-invoices";
+import { formatDisplayDate, formatRupees, roundMoney } from "@/lib/billing/quotation-math";
 import { listProjects } from "@/lib/billing/quotations-api";
 import styles from "./billing-shell.module.css";
 
@@ -16,8 +17,25 @@ function modeLabel(mode: LedgerEntry["paymentMode"]): string {
   return mode === "bank_transfer" ? "Bank transfer" : "Cash";
 }
 
+function finiteAmount(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function sumAmounts(values: unknown[]): number {
+  return roundMoney(values.reduce<number>((sum, value) => {
+    const amount = typeof value === "number" ? value : Number(value);
+    return sum + (Number.isFinite(amount) ? amount : 0);
+  }, 0));
+}
+
+function rupees(value: number | null): string {
+  return value == null ? "—" : formatRupees(value);
+}
+
 export function DashboardView() {
   const [summary, setSummary] = useState<BillingSummary | null>(null);
+  const [pendingAmount, setPendingAmount] = useState<number | null>(null);
+  const [discountAmount, setDiscountAmount] = useState<number | null>(null);
   const [projectCounts, setProjectCounts] = useState<{ inProcess: number; completed: number } | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const today = new Intl.DateTimeFormat("en-PK", {
@@ -30,15 +48,32 @@ export function DashboardView() {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const [summaryResult, projectsResult] = await Promise.allSettled([listSummary(), listProjects()]);
+      const [summaryResult, projectsResult, invoicesResult, discountsResult] = await Promise.allSettled([
+        listSummary(),
+        listProjects(),
+        listInvoices(),
+        listDiscounts(),
+      ]);
       if (cancelled) return;
       if (summaryResult.status === "fulfilled") setSummary(summaryResult.value);
+      const projects = projectsResult.status === "fulfilled" ? projectsResult.value : [];
       if (projectsResult.status === "fulfilled") {
-        const projects = projectsResult.value;
         setProjectCounts({
           inProcess: projects.filter((project) => project.status !== "completed").length,
           completed: projects.filter((project) => project.status === "completed").length,
         });
+      }
+      if (invoicesResult.status === "fulfilled") {
+        const invoices = invoicesResult.value;
+        const open = [...invoices.filter(stillOpen), ...outstandingBalances(projects, invoices)];
+        setPendingAmount(sumAmounts(open.map((invoice) => invoice.balanceDue)));
+      } else if (summaryResult.status === "fulfilled") {
+        setPendingAmount(finiteAmount(summaryResult.value.pendingTotal));
+      }
+      if (discountsResult.status === "fulfilled") {
+        setDiscountAmount(sumAmounts(discountsResult.value.map((entry) => entry.discountAmount)));
+      } else if (summaryResult.status === "fulfilled") {
+        setDiscountAmount(finiteAmount(summaryResult.value.discountTotal));
       }
       if (summaryResult.status === "rejected" && projectsResult.status === "rejected") {
         const error = summaryResult.reason;
@@ -75,9 +110,9 @@ export function DashboardView() {
     { href: "/billing/projects#completed", label: "Completed projects", value: completed, hint: "Marked completed", tone: styles.statDone },
     { href: "/billing/invoices", label: "Open invoices", value: summary ? String(summary.openInvoices) : "—", hint: "Not fully paid", tone: "" },
     { href: "/billing/payments", label: "Overdue installments", value: summary ? String(summary.overdueInstallments) : "—", hint: "Due date has passed", tone: summary && summary.overdueInstallments > 0 ? styles.statAlert : "" },
-    { href: "/billing/invoices", label: "Pending amount", value: summary ? formatRupees(summary.pendingTotal) : "—", hint: "Still to be received", tone: styles.statPending },
-    { href: "/billing/ledger", label: "Received amount", value: summary ? formatRupees(summary.receivedTotal) : "—", hint: summary ? `${summary.paymentCount} payment${summary.paymentCount === 1 ? "" : "s"}` : "Payments received", tone: styles.statMoney },
-    { href: "/billing/discounts", label: "Discount amount", value: summary ? formatRupees(summary.discountTotal) : "—", hint: "Given on invoices and payments", tone: styles.statDiscount },
+    { href: "/billing/invoices", label: "Pending amount", value: rupees(pendingAmount), hint: "Still to be received", tone: styles.statPending },
+    { href: "/billing/ledger", label: "Received amount", value: rupees(finiteAmount(summary?.receivedTotal)), hint: summary ? `${summary.paymentCount} payment${summary.paymentCount === 1 ? "" : "s"}` : "Payments received", tone: styles.statMoney },
+    { href: "/billing/discounts", label: "Discount amount", value: rupees(discountAmount), hint: "Given on invoices and payments", tone: styles.statDiscount },
   ];
 
   return (

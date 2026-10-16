@@ -1,12 +1,12 @@
 "use client";
 
-import { Eye, MessageCircle, Pencil, Plus, Printer, Trash2 } from "lucide-react";
+import { Copy, Eye, MessageCircle, Pencil, Plus, Printer, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { deleteInvoice, DocumentApiError, listInvoices, nextDirectSaleSerial, updateDueDate, updateInvoiceDiscount, type InvoiceRecord } from "@/lib/billing/documents-api";
+import { createDirectSale, deleteInvoice, DocumentApiError, listInvoices, nextDirectSaleSerial, updateDueDate, updateInvoiceDiscount, type InvoiceRecord } from "@/lib/billing/documents-api";
 import { outstandingBalances, plannedInvoice, stillOpen } from "@/lib/billing/pending-invoices";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { printBillingLetter, printFromControl } from "@/lib/billing/print-letter";
-import { formatDisplayDate, formatRupees, isDirectSale, type QuotationRecord } from "@/lib/billing/quotation-math";
+import { formatDisplayDate, formatRupees, isDirectSale, todayIsoDate, type QuotationDraft, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { listProjects, QuotationApiError, setPlanDiscount } from "@/lib/billing/quotations-api";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import { InvoiceLetter } from "./BillingLetters";
@@ -63,6 +63,7 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
   const [capture, setCapture] = useState<InvoiceRecord | null>(null);
   const [creating, setCreating] = useState(false);
   const [saleSerial, setSaleSerial] = useState("DS-001");
+  const [copyDraft, setCopyDraft] = useState<QuotationDraft | null>(null);
   const captureRef = useRef<HTMLDivElement>(null);
 
   async function sendInvoice(invoice: InvoiceRecord) {
@@ -183,6 +184,58 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
     }
   }
 
+  function saleFromInvoice(invoice: InvoiceRecord): { draft: QuotationDraft; dueDates?: string[] } {
+    const project = invoice.project;
+    const dates = (invoice.schedule ?? []).map((line) => line.dueDate).filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date));
+    const installmentCount = project.paymentMode === "installments" ? project.installmentCount ?? (dates.length || null) : null;
+    const dueDates = project.paymentMode === "installments" && installmentCount != null && dates.length === installmentCount ? dates : undefined;
+    return {
+      dueDates,
+      draft: {
+        quotationDate: todayIsoDate(),
+        customerName: project.customerName,
+        cnic: project.cnic,
+        address: project.address,
+        contactNo: project.contactNo,
+        whatsappNo: project.whatsappNo,
+        customerPackage: project.customerPackage,
+        paymentMode: project.paymentMode,
+        downPayment: project.downPayment,
+        planDiscount: project.planDiscount ?? 0,
+        installmentCount,
+        items: project.items.map((item) => ({
+          description: item.description,
+          qty: item.qty,
+          unit: item.unit,
+          price: item.price,
+          taxPercent: item.taxPercent,
+        })),
+      },
+    };
+  }
+
+  async function onDuplicate(invoice: InvoiceRecord) {
+    const sale = saleFromInvoice(invoice);
+    if (sale.draft.paymentMode === "installments" && !sale.dueDates) {
+      setCopyDraft(sale.draft);
+      setBanner(null);
+      void nextDirectSaleSerial().then(setSaleSerial).catch(() => setSaleSerial("DS-001"));
+      setCreating(true);
+      return;
+    }
+    setBusy(true);
+    setBanner(null);
+    try {
+      const saved = await createDirectSale(sale.draft, { paidAmount: 0, paymentDate: todayIsoDate(), paymentMode: "cash" }, sale.dueDates);
+      await refresh();
+      setBanner({ tone: "ok", text: `${saved.invoices[0]?.serial ?? "A new invoice"} was created as a copy of ${invoice.serial}.` });
+    } catch (error) {
+      setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The invoice could not be duplicated." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onDelete() {
     if (!deleting) return;
     setBusy(true);
@@ -252,6 +305,7 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
         {(invoice.discountAmount ?? 0) > 0 ? <p>Discount {formatRupees(invoice.discountAmount ?? 0)}</p> : null}
         <div className={styles.cardActions}>
           <button type="button" onClick={() => openInvoice(invoice)}><Eye size={15} /> View</button>
+          <button type="button" onClick={() => void onDuplicate(invoice)} disabled={busy}><Copy size={15} /> Duplicate</button>
           {completed ? <button type="button" onClick={() => openInvoice(invoice)}><Pencil size={15} /> Edit</button> : null}
           {completed ? <button type="button" onClick={() => void printInvoice(invoice)} disabled={busy}><Printer size={15} /> Print</button> : null}
           <button type="button" onClick={() => void sendInvoice(invoice)} disabled={busy}><MessageCircle size={15} /> WhatsApp</button>
@@ -261,23 +315,25 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
     );
   }
 
-  if (creating && direct) {
+  if (creating) {
     return (
       <>
         <header className={shell.pageHeader}>
           <div>
             <p className={shell.kicker}>Billing CMS</p>
-            <h1 className={shell.title}>New direct invoice</h1>
-            <p className={shell.summary}>Create a daily-sale invoice without a quotation or a project in process. The same fields as a quotation are used.</p>
+            <h1 className={shell.title}>{copyDraft ? "Copy invoice" : "New direct invoice"}</h1>
+            <p className={shell.summary}>{copyDraft ? "This copy keeps the customer and the items. Choose each installment due date, then save." : "Create a daily-sale invoice without a quotation or a project in process. The same fields as a quotation are used."}</p>
           </div>
         </header>
         {banner ? <p className={banner.tone === "ok" ? styles.success : styles.error}>{banner.text}</p> : null}
         <section className={shell.panel}>
           <DirectSaleForm
             serial={saleSerial}
-            onCancel={() => setCreating(false)}
+            initialDraft={copyDraft ?? undefined}
+            onCancel={() => { setCreating(false); setCopyDraft(null); }}
             onCreated={async (saved) => {
               setCreating(false);
+              setCopyDraft(null);
               await refresh();
               setBanner({ tone: "ok", text: `${saved.invoices[0]?.serial ?? "Invoice"} was created for ${saved.project.customerName}.` });
             }}
@@ -308,6 +364,7 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
             className={styles.primaryButton}
             type="button"
             onClick={() => {
+              setCopyDraft(null);
               void nextDirectSaleSerial().then(setSaleSerial).catch(() => setSaleSerial("DS-001"));
               setCreating(true);
             }}

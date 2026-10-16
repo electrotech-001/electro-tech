@@ -69,6 +69,14 @@ export function createBillingQuotationsRouter(dependencies: BillingQuotationsRou
       sendFailure(error, response, next);
     }
   });
+  router.get("/lookup", async (request, response, next) => {
+    try {
+      const cnic = typeof request.query.cnic === "string" ? request.query.cnic : "";
+      response.status(200).json({ customer: await repository().findCustomerByCnic(cnic) });
+    } catch (error) {
+      sendFailure(error, response, next);
+    }
+  });
   router.post("/", async (request, response, next) => {
     try {
       response.status(201).json({ quotation: await repository().create(readQuotationDraft(request.body)) });
