@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
+import { composePhone, isCustomerPhone, phoneCountry } from "../../lib/billing/phone-countries";
 import { computeTotals, maskCnic, maskPhone, quotationIssues, blankDraft } from "../../lib/billing/quotation-math";
 
 describe("quotation field masks", () => {
   it("inserts CNIC and phone dashes", () => {
     expect(maskCnic("3710112345671")).toBe("37101-1234567-1");
     expect(maskPhone("03005607350")).toBe("0300-5607350");
+    expect(composePhone(phoneCountry("AE"), "501234567")).toBe("+971 50 123 4567");
+    expect(composePhone(phoneCountry("FR"), "612345678")).toBe("+33 6 12 34 56 78");
+    expect(isCustomerPhone("+971 50 123 4567")).toBe(true);
+    expect(isCustomerPhone("+33 6 12 34 56 78")).toBe(true);
+    expect(isCustomerPhone("0300-5607350")).toBe(true);
+    expect(isCustomerPhone("0300")).toBe(false);
   });
 
   it("keeps tax at zero and splits the balance after down payment", () => {

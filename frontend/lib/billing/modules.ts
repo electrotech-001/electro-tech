@@ -21,10 +21,10 @@ export const billingModules: Record<string, BillingModule> = {
   },
   projects: {
     slug: "projects",
-    title: "Projects in Process",
-    summary: "A quotation moves here once the customer has negotiated it and approved it. It becomes the working project card.",
-    emptyTitle: "No projects in process",
-    emptyText: "Approved quotations will appear here as project cards, ready for invoices, payments and the agreement.",
+    title: "Completed Projects",
+    summary: "A project moves here automatically once the customer's payment is complete.",
+    emptyTitle: "No completed projects",
+    emptyText: "A fully paid project appears here after the invoice balance is received.",
   },
   invoices: {
     slug: "invoices",

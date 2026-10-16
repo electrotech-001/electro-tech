@@ -416,6 +416,50 @@ export function rebuildDirectInvoices(workspace: Workspace, reservedSerial: numb
   };
 }
 
+export function reviseProjectDocument(workspace: Workspace, project: QuotationRecord, reservedSerial: number): Workspace {
+  const moneyReceived = workspace.payments.some((payment) => payment.paidAmount > 0 || (payment.discountAmount ?? 0) > 0);
+  if (project.paymentMode !== workspace.project.paymentMode && (workspace.invoices.length > 0 || workspace.agreement || moneyReceived)) {
+    throw new DocumentError("Payment mode cannot change after the invoice is created.");
+  }
+  if (project.paymentMode === "direct") {
+    const settled = roundMoney(paidTotal(workspace.payments) + discountTotal(workspace.payments));
+    if (settled > project.grandTotal) {
+      throw new DocumentError("The new total cannot be less than the amount already received.");
+    }
+    const stamped = {
+      ...workspace,
+      project,
+      invoices: workspace.invoices.map((invoice) => ({ ...invoice, project, invoiceDate: project.quotationDate })),
+    };
+    if (stamped.invoices.length === 0) return stamped;
+    return rebuildDirectInvoices(stamped, reservedSerial);
+  }
+  if (moneyReceived && (project.installmentCount !== workspace.project.installmentCount || roundMoney(project.grandTotal) !== roundMoney(workspace.project.grandTotal))) {
+    throw new DocumentError("Customer details can be edited after a payment. Amounts stay locked once money is received.");
+  }
+  if (!workspace.agreement) {
+    return { ...workspace, project, invoices: workspace.invoices.map((invoice) => ({ ...invoice, project })) };
+  }
+  if (moneyReceived) {
+    return {
+      ...workspace,
+      project,
+      agreement: { ...workspace.agreement, project },
+      invoices: workspace.invoices.map((invoice) => ({ ...invoice, project })),
+    };
+  }
+  const dueDates = workspace.agreement.schedule.map((line) => line.dueDate);
+  if (dueDates.length !== (project.installmentCount ?? 0)) {
+    throw new DocumentError("Keep the same number of installments so the saved due dates still match.");
+  }
+  const schedule = buildSchedule(project, dueDates);
+  return syncWithOpening({
+    ...workspace,
+    project,
+    agreement: { ...workspace.agreement, project, schedule },
+  }, schedule, reservedSerial);
+}
+
 export function deleteInvoice(workspace: Workspace, invoiceId: string): Workspace {
   const invoice = workspace.invoices.find((entry) => entry.id === invoiceId);
   if (!invoice) throw new DocumentError("Invoice was not found.", 404, "not_found");
@@ -460,15 +504,15 @@ export function recordDirectPayment(
   reservedSerial: number,
 ): Workspace {
   if (workspace.project.paymentMode !== "direct") throw new DocumentError("This project uses installments. Receive the installment instead.");
-  if (workspace.project.status === "completed") throw new DocumentError("This project is already completed.", 409, "completed");
   assertDate(input.paymentDate, "payment date");
   if (input.paymentMode !== "bank_transfer" && input.paymentMode !== "cash") throw new DocumentError("Choose bank transfer or cash.");
   const amount = roundMoney(input.paidAmount);
   const discount = normalizeDiscount(input.discountAmount);
+  assertSettlement(amount, discount);
+  if (workspace.project.status === "completed") throw new DocumentError("This project is already completed.", 409, "completed");
   const invoiceDiscount = workspace.invoices.find((invoice) => invoice.kind !== "installment")?.discountAmount ?? 0;
   const already = roundMoney(paidTotal(workspace.payments) + invoiceDiscount + discountTotal(workspace.payments));
   const due = roundMoney(workspace.project.grandTotal - already);
-  assertSettlement(amount, discount);
   if (roundMoney(amount + discount) > due) {
     throw new DocumentError(discount > 0 ? "Paid amount and discount cannot be more than the remaining balance." : "Paid amount cannot be more than the remaining balance.");
   }
@@ -659,7 +703,6 @@ export function editPayment(
 }
 
 export function setInvoiceDiscount(workspace: Workspace, invoiceId: string, discountAmount: number, reservedSerial: number): Workspace {
-  if (workspace.project.status === "completed") throw new DocumentError("This project is already completed.", 409, "completed");
   const discount = normalizeDiscount(discountAmount);
   const invoice = workspace.invoices.find((entry) => entry.id === invoiceId);
   if (!invoice) throw new DocumentError("Invoice was not found.", 404, "not_found");

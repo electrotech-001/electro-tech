@@ -19,12 +19,12 @@ import {
   formatDisplayDate,
   formatRupees,
   maskCnic,
-  maskPhone,
   type CustomerProfileInput,
   type QuotationRecord,
 } from "@/lib/billing/quotation-math";
 import { listProjects, listQuotations, QuotationApiError } from "@/lib/billing/quotations-api";
 import shell from "./billing-shell.module.css";
+import { PhoneField } from "./PhoneField";
 import styles from "./quotation.module.css";
 
 function modeLabel(mode: string): string {
@@ -209,14 +209,8 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
                 <span>CNIC</span>
                 <input value={form.cnic} inputMode="numeric" placeholder="00000-0000000-0" onChange={(event) => setField("cnic", maskCnic(event.target.value))} />
               </label>
-              <label className={styles.field}>
-                <span>Contact number</span>
-                <input value={form.contactNo} inputMode="numeric" placeholder="0300-0000000" onChange={(event) => setField("contactNo", maskPhone(event.target.value))} />
-              </label>
-              <label className={styles.field}>
-                <span>WhatsApp number (optional)</span>
-                <input value={form.whatsappNo} inputMode="numeric" placeholder="0300-0000000" onChange={(event) => setField("whatsappNo", maskPhone(event.target.value))} />
-              </label>
+              <PhoneField label="Contact number" value={form.contactNo} onChange={(contactNo) => setField("contactNo", contactNo)} />
+              <PhoneField label="WhatsApp number (optional)" value={form.whatsappNo} onChange={(whatsappNo) => setField("whatsappNo", whatsappNo)} />
               <label className={`${styles.field} ${styles.wide}`}>
                 <span>Address</span>
                 <textarea rows={3} value={form.address} onChange={(event) => setField("address", event.target.value)} />

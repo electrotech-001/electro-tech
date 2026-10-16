@@ -332,7 +332,7 @@ export function ReceivePaymentsPage() {
                     </>
                   ) : null}
                   <div className={styles.formActions}>
-                    {current.invoices.length === 0 ? <p className={styles.hint}>Create the invoice from Projects in Process. The advance payment is recorded there and shown on the invoice balance.</p> : null}
+                    {current.invoices.length === 0 ? <p className={styles.hint}>Approve the quotation to create the invoice. It appears in Pending Invoices, and the payment is shown on the invoice balance.</p> : null}
                     {openingPending(current) > 0 ? <p className={styles.hint}>Receive the advance payment before the remaining balance.</p> : null}
                     <button className={styles.primaryButton} type="button" onClick={() => setReceiving(true)} disabled={saving || current.balance <= 0 || openingPending(current) > 0 || current.invoices.length === 0}>Receive payment</button>
                   </div>

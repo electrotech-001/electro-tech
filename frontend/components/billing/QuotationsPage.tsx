@@ -4,6 +4,7 @@ import { Check, Copy, Eye, MessageCircle, Pencil, Printer, Plus, Trash2, Undo2 }
 import { useEffect, useRef, useState } from "react";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { blankDraft, formatDisplayDate, formatRupees, todayIsoDate, type QuotationDraft, type QuotationRecord } from "@/lib/billing/quotation-math";
+import { DocumentApiError, issueDirectInvoice } from "@/lib/billing/documents-api";
 import { approveQuotation, deleteQuotation, disapproveQuotation, listQuotations, nextQuotationSerial, QuotationApiError, saveQuotation } from "@/lib/billing/quotations-api";
 import { printBillingLetter } from "@/lib/billing/print-letter";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
@@ -146,11 +147,24 @@ export function QuotationsPage() {
     setBusy({ id: approving.id, action: "approve" });
     setBanner(null);
     try {
-      await approveQuotation(approving.id);
+      const project = await approveQuotation(approving.id);
+      if (project.paymentMode === "direct") {
+        await issueDirectInvoice(project.id, { paidAmount: 0, paymentDate: todayIsoDate(), paymentMode: "cash" });
+      }
       await refresh();
       setApproving(null);
+      setBanner({
+        tone: "ok",
+        text: project.paymentMode === "installments"
+          ? `${approving.serial} is approved. Its invoices are in Pending Invoices.`
+          : `${approving.serial} is approved and its invoice is in Pending Invoices.`,
+      });
     } catch (error) {
-      setBanner({ tone: "bad", text: error instanceof QuotationApiError ? error.message : "The quotation could not be approved." });
+      const message = error instanceof QuotationApiError || error instanceof DocumentApiError
+        ? error.message
+        : "The quotation could not be approved.";
+      setBanner({ tone: "bad", text: message });
+      await refresh().catch(() => undefined);
     } finally {
       setBusy(null);
     }
@@ -260,7 +274,7 @@ export function QuotationsPage() {
         <div>
           <p className={shell.kicker}>Billing CMS</p>
           <h1 className={shell.title}>Quotations</h1>
-          <p className={shell.summary}>Each saved quotation stays here as a card. Approving it also copies it into Projects in Process.</p>
+          <p className={shell.summary}>Each saved quotation stays here as a card. Approving it marks the card Approved and creates the pending invoice.</p>
         </div>
         <button className={styles.primaryButton} type="button" onClick={() => void startNew()}>
           <Plus size={16} /> New quotation
@@ -295,7 +309,7 @@ export function QuotationsPage() {
                 <Copy size={15} /> {busy?.id === quotation.id && busy.action === "duplicate" ? "Copying…" : "Duplicate"}
               </button>
               <button type="button" onClick={() => onPrint(quotation)}><Printer size={15} /> Print</button>
-              <button type="button" onClick={() => void onWhatsApp(quotation)} disabled={busy?.id === quotation.id}>
+              <button className={styles.whatsappButton} type="button" onClick={() => void onWhatsApp(quotation)} disabled={busy?.id === quotation.id}>
                 <MessageCircle size={15} /> {busy?.id === quotation.id && busy.action === "whatsapp" ? "Sending…" : "WhatsApp"}
               </button>
               {quotation.approvedAt ? (
@@ -323,7 +337,7 @@ export function QuotationsPage() {
         <div className={styles.modal} role="presentation" onClick={() => setDisapproving(null)}>
           <div className={styles.confirm} role="dialog" aria-modal="true" aria-labelledby="disapprove-title" onClick={(event) => event.stopPropagation()}>
             <h2 id="disapprove-title">Disapprove {disapproving.serial}?</h2>
-            <p>This removes it from Projects in Process and brings it back to Quotations. You can approve it again later.</p>
+            <p>This clears the Approved status and removes the pending invoice. You can approve it again later.</p>
             <div className={styles.formActions}>
               <button className={styles.secondaryButton} type="button" onClick={() => setDisapproving(null)} disabled={busy?.id === disapproving.id}>Cancel</button>
               <button className={styles.dangerButton} type="button" onClick={() => void onDisapprove()} disabled={busy?.id === disapproving.id}>
@@ -338,7 +352,7 @@ export function QuotationsPage() {
         <div className={styles.modal} role="presentation" onClick={() => setDeleting(null)}>
           <div className={styles.confirm} role="dialog" aria-modal="true" aria-labelledby="delete-title" onClick={(event) => event.stopPropagation()}>
             <h2 id="delete-title">Delete {deleting.serial}?</h2>
-            <p>This removes the quotation. If it is in Projects in Process, that copy is removed too.</p>
+            <p>This removes the quotation. If it was approved, the pending invoice is removed too.</p>
             <div className={styles.formActions}>
               <button className={styles.secondaryButton} type="button" onClick={() => setDeleting(null)} disabled={busy?.id === deleting.id}>Cancel</button>
               <button className={styles.dangerButton} type="button" onClick={() => void onDelete()} disabled={busy?.id === deleting.id}>
@@ -353,7 +367,7 @@ export function QuotationsPage() {
         <div className={styles.modal} role="presentation" onClick={() => setApproving(null)}>
           <div className={styles.confirm} role="dialog" aria-modal="true" aria-labelledby="approve-title" onClick={(event) => event.stopPropagation()}>
             <h2 id="approve-title">Approve {approving.serial}?</h2>
-            <p>A copy will be added to Projects in Process. This quotation stays in the list, and later edits here do not change that copy.</p>
+            <p>The card will show Approved, and the invoice will be created in Pending Invoices. This quotation stays here, and later edits here do not change that invoice.</p>
             <div className={styles.formActions}>
               <button className={styles.secondaryButton} type="button" onClick={() => setApproving(null)} disabled={busy?.id === approving.id}>Cancel</button>
               <button className={styles.primaryButton} type="button" onClick={() => void onApprove()} disabled={busy?.id === approving.id}>

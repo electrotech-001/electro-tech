@@ -103,7 +103,7 @@ test("saved quotations keep a copy when approved and serials increment", async (
   assert.equal(quotations.find((entry) => entry.id === first.id)?.approvedAt == null, false);
   const projects = await repository.listProjects();
   assert.equal(projects.length, 1);
-  await assert.rejects(() => repository.approve(first.id), /already in Projects in Process/);
+  await assert.rejects(() => repository.approve(first.id), /already approved/);
 
   const returned = await repository.disapprove(first.id);
   assert.equal(returned.approvedAt, null);
@@ -184,6 +184,13 @@ test("a quotation can omit the CNIC, contact number, and WhatsApp number", async
   await assert.rejects(() => repository.create(sample({ cnic: "123" })), /CNIC/);
   await assert.rejects(() => repository.create(sample({ contactNo: "0300" })), /contact number/);
   await assert.rejects(() => repository.create(sample({ whatsappNo: "0300" })), /WhatsApp/);
+  const international = await repository.create(sample({
+    contactNo: "+971 50 123 4567",
+    whatsappNo: "+971 50 123 4567",
+    cnic: "",
+  }));
+  assert.equal(international.contactNo, "+971 50 123 4567");
+  assert.equal(international.whatsappNo, "+971 50 123 4567");
 });
 
 test("quotation routes require billing login and reject an incomplete CNIC", async () => {

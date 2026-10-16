@@ -9,8 +9,8 @@ import styles from "./billing-shell.module.css";
 
 const steps = [
   { title: "Quotation", text: "Customer, demand, line items in PKR, then installment or direct." },
-  { title: "Project in process", text: "An approved quotation becomes the working project card." },
-  { title: "Invoice and agreement", text: "Down payment, installments, guarantors, letterhead, and WhatsApp." },
+  { title: "Approved quotation", text: "Approving marks the card Approved and creates the pending invoice." },
+  { title: "Invoice and payment", text: "The invoice stays pending until the balance is received, then the project is completed." },
 ];
 
 function modeLabel(mode: LedgerEntry["paymentMode"]): string {
@@ -36,7 +36,7 @@ export function DashboardView() {
   const [summary, setSummary] = useState<BillingSummary | null>(null);
   const [pendingAmount, setPendingAmount] = useState<number | null>(null);
   const [discountAmount, setDiscountAmount] = useState<number | null>(null);
-  const [projectCounts, setProjectCounts] = useState<{ inProcess: number; completed: number } | null>(null);
+  const [completedCount, setCompletedCount] = useState<number | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const today = new Intl.DateTimeFormat("en-PK", {
     weekday: "long",
@@ -58,10 +58,7 @@ export function DashboardView() {
       if (summaryResult.status === "fulfilled") setSummary(summaryResult.value);
       const projects = projectsResult.status === "fulfilled" ? projectsResult.value : [];
       if (projectsResult.status === "fulfilled") {
-        setProjectCounts({
-          inProcess: projects.filter((project) => project.status !== "completed").length,
-          completed: projects.filter((project) => project.status === "completed").length,
-        });
+        setCompletedCount(projects.filter((project) => project.status === "completed").length);
       }
       if (invoicesResult.status === "fulfilled") {
         const invoices = invoicesResult.value;
@@ -93,21 +90,15 @@ export function DashboardView() {
     };
   }, []);
 
-  const inProcess = projectCounts
-    ? String(projectCounts.inProcess)
-    : summary
-      ? String(summary.projectsInProcess)
-      : "—";
-  const completed = projectCounts
-    ? String(projectCounts.completed)
+  const completed = completedCount != null
+    ? String(completedCount)
     : summary
       ? String(summary.projectsCompleted ?? 0)
       : "—";
 
   const cards = [
     { href: "/billing/quotations", label: "Quotations", value: summary ? String(summary.quotations) : "—", hint: "Saved quotations", tone: "" },
-    { href: "/billing/projects", label: "Projects in process", value: inProcess, hint: "Still being delivered", tone: "" },
-    { href: "/billing/projects#completed", label: "Completed projects", value: completed, hint: "Marked completed", tone: styles.statDone },
+    { href: "/billing/projects", label: "Completed projects", value: completed, hint: "Fully paid", tone: styles.statDone },
     { href: "/billing/invoices", label: "Open invoices", value: summary ? String(summary.openInvoices) : "—", hint: "Not fully paid", tone: "" },
     { href: "/billing/payments", label: "Overdue installments", value: summary ? String(summary.overdueInstallments) : "—", hint: "Due date has passed", tone: summary && summary.overdueInstallments > 0 ? styles.statAlert : "" },
     { href: "/billing/invoices", label: "Pending amount", value: rupees(pendingAmount), hint: "Still to be received", tone: styles.statPending },

@@ -1,3 +1,5 @@
+import { isCustomerPhone } from "./phone-countries";
+
 export type PaymentMode = "installments" | "direct";
 
 export type QuotationItemInput = {
@@ -146,7 +148,6 @@ export function computeTotals(draft: QuotationDraft) {
 }
 
 const CNIC = /^\d{5}-\d{7}-\d$/;
-const PHONE = /^\d{4}-\d{7}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function quotationIssues(draft: QuotationDraft): string[] {
@@ -155,8 +156,8 @@ export function quotationIssues(draft: QuotationDraft): string[] {
   if (!draft.customerName.trim()) issues.push("Enter the customer name.");
   if (draft.cnic.trim() && !CNIC.test(draft.cnic.trim())) issues.push("Enter the CNIC as 00000-0000000-0.");
   if (!draft.address.trim()) issues.push("Enter the address.");
-  if (draft.contactNo.trim() && !PHONE.test(draft.contactNo.trim())) issues.push("Enter the contact number as 0300-0000000.");
-  if (draft.whatsappNo.trim() && !PHONE.test(draft.whatsappNo.trim())) issues.push("Enter the WhatsApp number as 0300-0000000.");
+  if (draft.contactNo.trim() && !isCustomerPhone(draft.contactNo.trim())) issues.push("Enter a valid contact number for the selected country.");
+  if (draft.whatsappNo.trim() && !isCustomerPhone(draft.whatsappNo.trim())) issues.push("Enter a valid WhatsApp number for the selected country.");
   if (!draft.customerPackage.trim()) issues.push("Enter the customer package.");
   if (draft.items.length === 0) issues.push("Add at least one item.");
   draft.items.forEach((item, index) => {
@@ -203,8 +204,8 @@ export function customerProfileIssues(profile: CustomerProfileInput): string[] {
   if (!CNIC.test(profile.cnic.trim())) issues.push("Enter the CNIC as 00000-0000000-0.");
   if (!address) issues.push("Enter the address.");
   else if (address.length > 400) issues.push("Address must be 400 characters or fewer.");
-  if (!PHONE.test(profile.contactNo.trim())) issues.push("Enter the contact number as 0300-0000000.");
-  if (profile.whatsappNo.trim() && !PHONE.test(profile.whatsappNo.trim())) issues.push("Enter the WhatsApp number as 0300-0000000.");
+  if (!isCustomerPhone(profile.contactNo.trim())) issues.push("Enter a valid contact number for the selected country.");
+  if (profile.whatsappNo.trim() && !isCustomerPhone(profile.whatsappNo.trim())) issues.push("Enter a valid WhatsApp number for the selected country.");
   return issues;
 }
 

@@ -86,6 +86,224 @@
   font-weight: 700;
 }
 
+.phoneRow {
+  display: grid;
+  grid-template-columns: minmax(11rem, 0.9fr) minmax(0, 1.2fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.searchPicker {
+  position: relative;
+  min-width: 0;
+}
+
+.searchTrigger {
+  width: 100%;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(16, 20, 16, 0.12);
+  border-radius: 14px;
+  background: #fff;
+  color: #101410;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(23, 32, 25, 0.04);
+}
+
+.searchTrigger span,
+.searchOption span {
+  color: inherit;
+  font-size: inherit;
+}
+
+.searchTrigger span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.searchTrigger svg {
+  flex: none;
+  color: #5c665e;
+  transition: transform 160ms ease;
+}
+
+.searchTrigger[aria-expanded="true"] {
+  border-color: #128c7e;
+  outline: 2px solid rgba(37, 211, 102, 0.35);
+}
+
+.searchTrigger[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.searchTrigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.searchPanel {
+  margin-top: 8px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid rgba(16, 20, 16, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(16, 20, 16, 0.12);
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  margin-bottom: 6px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: #f7f4ee;
+  color: #5c665e;
+}
+
+.searchBox input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.searchBox input:focus {
+  outline: none;
+}
+
+.searchList {
+  max-height: 220px;
+  overflow: auto;
+}
+
+.searchOption {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #101410;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.searchOption small {
+  color: #5c665e;
+  font-weight: 700;
+}
+
+.searchOption:hover,
+.searchOption:focus-visible {
+  background: #f7f4ee;
+  outline: none;
+}
+
+.searchOption[aria-selected="true"] {
+  background: #10241c;
+  color: #fff;
+}
+
+.searchOption[aria-selected="true"] small {
+  color: #25d366;
+}
+
+.searchEmpty {
+  margin: 8px 10px 10px;
+  color: #667066;
+  font-size: 0.88rem;
+}
+
+.sendModes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sendMode {
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid rgba(16, 20, 16, 0.12);
+  border-radius: 14px;
+  background: #fff;
+  color: #101410;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sendMode[aria-pressed="true"] {
+  background: #10241c;
+  color: #25d366;
+  border-color: #10241c;
+}
+
+.uploadZone {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 22px 16px;
+  border: 1.5px dashed rgba(18, 140, 126, 0.55);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f3fff8, #fff);
+  color: #10241c;
+  text-align: center;
+  cursor: pointer;
+}
+
+.uploadZone strong {
+  font-size: 0.95rem;
+}
+
+.uploadZone span {
+  color: #5c665e;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.uploadZone input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.cardActions button.whatsappButton,
+.secondaryButton.whatsappButton,
+.primaryButton.whatsappButton {
+  background: #25d366;
+  color: #08301a;
+  border-color: #25d366;
+}
+
+.cardActions button.whatsappButton:hover,
+.secondaryButton.whatsappButton:hover,
+.primaryButton.whatsappButton:hover {
+  background: #1ebe5d;
+}
+
 .field input,
 .field textarea,
 .field select,
@@ -1919,8 +2137,13 @@
   .summaryRow,
   .letterHead,
   .parties,
-  .letterFoot {
+  .letterFoot,
+  .phoneRow {
     grid-template-columns: 1fr;
+  }
+
+  .sendModes {
+    grid-template-columns: 1fr 1fr;
   }
 
   .docTitle,

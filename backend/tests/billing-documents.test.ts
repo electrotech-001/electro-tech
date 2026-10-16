@@ -441,6 +441,8 @@ test("a direct invoice records the advance on the same invoice and in the ledger
   assert.equal(rest.balance, 0);
   assert.equal(rest.invoices.length, 1);
   assert.equal(rest.invoices[0]?.status, "paid");
+  assert.equal(rest.project.status, "completed");
+  assert.equal((await repository.listReceiveProjects()).length, 0);
   assert.equal((await repository.listLedger()).length, 2);
 });
 

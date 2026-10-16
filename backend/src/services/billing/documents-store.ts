@@ -8,6 +8,7 @@ import {
   discountTotal,
   issueDirectInvoice,
   issueDirectSale,
+  reviseProjectDocument,
   keepInstallmentAmounts,
   setAgreementBody,
   setInvoiceDiscount,
@@ -46,6 +47,7 @@ export type DocumentsRepository = {
   saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string; opening?: OpeningReceipt | null; planDiscount?: number }): Promise<AgreementRecord>;
   updateAgreementWording(agreementId: string, body: string): Promise<AgreementRecord>;
   issueInvoice(projectId: string, opening?: OpeningReceipt | null): Promise<ReceiveProject>;
+  applyRevisedProject(project: QuotationRecord): Promise<ReceiveProject>;
   deleteInvoice(invoiceId: string): Promise<ReceiveProject>;
   setInvoiceDiscount(invoiceId: string, discountAmount: number): Promise<ReceiveProject>;
   recordPayment(projectId: string, input: DirectPayment | OpeningPayment | InstallmentPayment): Promise<ReceiveProject>;
@@ -224,6 +226,26 @@ function present(workspace: Workspace): ReceiveProject {
   return { ...workspace, paidTotal: collected, balance };
 }
 
+function isFullySettled(workspace: Workspace): boolean {
+  if (workspace.project.origin === "direct_sale") return false;
+  if (workspace.invoices.length === 0) return false;
+  if (present(workspace).balance > 0.009) return false;
+  if (workspace.invoices.some((invoice) => invoice.balanceDue > 0.009 || invoice.status !== "paid")) return false;
+  if (workspace.project.paymentMode === "installments") {
+    const schedule = workspace.agreement?.schedule ?? [];
+    if (schedule.length === 0) return false;
+    if (schedule.some((line) => line.status !== "paid")) return false;
+  }
+  return true;
+}
+
+function syncProjectCompletion(workspace: Workspace): Workspace {
+  if (workspace.project.origin === "direct_sale") return workspace;
+  const status = isFullySettled(workspace) ? "completed" as const : "in_process" as const;
+  if (workspace.project.status === status) return workspace;
+  return { ...workspace, project: { ...workspace.project, status } };
+}
+
 function maxSerial(workspaces: Workspace[]): number {
   return workspaces.reduce((highest, workspace) => Math.max(highest, ...workspace.invoices.map((invoice) => invoice.serialNumber), 0), 0);
 }
@@ -238,8 +260,9 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
   }
 
   function remember(workspace: Workspace): ReceiveProject {
-    workspaces.set(workspace.project.id, workspace);
-    return present(workspace);
+    const next = syncProjectCompletion(workspace);
+    workspaces.set(next.project.id, next);
+    return present(next);
   }
 
   return {
@@ -278,6 +301,9 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
     async issueInvoice(projectId, opening) {
       return remember(issueDirectInvoice(requireWorkspace(projectId), maxSerial([...workspaces.values()]), todayIso(), opening));
     },
+    async applyRevisedProject(project) {
+      return remember(reviseProjectDocument(requireWorkspace(project.id), project, maxSerial([...workspaces.values()])));
+    },
     async deleteInvoice(invoiceId) {
       const current = [...workspaces.values()].find((workspace) => workspace.invoices.some((invoice) => invoice.id === invoiceId));
       if (!current) throw new DocumentError("Invoice was not found.", 404, "not_found");
@@ -315,8 +341,7 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
     },
     async completeProject(projectId) {
       const workspace = requireWorkspace(projectId);
-      workspace.project.status = "completed";
-      remember(workspace);
+      workspaces.set(projectId, { ...workspace, project: { ...workspace.project, status: "completed" } });
     },
     async projectHasDocuments(projectId) {
       const workspace = workspaces.get(projectId);
@@ -559,7 +584,15 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
     return data?.serial_number ?? 0;
   }
 
-  async function persist(previous: Workspace, next: Workspace, includeAgreement: boolean): Promise<void> {
+  async function persist(previous: Workspace, incoming: Workspace, includeAgreement: boolean): Promise<void> {
+    const next = syncProjectCompletion(incoming);
+    if (next.project.status !== previous.project.status) {
+      const statusUpdate = await client.from("billing_projects").update({
+        status: next.project.status,
+        completed_at: next.project.status === "completed" ? new Date().toISOString() : null,
+      }).eq("id", next.project.id);
+      if (statusUpdate.error) throw storageFailure(statusUpdate.error, "updated");
+    }
     if (includeAgreement && next.agreement) {
       const saved = await client.from("billing_agreements").upsert({
         id: next.agreement.id,
@@ -841,6 +874,12 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       const current = await loadWorkspace(projectId);
       const next = issueDirectInvoice(current, await reservedSerial(), todayIso(), opening);
       await persist(current, next, false);
+      return present(next);
+    },
+    async applyRevisedProject(project) {
+      const current = await loadWorkspace(project.id);
+      const next = reviseProjectDocument(current, project, await reservedSerial());
+      await persist(current, next, Boolean(next.agreement));
       return present(next);
     },
     async deleteInvoice(invoiceId) {

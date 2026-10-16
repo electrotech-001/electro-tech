@@ -1,16 +1,18 @@
 "use client";
 
-import { Copy, Eye, MessageCircle, Pencil, Plus, Printer, Trash2 } from "lucide-react";
+import { Copy, Eye, FileSignature, MessageCircle, Pencil, Plus, Printer, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createDirectSale, deleteInvoice, DocumentApiError, listInvoices, nextDirectSaleSerial, updateDueDate, updateInvoiceDiscount, type InvoiceRecord } from "@/lib/billing/documents-api";
 import { outstandingBalances, plannedInvoice, stillOpen } from "@/lib/billing/pending-invoices";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { printBillingLetter, printFromControl } from "@/lib/billing/print-letter";
 import { formatDisplayDate, formatRupees, isDirectSale, todayIsoDate, type QuotationDraft, type QuotationRecord } from "@/lib/billing/quotation-math";
-import { listProjects, QuotationApiError, setPlanDiscount } from "@/lib/billing/quotations-api";
+import { listProjects, QuotationApiError, setPlanDiscount, updateProject } from "@/lib/billing/quotations-api";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import { InvoiceLetter } from "./BillingLetters";
 import { DirectSaleForm } from "./DirectSaleForm";
+import { QuotationForm } from "./QuotationForm";
+import { AgreementDialog } from "./ProjectFlow";
 import { AmountInput } from "./FancyControls";
 import shell from "./billing-shell.module.css";
 import styles from "./quotation.module.css";
@@ -62,11 +64,19 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
   const [busy, setBusy] = useState(false);
   const [capture, setCapture] = useState<InvoiceRecord | null>(null);
   const [creating, setCreating] = useState(false);
+  const [agreementProject, setAgreementProject] = useState<QuotationRecord | null>(null);
   const [saleSerial, setSaleSerial] = useState("DS-001");
   const [copyDraft, setCopyDraft] = useState<QuotationDraft | null>(null);
+  const [editing, setEditing] = useState<InvoiceRecord | null>(null);
+  const [editDraft, setEditDraft] = useState<QuotationDraft | null>(null);
   const captureRef = useRef<HTMLDivElement>(null);
 
   async function sendInvoice(invoice: InvoiceRecord) {
+    const destination = invoice.project.whatsappNo.trim();
+    if (!destination) {
+      setBanner({ tone: "bad", text: "Save a WhatsApp number on this customer before sending the invoice." });
+      return;
+    }
     setBusy(true);
     setBanner(null);
     setCapture(invoice);
@@ -76,12 +86,12 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
       if (!(node instanceof HTMLElement)) throw new DocumentApiError("The PDF could not be prepared.");
       const file = await quotationToPdf(node, invoice.serial);
       await sendWhatsAppDocument({
-        phone: invoice.project.whatsappNo,
+        phone: destination,
         kind: "invoice",
         message: `Assalam o Alaikum ${invoice.project.customerName}, your Electro Tech invoice ${invoice.serial} is attached.`,
         file,
       });
-      setBanner({ tone: "ok", text: `${invoice.serial} was sent on WhatsApp.` });
+      setBanner({ tone: "ok", text: `${invoice.serial} was sent to ${destination} on WhatsApp.` });
     } catch (error) {
       const message = error instanceof WhatsAppApiError || error instanceof DocumentApiError
         ? error.message
@@ -184,6 +194,53 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
     }
   }
 
+  function draftFromProject(project: QuotationRecord, quotationDate = project.quotationDate): QuotationDraft {
+    return {
+      quotationDate,
+      customerName: project.customerName,
+      cnic: project.cnic,
+      address: project.address,
+      contactNo: project.contactNo,
+      whatsappNo: project.whatsappNo,
+      customerPackage: project.customerPackage,
+      paymentMode: project.paymentMode,
+      downPayment: project.downPayment,
+      planDiscount: project.planDiscount ?? 0,
+      installmentCount: project.paymentMode === "installments" ? project.installmentCount ?? null : null,
+      items: project.items.map((item) => ({
+        description: item.description,
+        qty: item.qty,
+        unit: item.unit,
+        price: item.price,
+        taxPercent: item.taxPercent,
+      })),
+    };
+  }
+
+  function beginEdit(invoice: InvoiceRecord) {
+    setEditing(invoice);
+    setEditDraft(draftFromProject(invoice.project));
+    setBanner(null);
+  }
+
+  async function saveEdit() {
+    if (!editing || !editDraft) return;
+    setBusy(true);
+    setBanner(null);
+    try {
+      await updateProject(editing.project.id, editDraft);
+      const serial = editing.serial;
+      setEditing(null);
+      setEditDraft(null);
+      await refresh();
+      setBanner({ tone: "ok", text: `${serial} was updated.` });
+    } catch (error) {
+      setBanner({ tone: "bad", text: error instanceof QuotationApiError || error instanceof DocumentApiError ? error.message : "The invoice could not be saved." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function saleFromInvoice(invoice: InvoiceRecord): { draft: QuotationDraft; dueDates?: string[] } {
     const project = invoice.project;
     const dates = (invoice.schedule ?? []).map((line) => line.dueDate).filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date));
@@ -191,26 +248,7 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
     const dueDates = project.paymentMode === "installments" && installmentCount != null && dates.length === installmentCount ? dates : undefined;
     return {
       dueDates,
-      draft: {
-        quotationDate: todayIsoDate(),
-        customerName: project.customerName,
-        cnic: project.cnic,
-        address: project.address,
-        contactNo: project.contactNo,
-        whatsappNo: project.whatsappNo,
-        customerPackage: project.customerPackage,
-        paymentMode: project.paymentMode,
-        downPayment: project.downPayment,
-        planDiscount: project.planDiscount ?? 0,
-        installmentCount,
-        items: project.items.map((item) => ({
-          description: item.description,
-          qty: item.qty,
-          unit: item.unit,
-          price: item.price,
-          taxPercent: item.taxPercent,
-        })),
-      },
+      draft: { ...draftFromProject(project, todayIsoDate()), installmentCount },
     };
   }
 
@@ -286,6 +324,8 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
   const projectInvoices = visible.filter((invoice) => !isDirectSale(invoice.project));
 
   function invoiceCard(invoice: InvoiceRecord): ReactNode {
+    const destination = invoice.project.whatsappNo.trim();
+    const needsAgreement = !direct && !completed && invoice.project.paymentMode === "installments" && !isDirectSale(invoice.project) && plannedInvoice(invoice);
     return (
       <article
         className={`${styles.card} ${invoice.status === "paid" ? styles.cardPaid : invoice.status === "partial" ? styles.cardPartial : styles.cardDue}`}
@@ -305,13 +345,43 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
         {(invoice.discountAmount ?? 0) > 0 ? <p>Discount {formatRupees(invoice.discountAmount ?? 0)}</p> : null}
         <div className={styles.cardActions}>
           <button type="button" onClick={() => openInvoice(invoice)}><Eye size={15} /> View</button>
+          <button type="button" onClick={() => beginEdit(invoice)}><Pencil size={15} /> Edit</button>
           <button type="button" onClick={() => void onDuplicate(invoice)} disabled={busy}><Copy size={15} /> Duplicate</button>
-          {completed ? <button type="button" onClick={() => openInvoice(invoice)}><Pencil size={15} /> Edit</button> : null}
+          {needsAgreement ? <button type="button" onClick={() => setAgreementProject(invoice.project)}><FileSignature size={15} /> Agreement</button> : null}
           {completed ? <button type="button" onClick={() => void printInvoice(invoice)} disabled={busy}><Printer size={15} /> Print</button> : null}
-          <button type="button" onClick={() => void sendInvoice(invoice)} disabled={busy}><MessageCircle size={15} /> WhatsApp</button>
+          <button className={styles.whatsappButton} type="button" onClick={() => void sendInvoice(invoice)} disabled={busy || !destination} title={destination ? `Send to ${destination}` : "Save a WhatsApp number on this customer first"}><MessageCircle size={15} /> WhatsApp</button>
           {plannedInvoice(invoice) ? null : <button className={styles.danger} type="button" onClick={() => setDeleting(invoice)} disabled={busy}><Trash2 size={15} /> Delete</button>}
         </div>
       </article>
+    );
+  }
+
+  if (editing && editDraft) {
+    return (
+      <>
+        <header className={shell.pageHeader}>
+          <div>
+            <p className={shell.kicker}>Billing CMS</p>
+            <h1 className={shell.title}>Edit {editing.serial}</h1>
+            <p className={shell.summary}>Change the customer, phone numbers, package, items, or payment amounts, then save this invoice.</p>
+          </div>
+        </header>
+        {banner?.tone === "ok" ? <p className={styles.success}>{banner.text}</p> : null}
+        <section className={shell.panel}>
+          <QuotationForm
+            serial={editing.serial}
+            draft={editDraft}
+            saving={busy}
+            error={banner?.tone === "bad" ? banner.text : null}
+            serialLabel="Invoice serial no"
+            dateLabel="Invoice date"
+            submitLabel="Save invoice"
+            onChange={setEditDraft}
+            onCancel={() => { setEditing(null); setEditDraft(null); setBanner(null); }}
+            onSubmit={() => void saveEdit()}
+          />
+        </section>
+      </>
     );
   }
 
@@ -322,7 +392,7 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
           <div>
             <p className={shell.kicker}>Billing CMS</p>
             <h1 className={shell.title}>{copyDraft ? "Copy invoice" : "New direct invoice"}</h1>
-            <p className={shell.summary}>{copyDraft ? "This copy keeps the customer and the items. Choose each installment due date, then save." : "Create a daily-sale invoice without a quotation or a project in process. The same fields as a quotation are used."}</p>
+            <p className={shell.summary}>{copyDraft ? "This copy keeps the customer and the items. Choose each installment due date, then save." : "Create a daily-sale invoice without a quotation. The same fields as a quotation are used."}</p>
           </div>
         </header>
         {banner ? <p className={banner.tone === "ok" ? styles.success : styles.error}>{banner.text}</p> : null}
@@ -356,7 +426,7 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
               ? "Daily sales made without a quotation or a project in process. Open invoices stay here until the balance is received."
               : completed
                 ? "Fully paid invoices stay here. You can view, edit the discount, print, or delete them."
-                : "Unpaid project invoices stay here until the balance is received."}
+                : "An approved quotation creates the invoice here. It stays until the balance is received, and then the project is completed."}
           </p>
         </div>
         {direct ? (
@@ -378,7 +448,7 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
       {!loading && visible.length === 0 ? (
         <section className={`${shell.panel} ${shell.empty}`}>
           <h2>{direct ? "No direct invoices" : completed ? "No completed invoices" : "No pending invoices"}</h2>
-          <p>{direct ? "Create a direct invoice for a daily sale. It does not need a quotation or a project in process." : completed ? "An invoice moves here once it is fully paid." : "Create an invoice from a project in process."}</p>
+          <p>{direct ? "Create a direct invoice for a daily sale. It does not need a quotation." : completed ? "An invoice moves here once it is fully paid." : "Approve a quotation and its invoice appears here."}</p>
         </section>
       ) : null}
       {directInvoices.length > 0 ? (
@@ -399,7 +469,9 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
             <div className={styles.modalBar}>
               <h2>{viewing.serial}</h2>
               <div>
-                <button className={styles.secondaryButton} type="button" onClick={() => void sendInvoice(viewing)} disabled={busy}>WhatsApp</button>
+                <button className={`${styles.secondaryButton} ${styles.whatsappButton}`} type="button" onClick={() => void sendInvoice(viewing)} disabled={busy || !viewing.project.whatsappNo.trim()} title={viewing.project.whatsappNo.trim() ? `Send to ${viewing.project.whatsappNo.trim()}` : "Save a WhatsApp number on this customer first"}>
+                  WhatsApp{viewing.project.whatsappNo.trim() ? ` · ${viewing.project.whatsappNo.trim()}` : ""}
+                </button>
                 <button className={styles.secondaryButton} type="button" onClick={(event) => printFromControl(event.currentTarget)}>Print</button>
                 <button className={styles.secondaryButton} type="button" onClick={() => setViewing(null)}>Close</button>
               </div>
@@ -441,13 +513,23 @@ export function InvoicesPage({ completed = false, direct = false }: { completed?
         <div className={styles.modal} role="presentation" onClick={() => { if (!busy) setDeleting(null); }}>
           <div className={styles.confirm} role="dialog" aria-modal="true" aria-labelledby="delete-invoice-title" onClick={(event) => event.stopPropagation()}>
             <h2 id="delete-invoice-title">Delete {deleting.serial}?</h2>
-            <p>This removes the invoice{deleting.payments.length > 0 ? " and the payments recorded on it" : ""}. You can create it again from the project.</p>
+            <p>This removes the invoice{deleting.payments.length > 0 ? " and the payments recorded on it" : ""}. Approving the quotation again creates a new one.</p>
             <div className={styles.formActions}>
               <button className={styles.secondaryButton} type="button" onClick={() => setDeleting(null)} disabled={busy}>Cancel</button>
               <button className={styles.dangerButton} type="button" onClick={() => void onDelete()} disabled={busy}>{busy ? "Deleting…" : "Delete"}</button>
             </div>
           </div>
         </div>
+      ) : null}
+      {agreementProject ? (
+        <AgreementDialog
+          project={agreementProject}
+          onClose={() => setAgreementProject(null)}
+          onSaved={() => {
+            setAgreementProject(null);
+            void refresh().then(() => setBanner({ tone: "ok", text: `The agreement and invoices for ${agreementProject.customerName} were saved.` }));
+          }}
+        />
       ) : null}
       {capture ? (
         <div className={styles.capture} ref={captureRef}>

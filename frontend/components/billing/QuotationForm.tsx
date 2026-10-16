@@ -1,8 +1,9 @@
 import { Plus, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
-import { computeTotals, formatRupees, installmentBalance, maskCnic, maskPhone, planDiscountOf, quotationIssues, type PaymentMode, type QuotationDraft, type QuotationItemInput } from "@/lib/billing/quotation-math";
+import { computeTotals, formatRupees, installmentBalance, maskCnic, planDiscountOf, quotationIssues, type PaymentMode, type QuotationDraft, type QuotationItemInput } from "@/lib/billing/quotation-math";
 import { findCustomerByCnic } from "@/lib/billing/quotations-api";
 import { AmountInput, FancySelect } from "./FancyControls";
+import { PhoneField } from "./PhoneField";
 import styles from "./quotation.module.css";
 
 const completeCnic = /^\d{5}-\d{7}-\d$/;
@@ -122,24 +123,8 @@ export function QuotationForm({
           <span>Address</span>
           <textarea value={draft.address} onChange={(event) => set("address", event.target.value)} rows={3} required />
         </label>
-        <label className={styles.field}>
-          <span>Contact no (optional)</span>
-          <input
-            value={draft.contactNo}
-            onChange={(event) => set("contactNo", maskPhone(event.target.value))}
-            inputMode="numeric"
-            placeholder="0300-0000000"
-          />
-        </label>
-        <label className={styles.field}>
-          <span>WhatsApp number (optional)</span>
-          <input
-            value={draft.whatsappNo}
-            onChange={(event) => set("whatsappNo", maskPhone(event.target.value))}
-            inputMode="numeric"
-            placeholder="0300-0000000"
-          />
-        </label>
+        <PhoneField label="Contact no (optional)" value={draft.contactNo} onChange={(contactNo) => set("contactNo", contactNo)} />
+        <PhoneField label="WhatsApp number (optional)" value={draft.whatsappNo} onChange={(whatsappNo) => set("whatsappNo", whatsappNo)} />
         <label className={`${styles.field} ${styles.wide}`}>
           <span>Customer package</span>
           <textarea value={draft.customerPackage} onChange={(event) => set("customerPackage", event.target.value)} rows={4} required />

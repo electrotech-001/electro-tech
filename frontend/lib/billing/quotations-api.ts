@@ -62,6 +62,14 @@ export async function nextQuotationSerial(): Promise<string> {
   return (payload as { serial: string }).serial;
 }
 
+export async function updateProject(id: string, draft: QuotationDraft): Promise<QuotationRecord> {
+  const payload = await expectOk(await billingFetch(`/api/billing/projects/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(draft),
+  }), "The invoice could not be saved.");
+  return (payload as { project: QuotationRecord }).project;
+}
+
 export async function saveQuotation(draft: QuotationDraft, id?: string): Promise<QuotationRecord> {
   const payload = await expectOk(await billingFetch(id ? `/api/billing/quotations/${id}` : "/api/billing/quotations", {
     method: id ? "PUT" : "POST",

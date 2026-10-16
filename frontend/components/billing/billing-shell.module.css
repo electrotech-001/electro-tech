@@ -830,3 +830,24 @@
     display: grid;
   }
 }
+
+.whatsappFloat {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 35;
+  width: 58px;
+  height: 58px;
+  border: 0;
+  border-radius: 50%;
+  background: #25d366;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 10px 24px rgba(18, 140, 70, 0.35);
+  cursor: pointer;
+}
+
+.whatsappFloat:hover {
+  background: #1ebe5d;
+}

@@ -78,6 +78,7 @@ export type QuotationRepository = {
   create(draft: QuotationDraft): Promise<QuotationRecord>;
   createDirectSale(draft: QuotationDraft): Promise<QuotationRecord>;
   update(id: string, draft: QuotationDraft): Promise<QuotationRecord>;
+  updateProject(id: string, draft: QuotationDraft): Promise<QuotationRecord>;
   approve(id: string): Promise<QuotationRecord>;
   disapprove(id: string): Promise<QuotationRecord>;
   disapproveProject(projectId: string): Promise<QuotationRecord>;
@@ -389,11 +390,39 @@ export function createMemoryQuotationRepository(): QuotationRepository {
       });
       return materialize(row, "quotation");
     },
+    async updateProject(id, draft) {
+      const clean = assertDraft(draft);
+      const row = projects.find((entry) => entry.id === id);
+      if (!row) throw new QuotationServiceError("Invoice was not found.", 404, "not_found");
+      const totals = computeTotals(clean);
+      Object.assign(row, {
+        quotation_date: clean.quotationDate,
+        customer_name: clean.customerName,
+        cnic: clean.cnic,
+        address: clean.address,
+        contact_no: clean.contactNo,
+        whatsapp_no: clean.whatsappNo,
+        customer_package: clean.customerPackage,
+        payment_mode: clean.paymentMode,
+        down_payment: clean.downPayment,
+        plan_discount: clean.planDiscount ?? 0,
+        installment_count: clean.installmentCount,
+        billing_project_items: totals.items.map((item) => ({
+          line_no: item.lineNo,
+          description: item.description,
+          qty: item.qty,
+          unit: item.unit,
+          price: item.price,
+          tax_percent: item.taxPercent,
+        })),
+      });
+      return materialize(row, "project");
+    },
     async approve(id) {
       const row = quotations.find((entry) => entry.id === id);
       if (!row) throw new QuotationServiceError("Quotation was not found.", 404, "not_found");
       if (row.approved_at) {
-        throw new QuotationServiceError("This quotation is already in Projects in Process.", 409, "already_approved");
+        throw new QuotationServiceError("This quotation is already approved.", 409, "already_approved");
       }
       const { billing_quotation_items: sourceItems, ...rest } = row;
       const copy: QuotationRow = {
@@ -411,7 +440,7 @@ export function createMemoryQuotationRepository(): QuotationRepository {
       const row = quotations.find((entry) => entry.id === id);
       if (!row) throw new QuotationServiceError("Quotation was not found.", 404, "not_found");
       if (!row.approved_at) {
-        throw new QuotationServiceError("This quotation is not in Projects in Process.", 409, "not_approved");
+        throw new QuotationServiceError("This quotation is not approved.", 409, "not_approved");
       }
       const projectIndex = projects.findIndex((entry) => entry.source_quotation_id === id);
       if (projectIndex >= 0) projects.splice(projectIndex, 1);
@@ -647,10 +676,41 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
       if (items.error) throw storageFailure(items.error, "updated");
       return readQuotation(existing.id);
     },
+    async updateProject(id, draft) {
+      const clean = assertDraft(draft);
+      const found = await client.from("billing_projects").select(PROJECT_SELECT).eq("id", id).maybeSingle();
+      if (found.error) throw storageFailure(found.error, "read");
+      if (!found.data) throw new QuotationServiceError("Invoice was not found.", 404, "not_found");
+      const totals = computeTotals(clean);
+      const updated = await client
+        .from("billing_projects")
+        .update({
+          quotation_date: clean.quotationDate,
+          customer_name: clean.customerName,
+          cnic: clean.cnic,
+          address: clean.address,
+          contact_no: clean.contactNo,
+          whatsapp_no: clean.whatsappNo,
+          customer_package: clean.customerPackage,
+          payment_mode: clean.paymentMode,
+          down_payment: clean.downPayment,
+          plan_discount: clean.planDiscount ?? 0,
+          installment_count: clean.installmentCount,
+        })
+        .eq("id", id);
+      if (updated.error) throw storageFailure(updated.error, "updated");
+      const removed = await client.from("billing_project_items").delete().eq("project_id", id);
+      if (removed.error) throw storageFailure(removed.error, "updated");
+      const items = await client.from("billing_project_items").insert(itemPayload(id, totals.items, "project_id"));
+      if (items.error) throw storageFailure(items.error, "updated");
+      const saved = await client.from("billing_projects").select(PROJECT_SELECT).eq("id", id).single();
+      if (saved.error || !saved.data) throw storageFailure(saved.error ?? { message: "Missing invoice." }, "updated");
+      return toQuotationRecord(saved.data as QuotationRow, "project");
+    },
     async approve(id) {
       const existing = await readQuotation(id);
       if (existing.approvedAt) {
-        throw new QuotationServiceError("This quotation is already in Projects in Process.", 409, "already_approved");
+        throw new QuotationServiceError("This quotation is already approved.", 409, "already_approved");
       }
       const inserted = await client
         .from("billing_projects")
@@ -662,7 +722,7 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
         .single();
       if (inserted.error) {
         if (isUniqueViolation(inserted.error)) {
-          throw new QuotationServiceError("This quotation is already in Projects in Process.", 409, "already_approved");
+          throw new QuotationServiceError("This quotation is already approved.", 409, "already_approved");
         }
         throw storageFailure(inserted.error, "approved");
       }
@@ -690,7 +750,7 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
     async disapprove(id) {
       const existing = await readQuotation(id);
       if (!existing.approvedAt) {
-        throw new QuotationServiceError("This quotation is not in Projects in Process.", 409, "not_approved");
+        throw new QuotationServiceError("This quotation is not approved.", 409, "not_approved");
       }
       const removed = await client.from("billing_projects").delete().eq("source_quotation_id", existing.id);
       if (removed.error) throw storageFailure(removed.error, "disapproved");

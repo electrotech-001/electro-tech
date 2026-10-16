@@ -8,6 +8,7 @@ import { billingNav, isBillingNavActive } from "@/lib/billing/navigation";
 import { currentAssuranceLevel, hasBillingAccess, needsAuthenticatorEnrollment, signOutBilling } from "@/lib/billing/mfa";
 import { billingSupabase } from "@/lib/billing/supabase";
 import { DocumentTermsProvider, publishDocumentTerms } from "./DocumentTerms";
+import { WhatsAppComposer } from "./WhatsAppComposer";
 import styles from "./billing-shell.module.css";
 
 export function BillingShell({ children }: { children: ReactNode }) {
@@ -116,6 +117,7 @@ export function BillingShell({ children }: { children: ReactNode }) {
           <span className={styles.topTitle}>Billing CMS</span>
         </header>
         <div className={styles.content}><DocumentTermsProvider>{children}</DocumentTermsProvider></div>
+        <WhatsAppComposer />
       </div>
     </div>
   );

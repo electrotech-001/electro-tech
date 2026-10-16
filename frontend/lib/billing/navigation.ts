@@ -35,7 +35,7 @@ export const billingNav: BillingNavGroup[] = [
     items: [
       { href: "/billing", label: "Dashboard", icon: LayoutDashboard, exact: true },
       { href: "/billing/quotations", label: "Quotations", icon: FileText },
-      { href: "/billing/projects", label: "Projects in Process", icon: SunMedium },
+      { href: "/billing/projects", label: "Completed Projects", icon: SunMedium },
     ],
   },
   {

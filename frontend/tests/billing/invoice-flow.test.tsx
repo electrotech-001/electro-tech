@@ -104,28 +104,20 @@ function invoice(record: QuotationRecord, overrides: Partial<InvoiceRecord> = {}
   };
 }
 
-test("a direct invoice asks for the advance payment, then creates one invoice", async () => {
-  const direct = project({ id: "direct-1", serial: "QT-010", downPayment: 50000 });
-  const created = invoice(direct, { advancePaid: 0, balanceDue: 673000, grandTotal: 673000 });
-  api.listProjects.mockResolvedValue([direct]);
+test("completed projects are listed and projects still in progress are not", async () => {
+  const active = project({ id: "direct-1", serial: "QT-010", paymentMode: "direct", status: "in_process" });
+  const done = project({ id: "done-1", serial: "QT-009", paymentMode: "direct", status: "completed" });
+  api.listProjects.mockResolvedValue([active, done]);
   api.listAgreements.mockResolvedValue([]);
-  api.listInvoices.mockResolvedValueOnce([]).mockResolvedValue([created]);
-  api.issueDirectInvoice.mockResolvedValue({ project: direct, invoices: [created], payments: [], agreement: null, paidTotal: 0, balance: 673000 });
-  const user = userEvent.setup();
+  api.listInvoices.mockResolvedValue([]);
   render(<ProjectsPage />);
-  await user.click(await screen.findByRole("button", { name: /create invoice/i }));
-  const dialog = await screen.findByRole("dialog");
-  expect(dialog.textContent).toContain("Advance payment received");
-  expect(dialog.textContent).toContain("Balance");
-  const amount = screen.getByLabelText(/advance payment received/i);
-  await user.clear(amount);
-  await user.type(amount, "0");
-  await user.click(screen.getByRole("button", { name: /save invoice/i }));
-  await waitFor(() => expect(api.issueDirectInvoice).toHaveBeenCalledWith("direct-1", expect.objectContaining({ paidAmount: 0, paymentMode: "cash" })));
-  await waitFor(() => expect((screen.getByRole("button", { name: /create invoice/i }) as HTMLButtonElement).disabled).toBe(true));
+  expect(await screen.findByRole("heading", { name: "Completed Projects" })).toBeDefined();
+  expect(screen.getByText("QT-009")).toBeDefined();
+  expect(screen.queryByText("QT-010")).toBeNull();
+  expect(screen.queryByRole("button", { name: /create invoice/i })).toBeNull();
 });
 
-test("an installment invoice opens the dates and guarantor form", async () => {
+test("an installment pending invoice opens the dates and guarantor form", async () => {
   const installment = project({
     id: "inst-1",
     serial: "QT-011",
@@ -134,12 +126,19 @@ test("an installment invoice opens the dates and guarantor form", async () => {
     installmentCount: 2,
     installments: [{ number: 1, amount: 211500 }, { number: 2, amount: 211500 }],
   });
+  const pending = invoice(installment, {
+    id: "plan-inst-1-1",
+    kind: "installment",
+    installmentNumber: 1,
+    grandTotal: 211500,
+    balanceDue: 211500,
+  });
   api.listProjects.mockResolvedValue([installment]);
-  api.listAgreements.mockResolvedValue([]);
-  api.listInvoices.mockResolvedValue([]);
+  api.listInvoices.mockResolvedValue([pending]);
   const user = userEvent.setup();
-  render(<ProjectsPage />);
-  await user.click(await screen.findByRole("button", { name: /create invoice/i }));
+  render(<InvoicesPage />);
+  expect((await screen.findAllByRole("button", { name: /edit/i })).length).toBeGreaterThan(0);
+  await user.click(screen.getAllByRole("button", { name: /agreement/i })[0]!);
   const dialog = await screen.findByRole("dialog");
   expect(dialog.textContent).toMatch(/down payment received/i);
   expect(dialog.textContent).toMatch(/balance after down payment/i);

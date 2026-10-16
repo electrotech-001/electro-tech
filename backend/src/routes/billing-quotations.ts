@@ -1,7 +1,9 @@
 import { Router, type NextFunction, type Request, type RequestHandler, type Response } from "express";
 import { createAuthenticateBilling } from "../middleware/authenticate-billing.js";
+import { DocumentError } from "../services/billing/documents-math.js";
 import { getDocumentsRepository } from "../services/billing/documents-store.js";
 import { QuotationServiceError, getQuotationRepository, type QuotationRepository } from "../services/billing/quotation-store.js";
+import type { QuotationRecord } from "../services/billing/quotation-store.js";
 import type { PaymentMode, QuotationDraft, QuotationItemInput } from "../services/billing/quotation-math.js";
 
 export type BillingQuotationsRouterDependencies = {
@@ -10,7 +12,7 @@ export type BillingQuotationsRouterDependencies = {
 };
 
 function sendFailure(error: unknown, response: Response, next: NextFunction): void {
-  if (error instanceof QuotationServiceError) {
+  if (error instanceof QuotationServiceError || error instanceof DocumentError) {
     response.status(error.status).json({ code: error.code, message: error.message });
     return;
   }
@@ -122,6 +124,30 @@ export function createBillingProjectsRouter(dependencies: BillingQuotationsRoute
   const auth = dependencies.authMiddleware ?? createAuthenticateBilling();
   const repository = () => dependencies.repository ?? getQuotationRepository();
   router.use(auth);
+  router.put("/:id", async (request, response, next) => {
+    const id = request.params.id ?? "";
+    const draft = readQuotationDraft(request.body);
+    try {
+      let previous: QuotationRecord | null = null;
+      try {
+        previous = (await getDocumentsRepository().workspace(id)).project;
+      } catch (error) {
+        if (!(error instanceof DocumentError) || error.status !== 404) throw error;
+      }
+      const project = await repository().updateProject(id, draft);
+      if (previous) {
+        try {
+          await getDocumentsRepository().applyRevisedProject(project);
+        } catch (error) {
+          await repository().updateProject(id, previous);
+          throw error;
+        }
+      }
+      response.status(200).json({ project });
+    } catch (error) {
+      sendFailure(error, response, next);
+    }
+  });
   router.get("/", async (_request: Request, response, next) => {
     try {
       response.setHeader("Cache-Control", "no-store");
