@@ -1,7 +1,7 @@
 import { Plus, Trash2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { computeTotals, formatRupees, installmentBalance, maskCnic, planDiscountOf, quotationIssues, roundMoney, splitInstallments, type PaymentMode, type QuotationDraft, type QuotationItemInput } from "@/lib/billing/quotation-math";
-import { findCustomerByCnic } from "@/lib/billing/quotations-api";
+import { findCustomerByCnic, searchCustomersByName, type SavedCustomer } from "@/lib/billing/quotations-api";
 import { AmountInput, FancySelect } from "./FancyControls";
 import { PhoneField } from "./PhoneField";
 import styles from "./quotation.module.css";
@@ -75,11 +75,68 @@ export function QuotationForm({
   const enteredTotal = roundMoney((draft.installmentAmounts ?? []).reduce((sum, amount) => sum + (Number(amount) || 0), 0));
   const draftRef = useRef(draft);
   const lookupRef = useRef(0);
+  const nameLookupRef = useRef(0);
+  const nameFieldRef = useRef<HTMLDivElement>(null);
   const [knownCustomer, setKnownCustomer] = useState<string | null>(null);
+  const [nameMatches, setNameMatches] = useState<SavedCustomer[]>([]);
+  const [nameOpen, setNameOpen] = useState(false);
   draftRef.current = draft;
+
+  useEffect(() => {
+    function onPointer(event: MouseEvent) {
+      const target = event.target;
+      if (!(target instanceof Node) || nameFieldRef.current?.contains(target)) return;
+      setNameOpen(false);
+    }
+    document.addEventListener("mousedown", onPointer);
+    return () => document.removeEventListener("mousedown", onPointer);
+  }, []);
 
   function set<K extends keyof QuotationDraft>(key: K, value: QuotationDraft[K]) {
     onChange({ ...draft, [key]: value });
+  }
+
+  function applyCustomer(customer: SavedCustomer) {
+    const filled = {
+      ...draftRef.current,
+      customerName: customer.customerName,
+      cnic: customer.cnic,
+      address: customer.address,
+      contactNo: customer.contactNo,
+      whatsappNo: customer.whatsappNo,
+    };
+    draftRef.current = filled;
+    onChange(filled);
+    setKnownCustomer(customer.customerName);
+    setNameMatches([]);
+    setNameOpen(false);
+  }
+
+  function onCustomerName(value: string) {
+    const next = { ...draftRef.current, customerName: value };
+    draftRef.current = next;
+    onChange(next);
+    setKnownCustomer(null);
+    const request = ++nameLookupRef.current;
+    const needle = value.trim();
+    if (needle.length < 2) {
+      setNameMatches([]);
+      setNameOpen(false);
+      return;
+    }
+    window.setTimeout(() => {
+      if (request !== nameLookupRef.current) return;
+      void searchCustomersByName(needle).then((customers) => {
+        if (request !== nameLookupRef.current) return;
+        setNameMatches(customers);
+        setNameOpen(customers.length > 0);
+      }).catch(() => {
+        if (request === nameLookupRef.current) {
+          setNameMatches([]);
+          setNameOpen(false);
+        }
+      });
+    }, 180);
   }
 
   function onCnic(value: string) {
@@ -98,17 +155,7 @@ export function QuotationForm({
         setKnownCustomer(null);
         return;
       }
-      const filled = {
-        ...draftRef.current,
-        cnic,
-        customerName: customer.customerName,
-        address: customer.address,
-        contactNo: customer.contactNo,
-        whatsappNo: customer.whatsappNo,
-      };
-      draftRef.current = filled;
-      onChange(filled);
-      setKnownCustomer(customer.customerName);
+      applyCustomer(customer);
     }).catch(() => {
       if (request === lookupRef.current) setKnownCustomer(null);
     });
@@ -133,10 +180,37 @@ export function QuotationForm({
             <input type="date" value={draft.quotationDate} onChange={(event) => set("quotationDate", event.target.value)} required />
           </label>
         ) : null}
-        <label className={styles.field}>
-          <span>Customer name</span>
-          <input value={draft.customerName} onChange={(event) => set("customerName", event.target.value)} required />
-        </label>
+        <div className={styles.nameField} ref={nameFieldRef}>
+          <label className={styles.field}>
+            <span>Customer name</span>
+            <input
+              value={draft.customerName}
+              onChange={(event) => onCustomerName(event.target.value)}
+              onFocus={() => { if (nameMatches.length > 0) setNameOpen(true); }}
+              autoComplete="off"
+              required
+            />
+          </label>
+          {nameOpen && nameMatches.length > 0 ? (
+            <ul className={styles.nameMenu} role="listbox" aria-label="Saved customers">
+              {nameMatches.map((customer) => (
+                <li key={`${customer.cnic || customer.customerName}-${customer.contactNo}`}>
+                  <button
+                    className={styles.nameOption}
+                    type="button"
+                    role="option"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => applyCustomer(customer)}
+                  >
+                    <strong>{customer.customerName}</strong>
+                    <small>{[customer.cnic, customer.contactNo, customer.address].filter(Boolean).join(" · ")}</small>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {knownCustomer ? <small className={styles.hint}>Saved customer: {knownCustomer}</small> : null}
+        </div>
         <label className={styles.field}>
           <span>CNIC number (optional)</span>
           <input
@@ -145,7 +219,6 @@ export function QuotationForm({
             inputMode="numeric"
             placeholder="00000-0000000-0"
           />
-          {knownCustomer ? <small className={styles.hint}>Saved customer: {knownCustomer}</small> : null}
         </label>
         <label className={`${styles.field} ${styles.wide}`}>
           <span>Address</span>

@@ -45,6 +45,7 @@ export function QuotationsPage() {
   const [banner, setBanner] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [editing, setEditing] = useState<QuotationRecord | null>(null);
   const [creating, setCreating] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const [draft, setDraft] = useState<QuotationDraft>(blankDraft());
   const [serial, setSerial] = useState("QT-001");
   const [saving, setSaving] = useState(false);
@@ -93,6 +94,7 @@ export function QuotationsPage() {
     setBanner(null);
     setFormError(null);
     setEditing(null);
+    setDuplicating(false);
     try {
       const next = await nextQuotationSerial();
       setSerial(next);
@@ -108,6 +110,7 @@ export function QuotationsPage() {
     setBanner(null);
     setFormError(null);
     setCreating(false);
+    setDuplicating(false);
     setEditing(quotation);
     setSerial(quotation.serial);
     setDraft(toDraft(quotation));
@@ -121,6 +124,7 @@ export function QuotationsPage() {
       await refresh();
       setCreating(false);
       setEditing(null);
+      setDuplicating(false);
     } catch (error) {
       setFormError(error instanceof QuotationApiError ? error.message : "The quotation could not be saved.");
     } finally {
@@ -129,17 +133,19 @@ export function QuotationsPage() {
   }
 
   async function onDuplicate(quotation: QuotationRecord) {
-    setBusy({ id: quotation.id, action: "duplicate" });
     setBanner(null);
+    setFormError(null);
+    setEditing(null);
+    setDuplicating(true);
     try {
-      const saved = await saveQuotation({ ...toDraft(quotation), quotationDate: todayIsoDate() });
-      await refresh();
-      setBanner({ tone: "ok", text: `${saved.serial} was created as a copy of ${quotation.serial}.` });
-    } catch (error) {
-      setBanner({ tone: "bad", text: error instanceof QuotationApiError ? error.message : "The quotation could not be duplicated." });
-    } finally {
-      setBusy(null);
+      const next = await nextQuotationSerial();
+      setSerial(next);
+      setDraft({ ...toDraft(quotation), quotationDate: todayIsoDate() });
+    } catch {
+      setSerial("QT-001");
+      setDraft({ ...toDraft(quotation), quotationDate: todayIsoDate() });
     }
+    setCreating(true);
   }
 
   async function onApprove() {
@@ -230,8 +236,8 @@ export function QuotationsPage() {
         <header className={shell.pageHeader}>
           <div>
             <p className={shell.kicker}>Billing CMS</p>
-            <h1 className={shell.title}>{editing ? `Edit ${editing.serial}` : "New quotation"}</h1>
-            <p className={shell.summary}>Fill the quotation, then save it. The list stays on the quotations page.</p>
+            <h1 className={shell.title}>{editing ? `Edit ${editing.serial}` : duplicating ? "Copy quotation" : "New quotation"}</h1>
+            <p className={shell.summary}>{duplicating ? "Review the copied details, search or type a different customer name if needed, then save." : "Fill the quotation, then save it. The list stays on the quotations page."}</p>
           </div>
         </header>
         {formError ? null : banner ? <p className={banner.tone === "ok" ? styles.success : styles.error}>{banner.text}</p> : null}
@@ -246,6 +252,7 @@ export function QuotationsPage() {
             onCancel={() => {
               setCreating(false);
               setEditing(null);
+              setDuplicating(false);
             }}
             onSubmit={() => void onSave()}
           />

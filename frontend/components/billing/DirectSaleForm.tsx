@@ -27,7 +27,10 @@ export function DirectSaleForm({
   const [paidAmount, setPaidAmount] = useState(0);
   const [paymentDate, setPaymentDate] = useState(todayIsoDate());
   const [paymentMode, setPaymentMode] = useState<BankMode>("cash");
-  const [dueDates, setDueDates] = useState<string[]>([]);
+  const [dueDates, setDueDates] = useState<string[]>(() => {
+    const count = initialDraft?.paymentMode === "installments" ? initialDraft.installmentCount ?? 0 : 0;
+    return Array.from({ length: count }, (_, index) => initialDraft?.installmentDueDates?.[index] ?? "");
+  });
   const [step, setStep] = useState<"form" | "receipt">("form");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

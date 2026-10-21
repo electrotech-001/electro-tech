@@ -2,7 +2,7 @@
 
 import { Copy, Eye, FileSignature, MessageCircle, Pencil, Plus, Printer, Search, Trash2, Undo2, Wallet } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { createDirectSale, deleteInvoice, DocumentApiError, listInvoices, nextDirectSaleSerial, saveAgreement, updateDueDate, updateInvoiceDiscount, type InvoiceRecord, type PaymentRecord } from "@/lib/billing/documents-api";
+import { deleteInvoice, DocumentApiError, listInvoices, nextDirectSaleSerial, saveAgreement, updateDueDate, updateInvoiceDiscount, type InvoiceRecord, type PaymentRecord } from "@/lib/billing/documents-api";
 import { consolidatedInvoice, groupInvoices, installmentDueDate, outstandingBalances, plannedInvoice } from "@/lib/billing/pending-invoices";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { printBillingLetter, printFromControl } from "@/lib/billing/print-letter";
@@ -278,24 +278,10 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
 
   async function onDuplicate(invoice: InvoiceRecord) {
     const sale = saleFromInvoice(invoice);
-    if (sale.draft.paymentMode === "installments" && !sale.dueDates) {
-      setCopyDraft(sale.draft);
-      setBanner(null);
-      void nextDirectSaleSerial().then(setSaleSerial).catch(() => setSaleSerial("DS-001"));
-      setCreating(true);
-      return;
-    }
-    setBusy(true);
+    setCopyDraft(sale.dueDates ? { ...sale.draft, installmentDueDates: sale.dueDates } : sale.draft);
     setBanner(null);
-    try {
-      const saved = await createDirectSale(sale.draft, { paidAmount: 0, paymentDate: todayIsoDate(), paymentMode: "cash" }, sale.dueDates);
-      await refresh();
-      setBanner({ tone: "ok", text: `${saved.invoices[0]?.serial ?? "A new invoice"} was created as a copy of ${invoice.serial}.` });
-    } catch (error) {
-      setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The invoice could not be duplicated." });
-    } finally {
-      setBusy(false);
-    }
+    void nextDirectSaleSerial().then(setSaleSerial).catch(() => setSaleSerial("DS-001"));
+    setCreating(true);
   }
 
   async function onUndoApproval() {
@@ -442,7 +428,7 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
           <div>
             <p className={shell.kicker}>Billing CMS</p>
             <h1 className={shell.title}>{copyDraft ? "Copy invoice" : "New direct invoice"}</h1>
-            <p className={shell.summary}>{copyDraft ? "This copy keeps the customer and the items. Choose each installment due date, then save." : "Create a daily-sale invoice without a quotation. The same fields as a quotation are used."}</p>
+            <p className={shell.summary}>{copyDraft ? "Review the copied details, search or type a different customer name if needed, then save." : "Create a daily-sale invoice without a quotation. The same fields as a quotation are used."}</p>
           </div>
         </header>
         {banner ? <p className={banner.tone === "ok" ? styles.success : styles.error}>{banner.text}</p> : null}

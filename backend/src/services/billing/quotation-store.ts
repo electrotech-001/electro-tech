@@ -53,13 +53,7 @@ export type SavedCustomer = {
   whatsappNo: string;
 };
 
-export function matchCustomer(rows: QuotationRow[], cnic: string): SavedCustomer | null {
-  const digits = cnic.replace(/\D/g, "");
-  if (digits.length !== 13) return null;
-  const matches = rows.filter((row) => row.cnic.replace(/\D/g, "") === digits);
-  matches.sort((left, right) => right.quotation_date.localeCompare(left.quotation_date));
-  const row = matches[0];
-  if (!row) return null;
+function savedCustomerFrom(row: Pick<QuotationRow, "customer_name" | "cnic" | "address" | "contact_no" | "whatsapp_no">): SavedCustomer {
   return {
     customerName: row.customer_name,
     cnic: row.cnic,
@@ -69,11 +63,49 @@ export function matchCustomer(rows: QuotationRow[], cnic: string): SavedCustomer
   };
 }
 
+function customerKey(row: Pick<QuotationRow, "customer_name" | "cnic">): string {
+  const digits = row.cnic.replace(/\D/g, "");
+  return digits.length === 13 ? `cnic:${digits}` : `name:${row.customer_name.trim().toLowerCase()}`;
+}
+
+export function matchCustomer(rows: QuotationRow[], cnic: string): SavedCustomer | null {
+  const digits = cnic.replace(/\D/g, "");
+  if (digits.length !== 13) return null;
+  const matches = rows.filter((row) => row.cnic.replace(/\D/g, "") === digits);
+  matches.sort((left, right) => right.quotation_date.localeCompare(left.quotation_date));
+  const row = matches[0];
+  if (!row) return null;
+  return savedCustomerFrom(row);
+}
+
+export function matchCustomersByName(rows: QuotationRow[], query: string, limit = 8): SavedCustomer[] {
+  const needle = query.trim().toLowerCase();
+  if (needle.length < 2) return [];
+  const matches = rows
+    .filter((row) => row.customer_name.trim().toLowerCase().includes(needle))
+    .sort((left, right) => right.quotation_date.localeCompare(left.quotation_date));
+  const seen = new Set<string>();
+  const customers: SavedCustomer[] = [];
+  for (const row of matches) {
+    const key = customerKey(row);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    customers.push(savedCustomerFrom(row));
+    if (customers.length >= limit) break;
+  }
+  return customers;
+}
+
+function escapeIlike(value: string): string {
+  return value.replace(/[%_\\]/g, "\\$&");
+}
+
 export type QuotationRepository = {
   listQuotations(): Promise<QuotationRecord[]>;
   countQuotations(): Promise<number>;
   listProjects(): Promise<QuotationRecord[]>;
   findCustomerByCnic(cnic: string): Promise<SavedCustomer | null>;
+  findCustomersByName(query: string): Promise<SavedCustomer[]>;
   nextSerial(): Promise<string>;
   nextDirectSaleSerial(): Promise<string>;
   create(draft: QuotationDraft): Promise<QuotationRecord>;
@@ -320,6 +352,9 @@ export function createMemoryQuotationRepository(): QuotationRepository {
     },
     async findCustomerByCnic(cnic) {
       return matchCustomer([...quotations, ...projects], cnic);
+    },
+    async findCustomersByName(query) {
+      return matchCustomersByName([...quotations, ...projects], query);
     },
     async nextSerial() {
       const max = quotations.reduce((highest, row) => Math.max(highest, row.serial_number), 0);
@@ -593,6 +628,19 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
       if (quotationsResult.error) throw storageFailure(quotationsResult.error, "listed");
       if (projectsResult.error) throw storageFailure(projectsResult.error, "listed");
       return matchCustomer([...(quotationsResult.data ?? []), ...(projectsResult.data ?? [])] as QuotationRow[], cnic);
+    },
+    async findCustomersByName(query) {
+      const needle = query.trim();
+      if (needle.length < 2) return [];
+      const columns = "customer_name, cnic, address, contact_no, whatsapp_no, quotation_date";
+      const pattern = `%${escapeIlike(needle)}%`;
+      const [quotationsResult, projectsResult] = await Promise.all([
+        client.from("billing_quotations").select(columns).ilike("customer_name", pattern).limit(40),
+        client.from("billing_projects").select(columns).ilike("customer_name", pattern).limit(40),
+      ]);
+      if (quotationsResult.error) throw storageFailure(quotationsResult.error, "listed");
+      if (projectsResult.error) throw storageFailure(projectsResult.error, "listed");
+      return matchCustomersByName([...(quotationsResult.data ?? []), ...(projectsResult.data ?? [])] as QuotationRow[], needle);
     },
     async nextSerial() {
       return formatSerial((await maxSerial()) + 1);

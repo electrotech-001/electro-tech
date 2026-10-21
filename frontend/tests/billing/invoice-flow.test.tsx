@@ -28,6 +28,8 @@ vi.mock("@/lib/billing/quotations-api", () => ({
   listProjects: api.listProjects,
   disapproveProject: api.disapproveProject,
   setPlanDiscount: api.setPlanDiscount,
+  searchCustomersByName: vi.fn().mockResolvedValue([]),
+  findCustomerByCnic: vi.fn(),
   QuotationApiError: class QuotationApiError extends Error {},
 }));
 
@@ -260,26 +262,17 @@ test("a direct installment invoice can change its due date after it is created",
   await waitFor(() => expect((screen.getByLabelText("Installment 1 due date") as HTMLInputElement).value).toBe("2026-12-20"));
 });
 
-test("duplicating an invoice creates a new unpaid copy", async () => {
+test("duplicating an invoice opens a copy form so the customer can be changed", async () => {
   const sale = project({ id: "sale-1", serial: "DS-001", origin: "direct_sale", paymentMode: "direct" });
   api.listProjects.mockResolvedValue([]);
   api.listInvoices.mockResolvedValue([invoice(sale, { serial: "INV-040", balanceDue: 673000 })]);
-  api.createDirectSale.mockResolvedValue({
-    project: sale,
-    invoices: [{ serial: "INV-041" }],
-    payments: [],
-    agreement: null,
-    paidTotal: 0,
-    balance: 673000,
-  });
+  api.nextDirectSaleSerial.mockResolvedValue("DS-002");
   const user = userEvent.setup();
   render(<InvoicesPage />);
   await user.click(await screen.findByRole("button", { name: /duplicate/i }));
-  await waitFor(() => expect(api.createDirectSale).toHaveBeenCalledWith(
-    expect.objectContaining({ customerName: "Sheikh Zain", paymentMode: "direct" }),
-    expect.objectContaining({ paidAmount: 0 }),
-    undefined,
-  ));
+  expect(await screen.findByRole("heading", { name: "Copy invoice" })).toBeDefined();
+  expect((screen.getByLabelText("Customer name") as HTMLInputElement).value).toBe("Sheikh Zain");
+  expect(api.createDirectSale).not.toHaveBeenCalled();
 });
 
 function mixedInvoices(): InvoiceRecord[] {

@@ -84,6 +84,25 @@ test("a cnic lookup returns the latest saved customer, including a direct sale",
   assert.equal(found?.address, "Attock City");
   assert.equal(found?.contactNo, "0300-1111111");
   assert.equal(await repository.findCustomerByCnic("37101-0000000-0"), null);
+  const byName = await repository.findCustomersByName("sheikh");
+  assert.equal(byName[0]?.customerName, "Sheikh Zain Ali");
+  assert.equal(byName[0]?.address, "Attock City");
+  assert.deepEqual(await repository.findCustomersByName("x"), []);
+});
+
+test("customer name lookup returns matching customers over http", async () => {
+  const repository = createMemoryQuotationRepository();
+  await repository.create(sample({ customerName: "Ayesha Khan", cnic: "37101-1111111-1" }));
+  await repository.create(sample({ customerName: "Ali Raza", cnic: "37101-2222222-2", address: "Kamra" }));
+  const baseUrl = await listen(repository);
+  const response = await fetch(`${baseUrl}/api/billing/quotations/lookup?name=${encodeURIComponent("ali")}`, {
+    headers: { Authorization: "Bearer staff" },
+  });
+  assert.equal(response.status, 200);
+  const payload = await response.json() as { customers: Array<{ customerName: string; address: string }> };
+  assert.equal(payload.customers.length, 1);
+  assert.equal(payload.customers[0]?.customerName, "Ali Raza");
+  assert.equal(payload.customers[0]?.address, "Kamra");
 });
 
 test("saved quotations keep a copy when approved and serials increment", async () => {

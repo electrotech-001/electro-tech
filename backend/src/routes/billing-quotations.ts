@@ -75,6 +75,11 @@ export function createBillingQuotationsRouter(dependencies: BillingQuotationsRou
   });
   router.get("/lookup", async (request, response, next) => {
     try {
+      const name = typeof request.query.name === "string" ? request.query.name : "";
+      if (name.trim()) {
+        response.status(200).json({ customers: await repository().findCustomersByName(name) });
+        return;
+      }
       const cnic = typeof request.query.cnic === "string" ? request.query.cnic : "";
       response.status(200).json({ customer: await repository().findCustomerByCnic(cnic) });
     } catch (error) {

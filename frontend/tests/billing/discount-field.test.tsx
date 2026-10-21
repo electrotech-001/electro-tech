@@ -14,6 +14,7 @@ vi.mock("@/lib/billing/documents-api", () => ({
 
 vi.mock("@/lib/billing/quotations-api", () => ({
   findCustomerByCnic: vi.fn(),
+  searchCustomersByName: vi.fn().mockResolvedValue([]),
 }));
 
 afterEach(() => {

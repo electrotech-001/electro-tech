@@ -70,6 +70,7 @@
 }
 
 .field {
+  position: relative;
   display: grid;
   gap: 6px;
   min-width: 0;
@@ -348,6 +349,61 @@
 
 .field input[readonly] {
   background: #f4f1ea;
+}
+
+.nameField {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.nameMenu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  max-height: 240px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid rgba(16, 20, 16, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(16, 20, 16, 0.12);
+}
+
+.nameOption {
+  width: 100%;
+  min-height: 48px;
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #101410;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.nameOption strong {
+  font-weight: 700;
+}
+
+.nameOption small {
+  font-size: 0.86rem;
+  color: rgba(16, 20, 16, 0.62);
+}
+
+.nameOption:hover,
+.nameOption:focus-visible {
+  background: #f7f4ee;
+  outline: none;
 }
 
 .modeSelect {

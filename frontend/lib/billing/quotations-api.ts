@@ -52,6 +52,16 @@ export async function findCustomerByCnic(cnic: string): Promise<SavedCustomer | 
   return (payload as { customer: SavedCustomer | null }).customer;
 }
 
+export async function searchCustomersByName(name: string): Promise<SavedCustomer[]> {
+  const needle = name.trim();
+  if (needle.length < 2) return [];
+  const payload = await expectOk(
+    await billingFetch(`/api/billing/quotations/lookup?name=${encodeURIComponent(needle)}`),
+    "The customer could not be looked up.",
+  );
+  return (payload as { customers: SavedCustomer[] }).customers ?? [];
+}
+
 export async function listQuotations(): Promise<QuotationRecord[]> {
   const payload = await expectOk(await billingFetch("/api/billing/quotations"), "Quotations could not be loaded.");
   return (payload as { quotations: QuotationRecord[] }).quotations;
