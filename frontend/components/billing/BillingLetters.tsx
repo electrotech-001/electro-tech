@@ -1,5 +1,6 @@
 import { agreementWording } from "@/lib/billing/agreement-wording";
 import type { AgreementRecord, GuarantorRecord, InvoiceRecord, PaymentRecord } from "@/lib/billing/documents-api";
+import { installmentDueDate } from "@/lib/billing/pending-invoices";
 import { formatDisplayDate, formatRupees, installmentBalance, letterhead, planDiscountOf, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { DocumentTermsNote } from "./DocumentTerms";
 import styles from "./quotation.module.css";
@@ -194,6 +195,7 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
   const openingPaid = openingPayments.reduce((sum, payment) => sum + payment.paidAmount + (payment.discountAmount ?? 0), 0);
   const planDiscount = planDiscountOf(project);
   const installments = project.paymentMode === "installments";
+  const dueDate = installmentDueDate(invoice);
   const downPayment = project.downPayment ?? 0;
   const remainingBalance = installmentBalance(project.grandTotal, project.downPayment, planDiscount);
   const breakdownLines = invoice.schedule && invoice.schedule.length > 0
@@ -222,12 +224,12 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
         </div>
         <dl className={styles.meta}>
           <div><dt>Invoice#</dt><dd>{invoice.serial}</dd></div>
-          <div><dt>Invoice date</dt><dd>{formatDisplayDate(invoice.invoiceDate)}</dd></div>
+          {dueDate ? <div><dt>Due date</dt><dd>{formatDisplayDate(dueDate)}</dd></div> : <div><dt>Invoice date</dt><dd>{formatDisplayDate(invoice.invoiceDate)}</dd></div>}
           <div><dt>{project.origin === "direct_sale" ? "Sale" : "Quotation"}</dt><dd>{project.serial}</dd></div>
           <div><dt>Status</dt><dd>{invoice.status === "partial" ? "Partially paid" : invoice.status === "paid" ? "Paid" : "Due"}</dd></div>
         </dl>
       </section>
-      {invoice.installmentNumber ? <p className={styles.packageBlock}>This invoice is for installment {invoice.installmentNumber}{invoice.dueDate ? `, due ${formatDisplayDate(invoice.dueDate)}` : ""}.</p> : null}
+      {invoice.installmentNumber ? <p className={styles.packageBlock}>This invoice is for installment {invoice.installmentNumber}{dueDate ? `, due ${formatDisplayDate(dueDate)}` : ""}.</p> : null}
       {invoice.kind === "advance" && (project.downPayment ?? 0) > 0 && invoice.grandTotal <= (project.downPayment ?? 0) ? (
         <p className={styles.packageBlock}>{project.paymentMode === "installments" ? "This invoice is the down payment." : "This invoice is the advance payment."}</p>
       ) : null}

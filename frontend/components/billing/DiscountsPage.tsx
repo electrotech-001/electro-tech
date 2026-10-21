@@ -85,16 +85,16 @@ export function DiscountsPage() {
                 <tbody>
                   {visible.map((entry) => (
                     <tr key={entry.id}>
-                      <td>{formatDisplayDate(entry.paymentDate)}</td>
-                      <td>
+                      <td data-label="Date">{formatDisplayDate(entry.paymentDate)}</td>
+                      <td data-label="Customer">
                         <a href={`/billing/profiles/${customerKey(entry.cnic)}`}>{entry.customerName}</a>
                         <small className={styles.subLine}>{entry.cnic}</small>
                       </td>
-                      <td>{entry.projectSerial}</td>
-                      <td>{entry.kind === "invoice" ? "Invoice" : "Payment"}</td>
-                      <td className={styles.amount}>{formatRupees(entry.balanceAmount)}</td>
-                      <td className={styles.amount}>{formatRupees(entry.discountAmount)}</td>
-                      <td className={styles.amount}>{entry.kind === "payment" ? formatRupees(entry.paidAmount) : "—"}</td>
+                      <td data-label="Project">{entry.projectSerial}</td>
+                      <td data-label="Where">{entry.kind === "invoice" ? "Invoice" : "Payment"}</td>
+                      <td data-label="Balance amount" className={styles.amount}>{formatRupees(entry.balanceAmount)}</td>
+                      <td data-label="Discount amount" className={styles.amount}>{formatRupees(entry.discountAmount)}</td>
+                      <td data-label="Received amount" className={styles.amount}>{entry.kind === "payment" ? formatRupees(entry.paidAmount) : "—"}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -52,6 +52,7 @@ function saleDraft(body: unknown): QuotationDraft {
     downPayment: source.downPayment == null || source.downPayment === "" ? null : amount(source.downPayment),
     planDiscount: source.planDiscount == null || source.planDiscount === "" ? 0 : amount(source.planDiscount),
     installmentCount: source.installmentCount == null || source.installmentCount === "" ? null : amount(source.installmentCount),
+    installmentAmounts: Array.isArray(source.installmentAmounts) ? source.installmentAmounts.map(amount) : null,
     items: items.map((item): QuotationItemInput => {
       const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
       return {
@@ -228,6 +229,21 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
           paymentMode: mode(body.paymentMode),
         }),
       });
+    } catch (error) {
+      sendFailure(error, response, next);
+    }
+  });
+  router.delete("/direct-sales/:id", async (request, response, next) => {
+    try {
+      await repository().deleteDirectSale(request.params.id ?? "");
+      response.status(204).end();
+    } catch (error) {
+      sendFailure(error, response, next);
+    }
+  });
+  router.delete("/payments/:id", async (request, response, next) => {
+    try {
+      response.status(200).json({ project: await repository().deletePayment(request.params.id ?? "") });
     } catch (error) {
       sendFailure(error, response, next);
     }

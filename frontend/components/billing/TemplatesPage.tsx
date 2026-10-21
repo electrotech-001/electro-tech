@@ -286,7 +286,7 @@ export function TemplatesPage() {
         </div>
       ) : null}
       {capture ? (
-        <div className={styles.capture} ref={captureRef}>
+        <div className={styles.capture} ref={captureRef} data-capture>
           {templateSendsCard(capture.template.kind) ? (
             <GreetingCard
               variant={capture.template.kind === "feedback" ? "feedback" : "thanks"}

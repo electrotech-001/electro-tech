@@ -13,6 +13,9 @@ import {
   setAgreementBody,
   setInvoiceDiscount,
   editPayment,
+  removePayment,
+  orphanSale,
+  assertDeletableSale,
   paidTotal,
   attachOpeningInvoice,
   receiveInstallment,
@@ -52,6 +55,8 @@ export type DocumentsRepository = {
   setInvoiceDiscount(invoiceId: string, discountAmount: number): Promise<ReceiveProject>;
   recordPayment(projectId: string, input: DirectPayment | OpeningPayment | InstallmentPayment): Promise<ReceiveProject>;
   updatePayment(paymentId: string, input: { paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode }): Promise<ReceiveProject>;
+  deletePayment(paymentId: string): Promise<ReceiveProject>;
+  deleteDirectSale(projectId: string): Promise<void>;
   updateDueDate(projectId: string, installmentNumber: number, dueDate: string): Promise<ReceiveProject>;
   completeProject(projectId: string): Promise<void>;
   projectHasDocuments(projectId: string): Promise<boolean>;
@@ -307,7 +312,13 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
     async deleteInvoice(invoiceId) {
       const current = [...workspaces.values()].find((workspace) => workspace.invoices.some((invoice) => invoice.id === invoiceId));
       if (!current) throw new DocumentError("Invoice was not found.", 404, "not_found");
-      return remember(deleteInvoice(current, invoiceId));
+      const next = remember(deleteInvoice(current, invoiceId));
+      if (orphanSale(next)) workspaces.delete(next.project.id);
+      return next;
+    },
+    async deleteDirectSale(projectId) {
+      assertDeletableSale(requireWorkspace(projectId));
+      workspaces.delete(projectId);
     },
     async setInvoiceDiscount(invoiceId, discountAmount) {
       const current = [...workspaces.values()].find((workspace) => workspace.invoices.some((invoice) => invoice.id === invoiceId));
@@ -335,6 +346,11 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
       const current = [...workspaces.values()].find((workspace) => workspace.payments.some((payment) => payment.id === paymentId));
       if (!current) throw new DocumentError("Payment was not found.", 404, "not_found");
       return remember(editPayment(current, paymentId, input, maxSerial([...workspaces.values()])));
+    },
+    async deletePayment(paymentId) {
+      const current = [...workspaces.values()].find((workspace) => workspace.payments.some((payment) => payment.id === paymentId));
+      if (!current) throw new DocumentError("Payment was not found.", 404, "not_found");
+      return remember(removePayment(current, paymentId, maxSerial([...workspaces.values()])));
     },
     async updateDueDate(projectId, installmentNumber, dueDate) {
       return remember(changeDueDate(requireWorkspace(projectId), installmentNumber, dueDate, maxSerial([...workspaces.values()])));
@@ -893,11 +909,21 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
         next.project = { ...next.project, installmentCount: 0, installments: [] };
       }
       await persist(current, next, false);
+      if (orphanSale(next)) {
+        const removed = await client.from("billing_projects").delete().eq("id", next.project.id);
+        if (removed.error) throw storageFailure(removed.error, "deleted");
+        return present(next);
+      }
       if (next.project.paymentMode === "installments" && next.invoices.length === 0) {
         const cleared = await client.from("billing_projects").update({ installment_count: 0 }).eq("id", next.project.id);
         if (cleared.error) throw storageFailure(cleared.error, "updated");
       }
       return present(next);
+    },
+    async deleteDirectSale(projectId) {
+      assertDeletableSale(await loadWorkspace(projectId));
+      const removed = await client.from("billing_projects").delete().eq("id", projectId).eq("origin", "direct_sale");
+      if (removed.error) throw storageFailure(removed.error, "deleted");
     },
     async setInvoiceDiscount(invoiceId, discountAmount) {
       const found = await client.from("billing_invoices").select("project_id").eq("id", invoiceId).maybeSingle();
@@ -939,6 +965,16 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
       if (typeof projectId !== "string") throw new DocumentError("Payment was not found.", 404, "not_found");
       const current = await loadWorkspace(projectId);
       const next = editPayment(current, paymentId, input, await reservedSerial());
+      await persist(current, next, false);
+      return present(next);
+    },
+    async deletePayment(paymentId) {
+      const found = await client.from("billing_payments").select("project_id").eq("id", paymentId).maybeSingle();
+      if (found.error) throw storageFailure(found.error, "read");
+      const projectId = found.data?.project_id;
+      if (typeof projectId !== "string") throw new DocumentError("Payment was not found.", 404, "not_found");
+      const current = await loadWorkspace(projectId);
+      const next = removePayment(current, paymentId, await reservedSerial());
       await persist(current, next, false);
       return present(next);
     },

@@ -1,5 +1,5 @@
-import { InvoicesPage } from "@/components/billing/InvoicesPage";
+import { redirect } from "next/navigation";
 
 export default function DirectInvoicesPage() {
-  return <InvoicesPage direct />;
+  redirect("/billing/invoices");
 }

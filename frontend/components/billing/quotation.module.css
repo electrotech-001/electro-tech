@@ -671,6 +671,13 @@
   color: #1f6b45;
 }
 
+.invoiceSearch {
+  max-width: 420px;
+  margin-bottom: 20px;
+  background: #fff;
+  border: 1px solid rgba(16, 20, 16, 0.08);
+}
+
 .invoiceGroup {
   display: grid;
   gap: 12px;
@@ -922,6 +929,7 @@
 
 .letter {
   position: relative;
+  container-type: inline-size;
   width: min(100%, 920px);
   margin: 0 auto;
   padding: 28px 28px 36px;
@@ -1092,6 +1100,7 @@
 }
 
 .greeting {
+  container-type: inline-size;
   width: min(100%, 640px);
   margin: 0 auto;
   padding: 48px 52px 40px;
@@ -1747,6 +1756,92 @@
   color: #101410;
 }
 
+@media screen and (max-width: 640px) {
+  .recordTable {
+    min-width: 0;
+  }
+
+  .recordTable thead {
+    display: none;
+  }
+
+  .recordTable,
+  .recordTable tbody,
+  .recordTable tr,
+  .recordTable td {
+    display: block;
+    width: 100%;
+  }
+
+  .recordTable tbody tr {
+    margin-bottom: 10px;
+    padding: 6px 12px;
+    border: 1px solid rgba(16, 20, 16, 0.1);
+    border-radius: 14px;
+    background: #fff;
+  }
+
+  .recordTable tbody td {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    column-gap: 12px;
+    align-items: baseline;
+    padding: 7px 0;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  .recordTable tbody td::before {
+    content: attr(data-label);
+    grid-row: 1 / span 2;
+    color: #667066;
+    font-size: 0.72rem;
+    font-weight: 750;
+    letter-spacing: 0.05em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .recordTable tbody td:last-child {
+    border-bottom: 0;
+  }
+
+  .recordTable tbody td:empty {
+    display: none;
+  }
+
+  .recordTable td > a,
+  .recordTable td > .subLine {
+    grid-column: 2;
+  }
+
+  .recordTable tfoot,
+  .recordTable tfoot tr {
+    display: block;
+  }
+
+  .recordTable tfoot tr {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .recordTable tfoot td {
+    width: auto;
+    border-bottom: 0;
+  }
+
+  .recordTable tfoot td:empty {
+    display: none;
+  }
+
+  .recordTable tfoot .ledgerTotal {
+    background: #f5c400;
+  }
+}
+
 .stack {
   display: grid;
   gap: 14px;
@@ -2132,21 +2227,17 @@
   }
 }
 
-@media screen and (max-width: 800px) {
-  .formGrid,
-  .summaryRow,
+@container (max-width: 600px) {
   .letterHead,
   .parties,
   .letterFoot,
-  .phoneRow {
-    grid-template-columns: 1fr;
-  }
-
-  .sendModes {
-    grid-template-columns: 1fr 1fr;
+  .sheet .letterHead,
+  .sheet .parties {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .docTitle,
+  .sheet .docTitle,
   .meta,
   .signature {
     text-align: left;
@@ -2155,6 +2246,74 @@
 
   .signOff {
     justify-content: space-between;
+  }
+
+  .sheetClose {
+    flex-direction: column;
+  }
+
+  .logo {
+    width: min(160px, 100%);
+  }
+
+  .docTitle {
+    font-size: 1.35rem;
+  }
+
+  .company {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .slipFacts div {
+    grid-template-columns: 1fr;
+  }
+
+  .slipFacts {
+    padding-right: 0;
+  }
+
+  .paidSeal {
+    position: relative;
+    top: auto;
+    right: auto;
+    margin: 8px auto 18px;
+  }
+
+  .slipAmount strong {
+    font-size: 1.6rem;
+  }
+
+  .greeting h2 {
+    font-size: 1.7rem;
+  }
+
+  .signature img {
+    width: min(180px, 100%);
+  }
+
+  .paymentInstructions {
+    max-width: none;
+  }
+
+  .paidStamp,
+  .sheet .paidStamp {
+    position: static;
+    display: inline-block;
+    margin: 8px 0;
+    transform: none;
+  }
+}
+
+@media screen and (max-width: 800px) {
+  .formGrid,
+  .summaryRow,
+  .phoneRow {
+    grid-template-columns: 1fr;
+  }
+
+  .sendModes {
+    grid-template-columns: 1fr 1fr;
   }
 
   .letter,
@@ -2171,21 +2330,8 @@
     grid-template-columns: 1fr;
   }
 
-  .letter {
+  .letter:not([data-capture] *) {
     padding: 16px 12px 24px;
-  }
-
-  .logo {
-    width: min(160px, 100%);
-  }
-
-  .docTitle {
-    font-size: 1.35rem;
-  }
-
-  .company {
-    justify-items: start;
-    text-align: left;
   }
 
   .modal {
@@ -2275,42 +2421,14 @@
     text-transform: uppercase;
   }
 
-  .cnicPreview,
-  .slipFacts div {
+  .cnicPreview {
     grid-template-columns: 1fr;
   }
 
-  .slipFacts {
-    padding-right: 0;
-  }
-
-  .paidSeal {
-    position: relative;
-    top: auto;
-    right: auto;
-    margin: 8px auto 18px;
-  }
-
-  .slipAmount strong {
-    font-size: 1.6rem;
-  }
-
-  .greeting {
+  .greeting:not([data-capture] *) {
     padding: 28px 16px 24px;
     border-width: 8px;
     outline-offset: -14px;
-  }
-
-  .greeting h2 {
-    font-size: 1.7rem;
-  }
-
-  .signature img {
-    width: min(180px, 100%);
-  }
-
-  .paymentInstructions {
-    max-width: none;
   }
 
   .field input[type="date"],
@@ -2335,11 +2453,5 @@
   .ledgerHero {
     flex-direction: column;
     align-items: flex-start;
-  }
-
-  .paidStamp {
-    position: static;
-    margin: 8px 0;
-    transform: none;
   }
 }

@@ -575,3 +575,136 @@ test("a daily sale discount lowers the invoice balance", async () => {
   const discounts = await repository.listDiscounts();
   assert.equal(discounts.some((entry) => entry.discountAmount === 500), true);
 });
+
+test("custom installment amounts are kept and a short payment plus a discount closes only that installment", async () => {
+  const repository = createMemoryDocumentsRepository([]);
+  const sale = {
+    quotationDate: "2026-10-21",
+    customerName: "Walk-in Customer",
+    cnic: "",
+    address: "Attock City",
+    contactNo: "",
+    whatsappNo: "",
+    customerPackage: "Solar package",
+    paymentMode: "installments" as const,
+    downPayment: 20000,
+    installmentCount: 3,
+    installmentAmounts: [80000, 50000, 50000],
+    items: [{ description: "Solar package", qty: 1, unit: "Set", price: 200000, taxPercent: 0 }],
+  };
+  const saved = await repository.createDirectSale(sale, null, ["2026-11-10", "2026-12-10", "2027-01-10"]);
+  assert.deepEqual(saved.project.installments.map((line) => line.amount), [80000, 50000, 50000]);
+  const first = saved.invoices.find((invoice) => invoice.installmentNumber === 1);
+  assert.equal(first?.balanceDue, 80000);
+  assert.equal(first?.dueDate, "2026-11-10");
+
+  const paid = await repository.recordPayment(saved.project.id, {
+    kind: "installment",
+    installmentNumber: 1,
+    paidAmount: 78000,
+    discountAmount: 2000,
+    paymentDate: "2026-11-09",
+    paymentMode: "cash",
+  });
+  const closed = paid.invoices.find((invoice) => invoice.installmentNumber === 1);
+  assert.equal(closed?.balanceDue, 0);
+  assert.equal(closed?.status, "paid");
+  assert.deepEqual(
+    paid.invoices.filter((invoice) => invoice.installmentNumber != null && invoice.installmentNumber > 1).map((invoice) => [invoice.balanceDue, invoice.status]),
+    [[50000, "due"], [50000, "due"]],
+  );
+
+  await assert.rejects(
+    () => repository.createDirectSale({ ...sale, installmentAmounts: [80000, 50000, 40000] }, null, ["2026-11-10", "2026-12-10", "2027-01-10"]),
+    /must add up to the remaining Rs 180,000\.00/,
+  );
+});
+
+test("deleting a payment removes it from the invoices and the ledger", async () => {
+  const repository = createMemoryDocumentsRepository([]);
+  const saved = await repository.createDirectSale({
+    quotationDate: "2026-10-21",
+    customerName: "Walk-in Customer",
+    cnic: "",
+    address: "Attock City",
+    contactNo: "",
+    whatsappNo: "",
+    customerPackage: "Solar package",
+    paymentMode: "installments",
+    downPayment: 20000,
+    installmentCount: 2,
+    items: [{ description: "Solar package", qty: 1, unit: "Set", price: 100000, taxPercent: 0 }],
+  }, { paidAmount: 20000, paymentDate: "2026-10-21", paymentMode: "cash" }, ["2026-11-10", "2026-12-10"]);
+  const paid = await repository.recordPayment(saved.project.id, {
+    kind: "installment",
+    installmentNumber: 1,
+    paidAmount: 40000,
+    paymentDate: "2026-11-09",
+    paymentMode: "cash",
+  });
+  assert.equal(paid.payments.length, 2);
+  assert.equal(paid.invoices.find((invoice) => invoice.installmentNumber === 1)?.status, "paid");
+
+  const installmentPayment = paid.payments.find((payment) => payment.installmentNumber === 1);
+  const afterInstallment = await repository.deletePayment(installmentPayment?.id ?? "");
+  assert.equal(afterInstallment.payments.length, 1);
+  const reopened = afterInstallment.invoices.find((invoice) => invoice.installmentNumber === 1);
+  assert.equal(reopened?.balanceDue, 40000);
+  assert.equal(reopened?.status, "due");
+
+  const downPayment = afterInstallment.payments[0];
+  const afterDown = await repository.deletePayment(downPayment?.id ?? "");
+  assert.equal(afterDown.payments.length, 0);
+  assert.equal(afterDown.paidTotal, 0);
+  assert.equal((await repository.listLedger()).length, 0);
+  await assert.rejects(() => repository.deletePayment(downPayment?.id ?? ""), /not found/);
+});
+
+test("deleting a direct payment restores the invoice balance", async () => {
+  const repository = createMemoryDocumentsRepository([]);
+  const saved = await repository.createDirectSale({
+    quotationDate: "2026-10-21",
+    customerName: "Walk-in Customer",
+    cnic: "",
+    address: "Attock City",
+    contactNo: "",
+    whatsappNo: "",
+    customerPackage: "MCB 63A",
+    paymentMode: "direct",
+    downPayment: null,
+    installmentCount: null,
+    items: [{ description: "MCB 63A", qty: 2, unit: "Nos", price: 1500, taxPercent: 0 }],
+  }, { paidAmount: 1000, paymentDate: "2026-10-21", paymentMode: "cash" });
+  assert.equal(saved.balance, 2000);
+  const removed = await repository.deletePayment(saved.payments[0]?.id ?? "");
+  assert.equal(removed.payments.length, 0);
+  assert.equal(removed.balance, 3000);
+  assert.equal(removed.invoices[0]?.balanceDue, 3000);
+  assert.equal((await repository.listLedger()).length, 0);
+});
+
+test("a daily sale is removed when its last invoice is deleted, and a sale with payments cannot be deleted", async () => {
+  const repository = createMemoryDocumentsRepository([]);
+  const draft = {
+    quotationDate: "2026-10-21",
+    customerName: "Walk-in Customer",
+    cnic: "",
+    address: "Attock City",
+    contactNo: "",
+    whatsappNo: "",
+    customerPackage: "MCB 63A",
+    paymentMode: "direct" as const,
+    downPayment: null,
+    installmentCount: null,
+    items: [{ description: "MCB 63A", qty: 1, unit: "Nos", price: 1500, taxPercent: 0 }],
+  };
+  const unpaid = await repository.createDirectSale(draft, null);
+  await repository.deleteInvoice(unpaid.invoices[0]?.id ?? "");
+  assert.equal((await repository.listReceiveProjects()).some((row) => row.project.id === unpaid.project.id), false);
+
+  const paid = await repository.createDirectSale(draft, { paidAmount: 500, paymentDate: "2026-10-21", paymentMode: "cash" });
+  await assert.rejects(() => repository.deleteDirectSale(paid.project.id), /Delete the payments/);
+  await repository.deletePayment(paid.payments[0]?.id ?? "");
+  await repository.deleteDirectSale(paid.project.id);
+  assert.equal((await repository.listReceiveProjects()).some((row) => row.project.id === paid.project.id), false);
+});

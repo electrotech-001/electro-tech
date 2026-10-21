@@ -155,7 +155,7 @@ export function DashboardPage() {
 
                       return (
                         <tr key={project.id}>
-                          <td>
+                          <td data-label="Image">
                             {thumbUrl ? (
                               <img
                                 src={thumbUrl}
@@ -166,7 +166,7 @@ export function DashboardPage() {
                               <div className="table-thumb-placeholder">No img</div>
                             )}
                           </td>
-                          <td>
+                          <td data-label="Project">
                             <div className="project-title-cell">
                               <a
                                 href={`/admin/projects/${project.id}/edit`}
@@ -179,18 +179,18 @@ export function DashboardPage() {
                               </span>
                             </div>
                           </td>
-                          <td>
+                          <td data-label="Status">
                             <StatusBadge
                               status={project.status}
                               isFeaturedHomepage={project.isFeaturedHomepage}
                             />
                           </td>
-                          <td>{project.location || "—"}</td>
-                          <td>{project.size || "—"}</td>
-                          <td style={{ color: "var(--text-secondary)", fontSize: "0.8rem" }}>
+                          <td data-label="Location">{project.location || "—"}</td>
+                          <td data-label="Size">{project.size || "—"}</td>
+                          <td data-label="Last Updated" style={{ color: "var(--text-secondary)", fontSize: "0.8rem" }}>
                             {new Date(project.updatedAt).toLocaleDateString()}
                           </td>
-                          <td>
+                          <td data-label="Actions">
                             <div className="table-actions">
                               <a
                                 href={`/admin/projects/${project.id}/preview`}

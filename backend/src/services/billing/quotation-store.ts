@@ -3,6 +3,7 @@ import { getSupabaseClient } from "../supabase.js";
 import {
   computeTotals,
   customerProfileIssues,
+  customInstallments,
   formatDirectSaleSerial,
   formatSerial,
   installmentBalance,
@@ -111,6 +112,7 @@ type QuotationRow = {
   down_payment: number | string | null;
   plan_discount?: number | string | null;
   installment_count: number | null;
+  installment_amounts?: (number | string)[] | null;
   approved_at: string | null;
   source_quotation_id?: string | null;
   status?: string | null;
@@ -136,6 +138,7 @@ function draftFromRow(row: QuotationRow, items: ItemRow[]): QuotationDraft {
     downPayment: row.down_payment == null ? null : asNumber(row.down_payment),
     planDiscount: asNumber(row.plan_discount),
     installmentCount: row.installment_count,
+    installmentAmounts: Array.isArray(row.installment_amounts) ? row.installment_amounts.map((amount) => asNumber(amount)) : null,
     items: [...items]
       .sort((a, b) => a.line_no - b.line_no)
       .map((item) => ({
@@ -217,6 +220,9 @@ function assertDraft(draft: QuotationDraft): QuotationDraft {
       : null,
     planDiscount: planDiscountOf(draft),
     installmentCount: draft.paymentMode === "installments" ? draft.installmentCount : null,
+    installmentAmounts: draft.paymentMode === "installments" && Array.isArray(draft.installmentAmounts) && draft.installmentAmounts.length > 0
+      ? draft.installmentAmounts.map((amount) => roundMoney(Number(amount)))
+      : null,
     items: draft.items.map((item) => ({
       description: item.description.trim(),
       qty: item.qty,
@@ -259,6 +265,7 @@ function parentPayload(draft: QuotationDraft, serialNumber: number) {
     down_payment: draft.downPayment,
     plan_discount: planDiscountOf(draft),
     installment_count: draft.installmentCount,
+    installment_amounts: draft.installmentAmounts ?? null,
   };
 }
 
@@ -333,6 +340,7 @@ export function createMemoryQuotationRepository(): QuotationRepository {
         down_payment: record.downPayment,
         plan_discount: record.planDiscount ?? 0,
         installment_count: record.installmentCount,
+        installment_amounts: record.installmentAmounts ?? null,
         approved_at: record.approvedAt,
         source_quotation_id: null,
         status: "in_process",
@@ -385,6 +393,7 @@ export function createMemoryQuotationRepository(): QuotationRepository {
         down_payment: clean.downPayment,
         plan_discount: clean.planDiscount ?? 0,
         installment_count: clean.installmentCount,
+        installment_amounts: clean.installmentAmounts ?? null,
         billing_quotation_items: totals.items.map((item) => ({
           line_no: item.lineNo,
           description: item.description,
@@ -413,6 +422,7 @@ export function createMemoryQuotationRepository(): QuotationRepository {
         down_payment: clean.downPayment,
         plan_discount: clean.planDiscount ?? 0,
         installment_count: clean.installmentCount,
+        installment_amounts: clean.installmentAmounts ?? null,
         billing_project_items: totals.items.map((item) => ({
           line_no: item.lineNo,
           description: item.description,
@@ -473,6 +483,9 @@ export function createMemoryQuotationRepository(): QuotationRepository {
       if (current.paymentMode !== "installments") {
         throw new QuotationServiceError("A plan discount is only used for installments.", 400, "invalid_discount");
       }
+      if (customInstallments(current) && discount !== planDiscountOf(current)) {
+        throw new QuotationServiceError("This plan has custom installment amounts. Edit the invoice and change the installment amounts instead.", 400, "custom_installments");
+      }
       if (discount > installmentBalance(current.grandTotal, current.downPayment, 0)) {
         throw new QuotationServiceError("Down payment and discount cannot be more than the total amount.", 400, "invalid_discount");
       }
@@ -505,8 +518,8 @@ export function createMemoryQuotationRepository(): QuotationRepository {
   };
 }
 
-const QUOTATION_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, approved_at, billing_quotation_items(line_no, description, qty, unit, price, tax_percent)";
-const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, approved_at, source_quotation_id, status, origin, billing_project_items(line_no, description, qty, unit, price, tax_percent)";
+const QUOTATION_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, installment_amounts, approved_at, billing_quotation_items(line_no, description, qty, unit, price, tax_percent)";
+const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, installment_amounts, approved_at, source_quotation_id, status, origin, billing_project_items(line_no, description, qty, unit, price, tax_percent)";
 
 function storageFailure(error: { message: string }, action: string): QuotationServiceError {
   console.error(`Quotation could not be ${action}.`, error.message);
@@ -670,6 +683,7 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
           down_payment: clean.downPayment,
           plan_discount: clean.planDiscount ?? 0,
           installment_count: clean.installmentCount,
+          installment_amounts: clean.installmentAmounts ?? null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", existing.id);
@@ -705,6 +719,7 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
           down_payment: clean.downPayment,
           plan_discount: clean.planDiscount ?? 0,
           installment_count: clean.installmentCount,
+          installment_amounts: clean.installmentAmounts ?? null,
         })
         .eq("id", id);
       if (updated.error) throw storageFailure(updated.error, "updated");
@@ -781,6 +796,9 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
       const current = toQuotationRecord(data as QuotationRow, "project");
       if (current.paymentMode !== "installments") {
         throw new QuotationServiceError("A plan discount is only used for installments.", 400, "invalid_discount");
+      }
+      if (customInstallments(current) && discount !== planDiscountOf(current)) {
+        throw new QuotationServiceError("This plan has custom installment amounts. Edit the invoice and change the installment amounts instead.", 400, "custom_installments");
       }
       if (discount > installmentBalance(current.grandTotal, current.downPayment, 0)) {
         throw new QuotationServiceError("Down payment and discount cannot be more than the total amount.", 400, "invalid_discount");

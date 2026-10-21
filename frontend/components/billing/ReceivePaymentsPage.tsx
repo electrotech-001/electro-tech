@@ -1,12 +1,12 @@
 "use client";
 
-import { MessageCircle, Plus } from "lucide-react";
+import { Eye, MessageCircle, Pencil, Plus, Printer, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { DocumentApiError, listReceiveProjects, nextDirectSaleSerial, recordPayment, saveAgreement, updateDueDate, updatePayment, type BankMode, type PaymentRecord, type ReceiveProject } from "@/lib/billing/documents-api";
+import { deleteDirectSale, deletePayment, DocumentApiError, listReceiveProjects, nextDirectSaleSerial, recordPayment, saveAgreement, updateDueDate, updatePayment, type BankMode, type PaymentRecord, type ReceiveProject } from "@/lib/billing/documents-api";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
-import { formatDisplayDate, formatRupees, isDirectSale, todayIsoDate } from "@/lib/billing/quotation-math";
+import { addMonths, formatDisplayDate, formatRupees, isDirectSale, todayIsoDate } from "@/lib/billing/quotation-math";
 import { DirectSaleForm } from "./DirectSaleForm";
-import { printFromControl } from "@/lib/billing/print-letter";
+import { printBillingLetter, printFromControl } from "@/lib/billing/print-letter";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import { PaymentSlip } from "./BillingLetters";
 import { AmountInput, FancySelect } from "./FancyControls";
@@ -15,16 +15,8 @@ import shell from "./billing-shell.module.css";
 import styles from "./quotation.module.css";
 import "./quotation-print.css";
 
-function addMonths(iso: string, months: number): string {
-  const [year, month, day] = iso.split("-").map(Number);
-  const date = new Date(year || 2026, (month || 1) - 1 + months, day || 1);
-  const nextYear = date.getFullYear();
-  const nextMonth = String(date.getMonth() + 1).padStart(2, "0");
-  const nextDay = String(date.getDate()).padStart(2, "0");
-  return `${nextYear}-${nextMonth}-${nextDay}`;
-}
-
 function legacyAdvanceInvoice(current: ReceiveProject) {
+  if (isDirectSale(current.project)) return undefined;
   const face = current.project.downPayment ?? 0;
   if (!(face > 0) || face + 0.001 >= current.project.grandTotal) return undefined;
   return current.invoices.find((entry) => entry.kind === "advance" && entry.grandTotal <= face + 0.001);
@@ -125,6 +117,8 @@ export function ReceivePaymentsPage() {
   const [paymentDate, setPaymentDate] = useState(todayIsoDate());
   const [paymentMode, setPaymentMode] = useState<BankMode>("cash");
   const [editing, setEditing] = useState<PaymentRecord | null>(null);
+  const [deleting, setDeleting] = useState<PaymentRecord | null>(null);
+  const [deletingSale, setDeletingSale] = useState(false);
   const [slip, setSlip] = useState<PaymentRecord | null>(null);
   const [receiving, setReceiving] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -261,6 +255,63 @@ export function ReceivePaymentsPage() {
     }
   }
 
+  async function printSlip(payment: PaymentRecord) {
+    setSendingId(payment.id);
+    setBanner(null);
+    setCapture(payment);
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, 80));
+      const root = captureRef.current;
+      if (!root) throw new DocumentApiError("The paid slip could not be prepared for printing.");
+      await printBillingLetter(root);
+    } catch (error) {
+      setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The paid slip could not be printed." });
+    } finally {
+      setCapture(null);
+      setSendingId(null);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleting || !current) return;
+    setSaving(true);
+    setBanner(null);
+    try {
+      await deletePayment(deleting.id);
+      if (slip?.id === deleting.id) setSlip(null);
+      if (editing?.id === deleting.id) setEditing(null);
+      await refresh(current.project.id);
+      setBanner({ tone: "ok", text: `The ${formatRupees(deleting.paidAmount)} payment was deleted and removed from the payment ledger.` });
+      setDeleting(null);
+    } catch (error) {
+      setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The payment could not be deleted." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmDeleteSale() {
+    if (!current) return;
+    const { id, serial } = current.project;
+    setSaving(true);
+    setBanner(null);
+    try {
+      await deleteDirectSale(id);
+      setDeletingSale(false);
+      await refresh("");
+      setBanner({ tone: "ok", text: `Sale ${serial} was deleted.` });
+    } catch (error) {
+      setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The sale could not be deleted." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function paymentLabel(payment: PaymentRecord): string {
+    if (payment.installmentNumber) return ` · Installment ${payment.installmentNumber}`;
+    return current?.project.paymentMode === "installments" ? " · Down payment" : "";
+  }
+
   async function saveEdit() {
     if (!editing || !current) return;
     setSaving(true);
@@ -321,6 +372,12 @@ export function ReceivePaymentsPage() {
           {current ? (
             <div className={styles.form}>
               <p>Total {formatRupees(current.project.grandTotal)} · Received {formatRupees(current.paidTotal)} · Balance {formatRupees(current.balance)}</p>
+              {isDirectSale(current.project) && current.payments.length === 0 ? (
+                <div className={styles.formActions}>
+                  {current.invoices.length === 0 ? <p className={styles.hint}>This sale has no invoices left. Delete it if it was entered by mistake.</p> : null}
+                  <button className={styles.dangerButton} type="button" onClick={() => setDeletingSale(true)} disabled={saving}><Trash2 size={15} /> Delete sale {current.project.serial}</button>
+                </div>
+              ) : null}
               {current.project.paymentMode === "direct" ? (
                 <>
                   {legacyAdvanceInvoice(current) ? (
@@ -332,7 +389,7 @@ export function ReceivePaymentsPage() {
                     </>
                   ) : null}
                   <div className={styles.formActions}>
-                    {current.invoices.length === 0 ? <p className={styles.hint}>Approve the quotation to create the invoice. It appears in Pending Invoices, and the payment is shown on the invoice balance.</p> : null}
+                    {current.invoices.length === 0 && !isDirectSale(current.project) ? <p className={styles.hint}>Approve the quotation to create the invoice. It appears in Invoices, and the payment is shown on the invoice balance.</p> : null}
                     {openingPending(current) > 0 ? <p className={styles.hint}>Receive the advance payment before the remaining balance.</p> : null}
                     <button className={styles.primaryButton} type="button" onClick={() => setReceiving(true)} disabled={saving || current.balance <= 0 || openingPending(current) > 0 || current.invoices.length === 0}>Receive payment</button>
                   </div>
@@ -417,13 +474,15 @@ export function ReceivePaymentsPage() {
                   ) : (
                     <>
                       <strong>{formatRupees(payment.paidAmount)}</strong>
-                      <p>{formatDisplayDate(payment.paymentDate)} · {payment.paymentMode === "bank_transfer" ? "Bank transfer" : "Cash"}{payment.installmentNumber ? ` · Installment ${payment.installmentNumber}` : ""}{(payment.discountAmount ?? 0) > 0 ? ` · Discount ${formatRupees(payment.discountAmount ?? 0)}` : ""}</p>
+                      <p>{formatDisplayDate(payment.paymentDate)} · {payment.paymentMode === "bank_transfer" ? "Bank transfer" : "Cash"}{paymentLabel(payment)}{(payment.discountAmount ?? 0) > 0 ? ` · Discount ${formatRupees(payment.discountAmount ?? 0)}` : ""}</p>
                       <div className={styles.cardActions}>
-                        <button type="button" onClick={() => setSlip(payment)}>Paid slip</button>
+                        <button type="button" onClick={() => setSlip(payment)}><Eye size={15} /> View</button>
+                        <button type="button" onClick={() => void printSlip(payment)} disabled={sendingId === payment.id}><Printer size={15} /> Print</button>
                         <button type="button" onClick={() => void sendSlip(payment)} disabled={sendingId === payment.id}>
                           <MessageCircle size={15} /> {sendingId === payment.id ? "Sending…" : "WhatsApp"}
                         </button>
-                        <button type="button" onClick={() => setEditing(payment)}>Edit</button>
+                        <button type="button" onClick={() => setEditing(payment)}><Pencil size={15} /> Edit</button>
+                        <button className={styles.danger} type="button" onClick={() => setDeleting(payment)} disabled={saving}><Trash2 size={15} /> Delete</button>
                       </div>
                     </>
                   )}
@@ -465,8 +524,38 @@ export function ReceivePaymentsPage() {
           </div>
         </div>
       ) : null}
+      {deletingSale && current ? (
+        <div className={styles.modal} role="presentation" onClick={() => { if (!saving) setDeletingSale(false); }}>
+          <div className={styles.confirm} role="dialog" aria-modal="true" aria-labelledby="delete-sale-title" onClick={(event) => event.stopPropagation()}>
+            <h2 id="delete-sale-title">Delete sale {current.project.serial}?</h2>
+            <p>
+              This removes {current.project.customerName}&apos;s sale {current.project.serial}
+              {(current.project.downPayment ?? 0) > 0 ? `, its ${formatRupees(current.project.downPayment ?? 0)} down payment plan` : ""}
+              {current.invoices.length > 0 ? `, and its ${current.invoices.length} invoice${current.invoices.length === 1 ? "" : "s"}` : ""} from the database. No payments are recorded on it. This cannot be undone.
+            </p>
+            <div className={styles.formActions}>
+              <button className={styles.secondaryButton} type="button" onClick={() => setDeletingSale(false)} disabled={saving}>Cancel</button>
+              <button className={styles.dangerButton} type="button" onClick={() => void confirmDeleteSale()} disabled={saving}>{saving ? "Deleting…" : "Delete sale"}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {deleting && current ? (
+        <div className={styles.modal} role="presentation" onClick={() => { if (!saving) setDeleting(null); }}>
+          <div className={styles.confirm} role="dialog" aria-modal="true" aria-labelledby="delete-payment-title" onClick={(event) => event.stopPropagation()}>
+            <h2 id="delete-payment-title">Delete this {formatRupees(deleting.paidAmount)} payment?</h2>
+            <p>
+              Received {formatDisplayDate(deleting.paymentDate)}{paymentLabel(deleting)}. It is removed from the payment history, the invoice balance, and the payment ledger. This cannot be undone.
+            </p>
+            <div className={styles.formActions}>
+              <button className={styles.secondaryButton} type="button" onClick={() => setDeleting(null)} disabled={saving}>Cancel</button>
+              <button className={styles.dangerButton} type="button" onClick={() => void confirmDelete()} disabled={saving}>{saving ? "Deleting…" : "Delete payment"}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {capture && current ? (
-        <div className={styles.capture} ref={captureRef}>
+        <div className={styles.capture} ref={captureRef} data-capture>
           <PaymentSlip project={current.project} payment={capture} paper />
         </div>
       ) : null}

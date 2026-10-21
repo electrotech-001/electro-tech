@@ -1,6 +1,6 @@
 import { Plus, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
-import { computeTotals, formatRupees, installmentBalance, maskCnic, planDiscountOf, quotationIssues, type PaymentMode, type QuotationDraft, type QuotationItemInput } from "@/lib/billing/quotation-math";
+import { computeTotals, formatRupees, installmentBalance, maskCnic, planDiscountOf, quotationIssues, roundMoney, splitInstallments, type PaymentMode, type QuotationDraft, type QuotationItemInput } from "@/lib/billing/quotation-math";
 import { findCustomerByCnic } from "@/lib/billing/quotations-api";
 import { AmountInput, FancySelect } from "./FancyControls";
 import { PhoneField } from "./PhoneField";
@@ -12,6 +12,15 @@ const paymentModes: { value: PaymentMode; label: string }[] = [
   { value: "installments", label: "Installments" },
   { value: "direct", label: "Direct" },
 ];
+
+const amountModes: { value: "equal" | "custom"; label: string }[] = [
+  { value: "equal", label: "Equal amounts" },
+  { value: "custom", label: "Custom amount for each installment" },
+];
+
+function sizedAmounts(amounts: number[], count: number | null): number[] {
+  return Array.from({ length: Math.max(0, count ?? 0) }, (_, index) => amounts[index] ?? 0);
+}
 
 function updateItem(items: QuotationItemInput[], index: number, patch: Partial<QuotationItemInput>) {
   return items.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item));
@@ -28,6 +37,7 @@ export function QuotationForm({
   submitLabel = "Save quotation",
   installmentDueDates,
   onInstallmentDueDate,
+  advancePayment = true,
   onChange,
   onCancel,
   onSubmit,
@@ -42,6 +52,7 @@ export function QuotationForm({
   submitLabel?: string;
   installmentDueDates?: string[];
   onInstallmentDueDate?: (index: number, value: string) => void;
+  advancePayment?: boolean;
   onChange: (draft: QuotationDraft) => void;
   onCancel: () => void;
   onSubmit: () => void;
@@ -49,6 +60,8 @@ export function QuotationForm({
   const totals = computeTotals(draft);
   const issues = quotationIssues(draft).filter((issue) => showDate || issue !== "Choose a quotation date.");
   const balance = installmentBalance(totals.grandTotal, draft.downPayment, planDiscountOf(draft));
+  const customAmounts = draft.installmentAmounts != null;
+  const enteredTotal = roundMoney((draft.installmentAmounts ?? []).reduce((sum, amount) => sum + (Number(amount) || 0), 0));
   const draftRef = useRef(draft);
   const lookupRef = useRef(0);
   const [knownCustomer, setKnownCustomer] = useState<string | null>(null);
@@ -146,6 +159,7 @@ export function QuotationForm({
                 downPayment: paymentMode === "installments" ? draft.downPayment ?? 0 : draft.downPayment,
                 planDiscount: draft.planDiscount ?? 0,
                 installmentCount: paymentMode === "installments" ? draft.installmentCount ?? 1 : null,
+                installmentAmounts: paymentMode === "installments" ? draft.installmentAmounts ?? null : null,
               });
             }}
           />
@@ -245,14 +259,16 @@ export function QuotationForm({
       <div className={styles.summaryRow}>
         {draft.paymentMode === "direct" ? (
           <div className={styles.planFields}>
-            <label className={styles.field}>
-              <span>Advance payment</span>
-              <AmountInput
-                value={draft.downPayment}
-                emptyAs={null}
-                onChange={(amount) => set("downPayment", amount)}
-              />
-            </label>
+            {advancePayment ? (
+              <label className={styles.field}>
+                <span>Advance payment</span>
+                <AmountInput
+                  value={draft.downPayment}
+                  emptyAs={null}
+                  onChange={(amount) => set("downPayment", amount)}
+                />
+              </label>
+            ) : null}
             <label className={styles.field}>
               <span>Discount</span>
               <AmountInput
@@ -260,7 +276,7 @@ export function QuotationForm({
                 onChange={(amount) => set("planDiscount", amount ?? 0)}
               />
             </label>
-            <p>Remaining after advance payment and discount <strong>{formatRupees(Math.max(0, balance))}</strong></p>
+            <p>{advancePayment ? "Remaining after advance payment and discount" : "Total after discount"} <strong>{formatRupees(Math.max(0, balance))}</strong></p>
           </div>
         ) : null}
         {draft.paymentMode === "installments" ? (
@@ -285,16 +301,47 @@ export function QuotationForm({
                 integer
                 value={draft.installmentCount}
                 emptyAs={null}
-                onChange={(count) => set("installmentCount", count)}
+                onChange={(count) => onChange({
+                  ...draft,
+                  installmentCount: count,
+                  installmentAmounts: customAmounts ? sizedAmounts(draft.installmentAmounts ?? [], count) : null,
+                })}
               />
             </label>
+            <div className={styles.field}>
+              <span id="installment-amounts-label">Installment amounts</span>
+              <FancySelect
+                labelId="installment-amounts-label"
+                value={customAmounts ? "custom" : "equal"}
+                options={amountModes}
+                onChange={(mode) => set(
+                  "installmentAmounts",
+                  mode === "custom"
+                    ? (draft.installmentCount ?? 0) > 0
+                      ? splitInstallments(Math.max(0, balance), draft.installmentCount ?? 0).map((line) => line.amount)
+                      : []
+                    : null,
+                )}
+              />
+            </div>
             <div className={styles.breakdown}>
               <p>Remaining after down payment and discount <strong>{formatRupees(Math.max(0, balance))}</strong></p>
+              {customAmounts ? (
+                <p>Installments entered <strong>{formatRupees(enteredTotal)}</strong>{enteredTotal !== roundMoney(Math.max(0, balance)) ? ` · ${formatRupees(Math.abs(roundMoney(balance - enteredTotal)))} ${enteredTotal < balance ? "still to assign" : "over the remaining"}` : ""}</p>
+              ) : null}
               <ol>
-                {totals.installments.map((line, index) => (
-                  <li key={line.number} className={onInstallmentDueDate ? styles.dueDateLine : undefined}>
+                {(customAmounts ? sizedAmounts(draft.installmentAmounts ?? [], draft.installmentCount).map((amount, index) => ({ number: index + 1, amount })) : totals.installments).map((line, index) => (
+                  <li key={line.number} className={onInstallmentDueDate || customAmounts ? styles.dueDateLine : undefined}>
                     <span>Installment {line.number}</span>
-                    <strong>{formatRupees(line.amount)}</strong>
+                    {customAmounts ? (
+                      <label className={styles.field}>
+                        <span>Installment {line.number} amount</span>
+                        <AmountInput
+                          value={line.amount}
+                          onChange={(amount) => set("installmentAmounts", sizedAmounts(draft.installmentAmounts ?? [], draft.installmentCount).map((current, amountIndex) => amountIndex === index ? amount ?? 0 : current))}
+                        />
+                      </label>
+                    ) : <strong>{formatRupees(line.amount)}</strong>}
                     {onInstallmentDueDate ? (
                       <label className={styles.field}>
                         <span>Installment {line.number} due date</span>

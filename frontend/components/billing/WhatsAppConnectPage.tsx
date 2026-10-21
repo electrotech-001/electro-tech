@@ -334,7 +334,7 @@ export function WhatsAppConnectPage() {
         </section>
       </div>
       {captureCard ? (
-        <div className={styles.capture} ref={captureRef}>
+        <div className={styles.capture} ref={captureRef} data-capture>
           <GreetingCard variant={captureCard} customerName={cardName || "Valued customer"} body={message} paper />
         </div>
       ) : null}

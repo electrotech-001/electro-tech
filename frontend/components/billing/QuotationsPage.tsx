@@ -1,11 +1,11 @@
 "use client";
 
-import { Check, Copy, Eye, MessageCircle, Pencil, Printer, Plus, Trash2, Undo2 } from "lucide-react";
+import { Check, Copy, Eye, MessageCircle, Pencil, Printer, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { blankDraft, formatDisplayDate, formatRupees, todayIsoDate, type QuotationDraft, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { DocumentApiError, issueDirectInvoice } from "@/lib/billing/documents-api";
-import { approveQuotation, deleteQuotation, disapproveQuotation, listQuotations, nextQuotationSerial, QuotationApiError, saveQuotation } from "@/lib/billing/quotations-api";
+import { approveQuotation, deleteQuotation, listQuotations, nextQuotationSerial, QuotationApiError, saveQuotation } from "@/lib/billing/quotations-api";
 import { printBillingLetter } from "@/lib/billing/print-letter";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import shell from "./billing-shell.module.css";
@@ -27,6 +27,7 @@ function toDraft(record: QuotationRecord): QuotationDraft {
     downPayment: record.downPayment,
     planDiscount: record.planDiscount ?? 0,
     installmentCount: record.installmentCount,
+    installmentAmounts: record.installmentAmounts ?? null,
     items: record.items.map((item) => ({
       description: item.description,
       qty: item.qty,
@@ -49,9 +50,8 @@ export function QuotationsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [viewing, setViewing] = useState<QuotationRecord | null>(null);
   const [approving, setApproving] = useState<QuotationRecord | null>(null);
-  const [disapproving, setDisapproving] = useState<QuotationRecord | null>(null);
   const [deleting, setDeleting] = useState<QuotationRecord | null>(null);
-  const [busy, setBusy] = useState<{ id: string; action: "whatsapp" | "approve" | "disapprove" | "delete" | "duplicate" } | null>(null);
+  const [busy, setBusy] = useState<{ id: string; action: "whatsapp" | "approve" | "delete" | "duplicate" } | null>(null);
   const [capture, setCapture] = useState<QuotationRecord | null>(null);
   const captureRef = useRef<HTMLDivElement>(null);
 
@@ -81,7 +81,6 @@ export function QuotationsPage() {
       if (event.key === "Escape") {
         setViewing(null);
         setApproving(null);
-        setDisapproving(null);
         setDeleting(null);
       }
     }
@@ -156,8 +155,8 @@ export function QuotationsPage() {
       setBanner({
         tone: "ok",
         text: project.paymentMode === "installments"
-          ? `${approving.serial} is approved. Its invoices are in Pending Invoices.`
-          : `${approving.serial} is approved and its invoice is in Pending Invoices.`,
+          ? `${approving.serial} is approved. Its invoices are in Invoices.`
+          : `${approving.serial} is approved and its invoice is in Invoices.`,
       });
     } catch (error) {
       const message = error instanceof QuotationApiError || error instanceof DocumentApiError
@@ -165,22 +164,6 @@ export function QuotationsPage() {
         : "The quotation could not be approved.";
       setBanner({ tone: "bad", text: message });
       await refresh().catch(() => undefined);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function onDisapprove() {
-    if (!disapproving) return;
-    setBusy({ id: disapproving.id, action: "disapprove" });
-    setBanner(null);
-    try {
-      await disapproveQuotation(disapproving.id);
-      await refresh();
-      setDisapproving(null);
-      setBanner({ tone: "ok", text: `${disapproving.serial} is back in Quotations.` });
-    } catch (error) {
-      setBanner({ tone: "bad", text: error instanceof QuotationApiError ? error.message : "The quotation could not be disapproved." });
     } finally {
       setBusy(null);
     }
@@ -238,6 +221,7 @@ export function QuotationsPage() {
   }
 
   const formOpen = creating || editing;
+  const pending = quotations.filter((quotation) => !quotation.approvedAt);
 
   if (formOpen) {
     return (
@@ -274,7 +258,7 @@ export function QuotationsPage() {
         <div>
           <p className={shell.kicker}>Billing CMS</p>
           <h1 className={shell.title}>Quotations</h1>
-          <p className={shell.summary}>Each saved quotation stays here as a card. Approving it marks the card Approved and creates the pending invoice.</p>
+          <p className={shell.summary}>Quotations waiting for approval are listed here. Approving one creates its invoice and moves it to Invoices.</p>
         </div>
         <button className={styles.primaryButton} type="button" onClick={() => void startNew()}>
           <Plus size={16} /> New quotation
@@ -284,19 +268,18 @@ export function QuotationsPage() {
       {banner ? <p className={banner.tone === "ok" ? styles.success : styles.error}>{banner.text}</p> : null}
 
       {loading ? <p className={styles.hint}>Loading quotations…</p> : null}
-      {!loading && quotations.length === 0 ? (
+      {!loading && pending.length === 0 ? (
         <section className={`${shell.panel} ${shell.empty}`}>
-          <h2>No quotations yet</h2>
-          <p>Save the first quotation and it will appear here as a card.</p>
+          <h2>No quotations waiting for approval</h2>
+          <p>Save a new quotation and it will appear here as a card. Approved quotations are in Invoices.</p>
         </section>
       ) : null}
 
       <div className={styles.cards}>
-        {quotations.map((quotation) => (
+        {pending.map((quotation) => (
           <article className={styles.card} key={quotation.id}>
             <div className={styles.cardTop}>
               <strong>{quotation.serial}</strong>
-              {quotation.approvedAt ? <span className={styles.badge}>Approved</span> : null}
             </div>
             <h2>{quotation.customerName}</h2>
             <p>{formatDisplayDate(quotation.quotationDate)} · {quotation.paymentMode === "installments" ? "Installments" : "Direct"}</p>
@@ -312,15 +295,9 @@ export function QuotationsPage() {
               <button className={styles.whatsappButton} type="button" onClick={() => void onWhatsApp(quotation)} disabled={busy?.id === quotation.id}>
                 <MessageCircle size={15} /> {busy?.id === quotation.id && busy.action === "whatsapp" ? "Sending…" : "WhatsApp"}
               </button>
-              {quotation.approvedAt ? (
-                <button type="button" onClick={() => setDisapproving(quotation)} disabled={busy?.id === quotation.id}>
-                  <Undo2 size={15} /> Disapprove
-                </button>
-              ) : (
-                <button type="button" onClick={() => setApproving(quotation)} disabled={busy?.id === quotation.id}>
-                  <Check size={15} /> Approve
-                </button>
-              )}
+              <button type="button" onClick={() => setApproving(quotation)} disabled={busy?.id === quotation.id}>
+                <Check size={15} /> Approve
+              </button>
               <button className={styles.danger} type="button" onClick={() => setDeleting(quotation)} disabled={busy?.id === quotation.id}>
                 <Trash2 size={15} /> Delete
               </button>
@@ -333,26 +310,11 @@ export function QuotationsPage() {
         <QuotationDialog quotation={viewing} onClose={() => setViewing(null)} />
       ) : null}
 
-      {disapproving ? (
-        <div className={styles.modal} role="presentation" onClick={() => setDisapproving(null)}>
-          <div className={styles.confirm} role="dialog" aria-modal="true" aria-labelledby="disapprove-title" onClick={(event) => event.stopPropagation()}>
-            <h2 id="disapprove-title">Disapprove {disapproving.serial}?</h2>
-            <p>This clears the Approved status and removes the pending invoice. You can approve it again later.</p>
-            <div className={styles.formActions}>
-              <button className={styles.secondaryButton} type="button" onClick={() => setDisapproving(null)} disabled={busy?.id === disapproving.id}>Cancel</button>
-              <button className={styles.dangerButton} type="button" onClick={() => void onDisapprove()} disabled={busy?.id === disapproving.id}>
-                {busy?.id === disapproving.id ? "Disapproving…" : "Disapprove"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       {deleting ? (
         <div className={styles.modal} role="presentation" onClick={() => setDeleting(null)}>
           <div className={styles.confirm} role="dialog" aria-modal="true" aria-labelledby="delete-title" onClick={(event) => event.stopPropagation()}>
             <h2 id="delete-title">Delete {deleting.serial}?</h2>
-            <p>This removes the quotation. If it was approved, the pending invoice is removed too.</p>
+            <p>This removes the quotation.</p>
             <div className={styles.formActions}>
               <button className={styles.secondaryButton} type="button" onClick={() => setDeleting(null)} disabled={busy?.id === deleting.id}>Cancel</button>
               <button className={styles.dangerButton} type="button" onClick={() => void onDelete()} disabled={busy?.id === deleting.id}>
@@ -367,7 +329,7 @@ export function QuotationsPage() {
         <div className={styles.modal} role="presentation" onClick={() => setApproving(null)}>
           <div className={styles.confirm} role="dialog" aria-modal="true" aria-labelledby="approve-title" onClick={(event) => event.stopPropagation()}>
             <h2 id="approve-title">Approve {approving.serial}?</h2>
-            <p>The card will show Approved, and the invoice will be created in Pending Invoices. This quotation stays here, and later edits here do not change that invoice.</p>
+            <p>The card will show Approved, and the invoice will be created in Invoices. This quotation stays here, and later edits here do not change that invoice.</p>
             <div className={styles.formActions}>
               <button className={styles.secondaryButton} type="button" onClick={() => setApproving(null)} disabled={busy?.id === approving.id}>Cancel</button>
               <button className={styles.primaryButton} type="button" onClick={() => void onApprove()} disabled={busy?.id === approving.id}>
@@ -379,7 +341,7 @@ export function QuotationsPage() {
       ) : null}
 
       {capture ? (
-        <div className={styles.capture} ref={captureRef}>
+        <div className={styles.capture} ref={captureRef} data-capture>
           <QuotationLetter quotation={capture} paper />
         </div>
       ) : null}

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { defaultAgreementWording } from "@/lib/billing/agreement-wording";
 import { DocumentApiError, issueDirectInvoice, readImageFile, saveAgreement, updateAgreementWording, recordPayment, type AgreementRecord, type BankMode, type GuarantorInput, type PaymentRecord } from "@/lib/billing/documents-api";
 import { printFromControl } from "@/lib/billing/print-letter";
-import { formatRupees, maskCnic, maskPhone, roundMoney, splitInstallments, todayIsoDate, type QuotationRecord } from "@/lib/billing/quotation-math";
+import { customInstallments, formatRupees, isDirectSale, maskCnic, maskPhone, roundMoney, splitInstallments, todayIsoDate, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { AgreementLetter } from "./BillingLetters";
 import { AmountInput, FancySelect, FilePicker } from "./FancyControls";
 import styles from "./quotation.module.css";
@@ -45,7 +45,8 @@ export function AgreementDialog({
   const [wording, setWording] = useState(() => defaultAgreementWording(project));
   const [downAmount, setDownAmount] = useState(0);
   const [planDiscount, setPlanDiscount] = useState(project.planDiscount ?? 0);
-  const installmentFaces = installments && (project.installmentCount ?? 0) > 0
+  const custom = customInstallments(project) != null;
+  const installmentFaces = installments && !custom && (project.installmentCount ?? 0) > 0
     ? splitInstallments(Math.max(0, roundMoney(project.grandTotal - (project.downPayment ?? 0) - (Number(planDiscount) || 0))), project.installmentCount ?? 0)
     : project.installments;
   const [downDate, setDownDate] = useState(todayIsoDate());
@@ -147,12 +148,18 @@ export function AgreementDialog({
                   </div>
                 </>
               ) : null}
-              <label className={styles.field}>
-                <span>Discount after down payment</span>
-                <AmountInput value={planDiscount} onChange={(amount) => setPlanDiscount(amount ?? 0)} />
-              </label>
-              <p>Balance after down payment and discount <strong>{formatRupees(Math.max(0, roundMoney(project.grandTotal - (project.downPayment ?? 0) - (Number(planDiscount) || 0))))}</strong></p>
-              <p>This balance is divided across the installment months.</p>
+              {custom ? (
+                <p>This plan uses the custom amount entered for each installment.</p>
+              ) : (
+                <>
+                  <label className={styles.field}>
+                    <span>Discount after down payment</span>
+                    <AmountInput value={planDiscount} onChange={(amount) => setPlanDiscount(amount ?? 0)} />
+                  </label>
+                  <p>Balance after down payment and discount <strong>{formatRupees(Math.max(0, roundMoney(project.grandTotal - (project.downPayment ?? 0) - (Number(planDiscount) || 0))))}</strong></p>
+                  <p>This balance is divided across the installment months.</p>
+                </>
+              )}
             </fieldset>
           ) : null}
           <label className={styles.field}>
@@ -252,16 +259,24 @@ export function AgreementViewDialog({
   );
 }
 
+export type PaymentTarget = { kind: "direct" } | { kind: "opening" } | { kind: "installment"; installmentNumber: number };
+
 export function DirectPaymentDialog({
   project,
   balance,
   firstPayment,
+  serial = project.serial,
+  target = { kind: "direct" },
+  prepare,
   onClose,
   onSaved,
 }: {
   project: QuotationRecord;
   balance: number;
   firstPayment: boolean;
+  serial?: string;
+  target?: PaymentTarget;
+  prepare?: () => Promise<void>;
   onClose: () => void;
   onSaved: (payment: PaymentRecord | null) => void;
 }) {
@@ -277,10 +292,12 @@ export function DirectPaymentDialog({
     setSaving(true);
     setError(null);
     try {
-      const saved = await recordPayment(project.id, { kind: "direct", paidAmount: Number(paidAmount), discountAmount: Number(discountAmount) || 0, paymentDate, paymentMode });
       const paid = Number(paidAmount);
       const discount = Number(discountAmount) || 0;
-      const payment = [...saved.payments].reverse().find((entry) => entry.paymentDate === paymentDate && entry.paidAmount === paid && (entry.discountAmount ?? 0) === discount && entry.paymentMode === paymentMode) ?? null;
+      await prepare?.();
+      const saved = await recordPayment(project.id, { ...target, paidAmount: paid, discountAmount: discount, paymentDate, paymentMode });
+      const installmentNumber = target.kind === "installment" ? target.installmentNumber : null;
+      const payment = [...saved.payments].reverse().find((entry) => entry.paymentDate === paymentDate && entry.paidAmount === paid && (entry.discountAmount ?? 0) === discount && entry.paymentMode === paymentMode && (target.kind === "direct" || entry.installmentNumber === installmentNumber)) ?? null;
       onSaved(payment);
     } catch (caught) {
       setError(caught instanceof DocumentApiError ? caught.message : "The payment could not be saved.");
@@ -292,10 +309,10 @@ export function DirectPaymentDialog({
   return (
     <div className={styles.modal} role="presentation" onClick={onClose}>
       <div className={styles.confirm} role="dialog" aria-modal="true" aria-labelledby="invoice-title" onClick={(event) => event.stopPropagation()}>
-        <h2 id="invoice-title">Receive payment · {project.serial}</h2>
+        <h2 id="invoice-title">Receive payment · {serial}</h2>
         <p>Total {formatRupees(project.grandTotal)}. Cash and discount on this receipt update the balance invoice.</p>
         <label className={styles.field}><span>Balance amount</span><input readOnly value={formatRupees(balance)} /></label>
-        <label className={styles.field}><span>{firstPayment ? "Advance payment" : "Paid amount"}</span><AmountInput value={paidAmount} onChange={(amount) => setPaidAmount(amount ?? 0)} /></label>
+        <label className={styles.field}><span>{firstPayment && !isDirectSale(project) ? "Advance payment" : "Paid amount"}</span><AmountInput value={paidAmount} onChange={(amount) => setPaidAmount(amount ?? 0)} /></label>
         <label className={styles.field}><span>Discount amount</span><AmountInput value={discountAmount} onChange={(amount) => setDiscountAmount(amount ?? 0)} /></label>
         <label className={styles.field}><span>Remaining balance</span><input readOnly value={formatRupees(remaining)} /></label>
         <label className={styles.field}><span>Date of payment</span><input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label>

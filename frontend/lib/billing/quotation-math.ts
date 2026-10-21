@@ -34,8 +34,20 @@ export type QuotationDraft = {
   downPayment: number | null;
   planDiscount?: number | null;
   installmentCount: number | null;
+  installmentAmounts?: number[] | null;
   items: QuotationItemInput[];
 };
+
+export function customInstallments(draft: Pick<QuotationDraft, "paymentMode" | "installmentCount" | "installmentAmounts">): number[] | null {
+  const amounts = draft.installmentAmounts;
+  if (draft.paymentMode !== "installments" || !Array.isArray(amounts) || amounts.length === 0) return null;
+  if (amounts.length !== draft.installmentCount) return null;
+  return amounts.map((amount) => roundMoney(Number(amount)));
+}
+
+export function withoutAdvance<T extends QuotationDraft>(draft: T): T {
+  return draft.paymentMode === "direct" && draft.downPayment != null ? { ...draft, downPayment: null } : draft;
+}
 
 export function planDiscountOf(draft: { planDiscount?: number | null }): number {
   const value = draft.planDiscount ?? 0;
@@ -101,6 +113,15 @@ export function todayIsoDate(): string {
   return local.toISOString().slice(0, 10);
 }
 
+export function addMonths(iso: string, months: number): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  const date = new Date(year || 2026, (month || 1) - 1 + months, day || 1);
+  const nextYear = date.getFullYear();
+  const nextMonth = String(date.getMonth() + 1).padStart(2, "0");
+  const nextDay = String(date.getDate()).padStart(2, "0");
+  return `${nextYear}-${nextMonth}-${nextDay}`;
+}
+
 export function formatDisplayDate(iso: string): string {
   const [year, month, day] = iso.split("-");
   if (!year || !month || !day) return iso;
@@ -141,9 +162,12 @@ export function computeTotals(draft: QuotationDraft) {
   const taxTotal = roundMoney(items.reduce((sum, item) => sum + item.taxAmount, 0));
   const grandTotal = roundMoney(items.reduce((sum, item) => sum + item.lineTotal, 0));
   const discount = planDiscountOf(draft);
-  const installments = draft.paymentMode === "installments" && draft.installmentCount
-    ? splitInstallments(installmentBalance(grandTotal, draft.downPayment, discount), draft.installmentCount)
-    : [];
+  const custom = customInstallments(draft);
+  const installments = custom
+    ? custom.map((amount, index) => ({ number: index + 1, amount }))
+    : draft.paymentMode === "installments" && draft.installmentCount
+      ? splitInstallments(installmentBalance(grandTotal, draft.downPayment, discount), draft.installmentCount)
+      : [];
   return { items, taxableTotal, taxTotal, grandTotal, installments };
 }
 
@@ -180,6 +204,19 @@ export function quotationIssues(draft: QuotationDraft): string[] {
     else if (draft.downPayment + discount > grandTotal) issues.push("Down payment and discount cannot be more than the total amount.");
     if (draft.installmentCount == null || !Number.isInteger(draft.installmentCount) || draft.installmentCount < 1) {
       issues.push("Enter the number of installments.");
+    } else if (draft.installmentAmounts != null) {
+      const amounts = draft.installmentAmounts;
+      if (amounts.length !== draft.installmentCount) issues.push("Enter an amount for each installment.");
+      else {
+        amounts.forEach((amount, index) => {
+          if (!Number.isFinite(amount) || !(amount > 0)) issues.push(`Enter an amount greater than zero for installment ${index + 1}.`);
+        });
+        const remaining = installmentBalance(grandTotal, draft.downPayment, discount);
+        const entered = roundMoney(amounts.reduce((sum, amount) => sum + (Number.isFinite(amount) ? amount : 0), 0));
+        if (issues.length === 0 && entered !== remaining) {
+          issues.push(`Installment amounts add up to ${formatRupees(entered)}. They must add up to the remaining ${formatRupees(remaining)}.`);
+        }
+      }
     }
   }
   if (draft.paymentMode === "direct") {

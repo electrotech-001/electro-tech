@@ -1,7 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BookOpen,
-  FilePlus,
   FileSignature,
   FileText,
   ScrollText,
@@ -39,12 +38,6 @@ export const billingNav: BillingNavGroup[] = [
     ],
   },
   {
-    label: "Direct Invoices",
-    items: [
-      { href: "/billing/direct-invoices", label: "Direct Invoices", icon: FilePlus, exact: true },
-    ],
-  },
-  {
     label: "Customers",
     items: [
       { href: "/billing/profiles", label: "Customer Profiles", icon: IdCard },
@@ -54,7 +47,7 @@ export const billingNav: BillingNavGroup[] = [
   {
     label: "Billing",
     items: [
-      { href: "/billing/invoices", label: "Pending Invoices", icon: Receipt, exact: true },
+      { href: "/billing/invoices", label: "Invoices", icon: Receipt, exact: true },
       { href: "/billing/invoices/completed", label: "Completed Invoices", icon: CircleCheck },
       { href: "/billing/payments", label: "Receive Payments", icon: Wallet },
       { href: "/billing/discounts", label: "Discounts", icon: BadgePercent },

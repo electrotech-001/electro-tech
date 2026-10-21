@@ -587,30 +587,10 @@ export function ProjectMediaManager({
                   border: item.isPrimary
                     ? "2px solid var(--accent)"
                     : "1px solid var(--border)",
-                  borderRadius: "var(--radius-md)",
-                  padding: "1rem",
-                  display: "grid",
-                  gridTemplateColumns: "140px 1fr auto",
-                  gap: "1.25rem",
-                  alignItems: "center",
-                  boxShadow: "var(--shadow-subtle)",
                 }}
               >
                 {/* Image Preview Box */}
-                <div
-                  style={{
-                    width: "140px",
-                    height: "95px",
-                    backgroundColor: "var(--background)",
-                    borderRadius: "var(--radius-sm)",
-                    overflow: "hidden",
-                    position: "relative",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    border: "1px solid var(--border)",
-                  }}
-                >
+                <div className="media-card-thumb">
                   <img
                     src={item.url}
                     alt={item.altText || "Project image"}
@@ -702,7 +682,7 @@ export function ProjectMediaManager({
                 </div>
 
                 {/* Image Actions */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", alignItems: "flex-end" }}>
+                <div className="media-card-actions">
                   {!item.isPrimary && (
                     <button
                       type="button"

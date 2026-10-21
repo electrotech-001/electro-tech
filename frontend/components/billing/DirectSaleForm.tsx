@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createDirectSale, DocumentApiError, type BankMode, type ReceiveProject } from "@/lib/billing/documents-api";
-import { blankDraft, computeTotals, formatRupees, planDiscountOf, quotationIssues, roundMoney, todayIsoDate, type QuotationDraft } from "@/lib/billing/quotation-math";
+import { blankDraft, computeTotals, formatRupees, planDiscountOf, quotationIssues, roundMoney, todayIsoDate, withoutAdvance, type QuotationDraft } from "@/lib/billing/quotation-math";
 import { AmountInput, FancySelect } from "./FancyControls";
 import { QuotationForm } from "./QuotationForm";
 import styles from "./quotation.module.css";
@@ -23,7 +23,7 @@ export function DirectSaleForm({
   onCancel: () => void;
   onCreated: (saved: ReceiveProject) => void;
 }) {
-  const [draft, setDraft] = useState<QuotationDraft>(initialDraft ?? blankDraft(serial));
+  const [draft, setDraft] = useState<QuotationDraft>(() => withoutAdvance(initialDraft ?? blankDraft(serial)));
   const [paidAmount, setPaidAmount] = useState(0);
   const [paymentDate, setPaymentDate] = useState(todayIsoDate());
   const [paymentMode, setPaymentMode] = useState<BankMode>("cash");
@@ -82,7 +82,7 @@ export function DirectSaleForm({
   if (step === "receipt") {
     return (
       <div className={styles.form}>
-        <p>Record cash or bank received on this sale. Enter 0 if the customer will pay later. The rest stays in pending invoices, receive payments, and the ledger.</p>
+        <p>Record cash or bank received on this sale. Enter 0 if the customer will pay later. The rest stays in invoices, receive payments, and the ledger.</p>
         <label className={styles.field}><span>Total</span><input readOnly value={formatRupees(totals.grandTotal)} /></label>
         <label className={styles.field}><span>Discount</span><input readOnly value={formatRupees(discount)} /></label>
         <label className={styles.field}>
@@ -120,6 +120,7 @@ export function DirectSaleForm({
       serialLabel="Sale serial no"
       dateLabel="Invoice date"
       submitLabel="Continue"
+      advancePayment={false}
       installmentDueDates={installmentDueDates}
       onInstallmentDueDate={installmentCount > 0 ? (index, value) => {
         setError(null);
@@ -129,7 +130,7 @@ export function DirectSaleForm({
           return next;
         });
       } : undefined}
-      onChange={setDraft}
+      onChange={(next) => setDraft(withoutAdvance(next))}
       onCancel={onCancel}
       onSubmit={() => {
         const issues = quotationIssues(draft);

@@ -440,7 +440,7 @@ export function ProjectsListPage() {
 
                 return (
                   <tr key={project.id}>
-                    <td>
+                    <td data-label="Media">
                       {thumbUrl ? (
                         <img
                           src={thumbUrl}
@@ -451,7 +451,7 @@ export function ProjectsListPage() {
                         <div className="table-thumb-placeholder">No media</div>
                       )}
                     </td>
-                    <td>
+                    <td data-label="Title &amp; Slug">
                       <div className="project-title-cell">
                         <a
                           href={`/admin/projects/${project.id}/edit`}
@@ -464,12 +464,12 @@ export function ProjectsListPage() {
                         </span>
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Category">
                       <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
                         {project.category || "—"}
                       </span>
                     </td>
-                    <td>
+                    <td data-label="Client / Location">
                       <div style={{ fontSize: "0.85rem" }}>
                         <div style={{ fontWeight: 500 }}>{project.clientOrganization || "—"}</div>
                         <div style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>
@@ -477,7 +477,7 @@ export function ProjectsListPage() {
                         </div>
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Size / Year">
                       <div style={{ fontSize: "0.85rem" }}>
                         <div>{project.size || "—"}</div>
                         <div style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>
@@ -485,13 +485,13 @@ export function ProjectsListPage() {
                         </div>
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Status">
                       <StatusBadge
                         status={project.status}
                         isFeaturedHomepage={project.isFeaturedHomepage}
                       />
                     </td>
-                    <td>
+                    <td data-label="Homepage">
                       {project.isFeaturedHomepage ? (
                         <span className="badge badge-featured">
                           Featured (#{project.homepageOrder})
@@ -506,7 +506,7 @@ export function ProjectsListPage() {
                         </span>
                       )}
                     </td>
-                    <td>
+                    <td data-label="Actions">
                       <div className="table-actions">
                         <a
                           href={`/admin/projects/${project.id}/preview`}

@@ -225,7 +225,7 @@ export function WhatsAppComposer() {
         </div>
       ) : null}
       {captureQuote || captureInvoice ? (
-        <div className={styles.capture} ref={captureRef}>
+        <div className={styles.capture} ref={captureRef} data-capture>
           {captureQuote ? <QuotationLetter quotation={captureQuote} paper /> : null}
           {captureInvoice ? <InvoiceLetter invoice={captureInvoice} paper /> : null}
         </div>

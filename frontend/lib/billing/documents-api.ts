@@ -298,6 +298,18 @@ export function updatePayment(paymentId: string, input: { paidAmount: number; di
     .then((payload) => (payload as { project: ReceiveProject }).project);
 }
 
+export function deleteDirectSale(projectId: string): Promise<void> {
+  return billingFetch(`/api/billing/direct-sales/${projectId}`, { method: "DELETE" })
+    .then((response) => expectOk(response, "The sale could not be deleted."))
+    .then(() => undefined);
+}
+
+export function deletePayment(paymentId: string): Promise<ReceiveProject> {
+  return billingFetch(`/api/billing/payments/${paymentId}`, { method: "DELETE" })
+    .then((response) => expectOk(response, "The payment could not be deleted."))
+    .then((payload) => (payload as { project: ReceiveProject }).project);
+}
+
 export function updateDueDate(projectId: string, installmentNumber: number, dueDate: string): Promise<ReceiveProject> {
   return billingFetch(`/api/billing/projects/${projectId}/installments/${installmentNumber}`, { method: "PATCH", body: JSON.stringify({ dueDate }) })
     .then((response) => expectOk(response, "The due date could not be saved."))

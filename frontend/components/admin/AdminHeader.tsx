@@ -19,7 +19,7 @@ export function AdminHeader() {
 
   return (
     <header className="admin-header">
-      <div style={{ display: "flex", alignItems: "center" }}>
+      <div className="admin-header-main">
         <a href="/admin" className="admin-header-brand">
           <img
             src="/logos/electrotech-horizontal.png"

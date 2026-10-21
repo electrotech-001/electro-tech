@@ -1,4 +1,4 @@
-import { installmentBalance, planDiscountOf, roundMoney, splitInstallments } from "./quotation-math.js";
+import { customInstallments, installmentBalance, planDiscountOf, roundMoney, splitInstallments } from "./quotation-math.js";
 import type { QuotationRecord } from "./quotation-store.js";
 
 export type BankMode = "bank_transfer" | "cash";
@@ -702,6 +702,27 @@ export function editPayment(
   return syncWithOpening(next, schedule, reservedSerial);
 }
 
+export function removePayment(workspace: Workspace, paymentId: string, reservedSerial: number): Workspace {
+  const payment = workspace.payments.find((entry) => entry.id === paymentId);
+  if (!payment) throw new DocumentError("Payment was not found.", 404, "not_found");
+  if (workspace.project.status === "completed") throw new DocumentError("This project is already completed.", 409, "completed");
+  const payments = workspace.payments.filter((entry) => entry.id !== paymentId);
+  if (workspace.project.paymentMode === "direct") return rebuildDirectInvoices({ ...workspace, payments }, reservedSerial);
+  if (payment.installmentNumber == null) return attachOpeningInvoice({ ...workspace, payments }, reservedSerial);
+  if (!workspace.agreement) return { ...workspace, payments };
+  const schedule = workspace.agreement.schedule.map((entry) => entry.number === payment.installmentNumber ? refreshInstallment(entry, payments) : entry);
+  return syncWithOpening({ ...workspace, payments, agreement: { ...workspace.agreement, schedule } }, schedule, reservedSerial);
+}
+
+export function orphanSale(workspace: Workspace): boolean {
+  return workspace.project.origin === "direct_sale" && workspace.invoices.length === 0 && workspace.payments.length === 0;
+}
+
+export function assertDeletableSale(workspace: Workspace): void {
+  if (workspace.project.origin !== "direct_sale") throw new DocumentError("Only a direct invoice sale can be deleted here.", 400, "not_direct_sale");
+  if (workspace.payments.length > 0) throw new DocumentError("Delete the payments in the payment history first.", 409, "has_payments");
+}
+
 export function setInvoiceDiscount(workspace: Workspace, invoiceId: string, discountAmount: number, reservedSerial: number): Workspace {
   const discount = normalizeDiscount(discountAmount);
   const invoice = workspace.invoices.find((entry) => entry.id === invoiceId);
@@ -752,6 +773,10 @@ function projectWithPlanDiscount(project: QuotationRecord, planDiscount: number 
   const discount = roundMoney(Math.max(0, planDiscount ?? planDiscountOf(project)));
   const room = installmentBalance(project.grandTotal, project.downPayment, 0);
   if (discount > room) throw new DocumentError("Down payment and discount cannot be more than the total amount.");
+  if (customInstallments(project)) {
+    if (discount !== planDiscountOf(project)) throw new DocumentError("This plan has custom installment amounts. Edit the invoice and change the installment amounts instead.");
+    return project;
+  }
   const count = project.installmentCount ?? 0;
   return {
     ...project,

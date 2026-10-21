@@ -38,6 +38,7 @@ export function readQuotationDraft(body: unknown): QuotationDraft {
     downPayment: source.downPayment == null || source.downPayment === "" ? null : numberValue(source.downPayment),
     planDiscount: source.planDiscount == null || source.planDiscount === "" ? 0 : numberValue(source.planDiscount),
     installmentCount: source.installmentCount == null || source.installmentCount === "" ? null : numberValue(source.installmentCount),
+    installmentAmounts: Array.isArray(source.installmentAmounts) ? source.installmentAmounts.map(numberValue) : null,
     items: items.map((item): QuotationItemInput => {
       const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
       return {

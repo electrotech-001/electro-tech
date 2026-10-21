@@ -212,16 +212,16 @@ export function PaymentLedgerPage() {
                 <tbody>
                   {visible.map(({ entry, running }) => (
                     <tr key={entry.id}>
-                      <td>{formatDisplayDate(entry.paymentDate)}</td>
-                      <td>
+                      <td data-label="Date">{formatDisplayDate(entry.paymentDate)}</td>
+                      <td data-label="Customer">
                         <a href={`/billing/profiles/${customerKey(entry.cnic)}`}>{entry.customerName}</a>
                         <small className={styles.subLine}>{entry.cnic}</small>
                       </td>
-                      <td>{entry.projectSerial}</td>
-                      <td>{detail(entry)}</td>
-                      <td>{modeLabel(entry.paymentMode)}</td>
-                      <td className={styles.amount}>{formatRupees(entry.paidAmount)}</td>
-                      <td className={styles.amount}>{formatRupees(running)}</td>
+                      <td data-label="Project">{entry.projectSerial}</td>
+                      <td data-label="Detail">{detail(entry)}</td>
+                      <td data-label="Mode">{modeLabel(entry.paymentMode)}</td>
+                      <td data-label="Received" className={styles.amount}>{formatRupees(entry.paidAmount)}</td>
+                      <td data-label="Running total" className={styles.amount}>{formatRupees(running)}</td>
                     </tr>
                   ))}
                 </tbody>

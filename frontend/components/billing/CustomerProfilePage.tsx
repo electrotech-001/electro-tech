@@ -248,12 +248,12 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
                 <tbody>
                   {customer.jobs.map((job) => (
                     <tr key={`${job.kind}-${job.id}`}>
-                      <td>{job.serial}</td>
-                      <td>{stageLabel(job.stage)}</td>
-                      <td>{formatDisplayDate(job.date)}</td>
-                      <td>{job.packageName}</td>
-                      <td>{modeLabel(job.paymentMode)}</td>
-                      <td className={styles.amount}>{formatRupees(job.grandTotal)}</td>
+                      <td data-label="Number">{job.serial}</td>
+                      <td data-label="Stage">{stageLabel(job.stage)}</td>
+                      <td data-label="Date">{formatDisplayDate(job.date)}</td>
+                      <td data-label="Package">{job.packageName}</td>
+                      <td data-label="Plan">{modeLabel(job.paymentMode)}</td>
+                      <td data-label="Total" className={styles.amount}>{formatRupees(job.grandTotal)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -278,11 +278,11 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
                   <tbody>
                     {pendingInvoices.map((invoice) => (
                       <tr key={invoice.id}>
-                        <td>{invoice.serial}</td>
-                        <td>{invoice.project.serial}</td>
-                        <td>{invoiceLabel(invoice)}</td>
-                        <td>{invoice.status === "partial" ? "Partially paid" : "Due"}</td>
-                        <td className={styles.amount}>{formatRupees(invoice.balanceDue)}</td>
+                        <td data-label="Invoice">{invoice.serial}</td>
+                        <td data-label="Project">{invoice.project.serial}</td>
+                        <td data-label="For">{invoiceLabel(invoice)}</td>
+                        <td data-label="Status">{invoice.status === "partial" ? "Partially paid" : "Due"}</td>
+                        <td data-label="Balance" className={styles.amount}>{formatRupees(invoice.balanceDue)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -305,10 +305,10 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
                     <tbody>
                       {paidInvoices.map((invoice) => (
                         <tr key={invoice.id}>
-                          <td>{invoice.serial}</td>
-                          <td>{invoice.project.serial}</td>
-                          <td>{invoiceLabel(invoice)}</td>
-                          <td className={styles.amount}>{formatRupees(invoice.grandTotal)}</td>
+                          <td data-label="Invoice">{invoice.serial}</td>
+                          <td data-label="Project">{invoice.project.serial}</td>
+                          <td data-label="For">{invoiceLabel(invoice)}</td>
+                          <td data-label="Total" className={styles.amount}>{formatRupees(invoice.grandTotal)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -339,20 +339,20 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
                       <tbody>
                         {(agreement.project.downPayment ?? 0) > 0 ? (
                           <tr>
-                            <td>Down payment</td>
-                            <td />
-                            <td className={styles.amount}>{formatRupees(agreement.project.downPayment ?? 0)}</td>
-                            <td>{receivedDownPayment(agreement.projectId, payments) + 0.001 >= (agreement.project.downPayment ?? 0) ? "Paid" : receivedDownPayment(agreement.projectId, payments) > 0 ? "Partial" : "Due"}</td>
-                            <td className={styles.amount}>{formatRupees(receivedDownPayment(agreement.projectId, payments))}</td>
+                            <td data-label="Installment">Down payment</td>
+                            <td data-label="Due date" />
+                            <td data-label="Amount" className={styles.amount}>{formatRupees(agreement.project.downPayment ?? 0)}</td>
+                            <td data-label="Status">{receivedDownPayment(agreement.projectId, payments) + 0.001 >= (agreement.project.downPayment ?? 0) ? "Paid" : receivedDownPayment(agreement.projectId, payments) > 0 ? "Partial" : "Due"}</td>
+                            <td data-label="Paid" className={styles.amount}>{formatRupees(receivedDownPayment(agreement.projectId, payments))}</td>
                           </tr>
                         ) : null}
                         {agreement.schedule.map((line) => (
                           <tr key={line.number}>
-                            <td>Installment {line.number}</td>
-                            <td>{formatDisplayDate(line.dueDate)}</td>
-                            <td className={styles.amount}>{formatRupees(line.amount)}</td>
-                            <td>{line.status === "paid" ? "Paid" : line.paidAmount > 0 ? "Partial" : "Due"}</td>
-                            <td className={styles.amount}>{formatRupees(line.paidAmount)}</td>
+                            <td data-label="Installment">Installment {line.number}</td>
+                            <td data-label="Due date">{formatDisplayDate(line.dueDate)}</td>
+                            <td data-label="Amount" className={styles.amount}>{formatRupees(line.amount)}</td>
+                            <td data-label="Status">{line.status === "paid" ? "Paid" : line.paidAmount > 0 ? "Partial" : "Due"}</td>
+                            <td data-label="Paid" className={styles.amount}>{formatRupees(line.paidAmount)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -376,16 +376,16 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
                     <tbody>
                       {(project.downPayment ?? 0) > 0 ? (
                         <tr>
-                          <td>Down payment</td>
-                          <td className={styles.amount}>{formatRupees(project.downPayment ?? 0)}</td>
-                          <td>{receivedDownPayment(project.id, payments) + 0.001 >= (project.downPayment ?? 0) ? "Paid" : receivedDownPayment(project.id, payments) > 0 ? "Partial" : "Due"}</td>
+                          <td data-label="Installment">Down payment</td>
+                          <td data-label="Amount" className={styles.amount}>{formatRupees(project.downPayment ?? 0)}</td>
+                          <td data-label="Status">{receivedDownPayment(project.id, payments) + 0.001 >= (project.downPayment ?? 0) ? "Paid" : receivedDownPayment(project.id, payments) > 0 ? "Partial" : "Due"}</td>
                         </tr>
                       ) : null}
                       {project.installments.map((line) => (
                         <tr key={line.number}>
-                          <td>Installment {line.number}</td>
-                          <td className={styles.amount}>{formatRupees(line.amount)}</td>
-                          <td>Due</td>
+                          <td data-label="Installment">Installment {line.number}</td>
+                          <td data-label="Amount" className={styles.amount}>{formatRupees(line.amount)}</td>
+                          <td data-label="Status">Due</td>
                         </tr>
                       ))}
                     </tbody>
@@ -412,11 +412,11 @@ export function CustomerProfilePage({ cnicKey }: { cnicKey: string }) {
                   <tbody>
                     {payments.map((entry) => (
                       <tr key={entry.id}>
-                        <td>{formatDisplayDate(entry.paymentDate)}</td>
-                        <td>{entry.projectSerial}</td>
-                        <td>{paymentDetail(entry, projects)}</td>
-                        <td>{modeLabel(entry.paymentMode)}</td>
-                        <td className={styles.amount}>{formatRupees(entry.paidAmount)}</td>
+                        <td data-label="Date">{formatDisplayDate(entry.paymentDate)}</td>
+                        <td data-label="Project">{entry.projectSerial}</td>
+                        <td data-label="Detail">{paymentDetail(entry, projects)}</td>
+                        <td data-label="Mode">{modeLabel(entry.paymentMode)}</td>
+                        <td data-label="Received" className={styles.amount}>{formatRupees(entry.paidAmount)}</td>
                       </tr>
                     ))}
                   </tbody>
