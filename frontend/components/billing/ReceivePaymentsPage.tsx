@@ -4,7 +4,7 @@ import { Eye, MessageCircle, Pencil, Plus, Printer, Trash2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react";
 import { deleteDirectSale, deletePayment, DocumentApiError, listReceiveProjects, nextDirectSaleSerial, recordPayment, saveAgreement, updateDueDate, updatePayment, type BankMode, type PaymentRecord, type ReceiveProject } from "@/lib/billing/documents-api";
 import { quotationToPdf } from "@/lib/billing/quotation-pdf";
-import { addMonths, formatDisplayDate, formatRupees, isDirectSale, todayIsoDate } from "@/lib/billing/quotation-math";
+import { addMonths, formatDisplayDate, formatRupees, isDirectSale, todayIsoDate, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { DirectSaleForm } from "./DirectSaleForm";
 import { printBillingLetter, printFromControl } from "@/lib/billing/print-letter";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
@@ -129,8 +129,8 @@ export function ReceivePaymentsPage() {
   const [saleSerial, setSaleSerial] = useState("DS-001");
   const captureRef = useRef<HTMLDivElement>(null);
 
-  function draftDueDate(projectId: string, number: number, index: number): string {
-    return draftDueDates[`${projectId}:${number}`] ?? addMonths(todayIsoDate(), index + 1);
+  function draftDueDate(project: QuotationRecord, number: number, index: number): string {
+    return draftDueDates[`${project.id}:${number}`] ?? (project.installmentDueDates?.[index] || addMonths(todayIsoDate(), index + 1));
   }
 
   async function refresh(selected = projectId) {
@@ -211,7 +211,7 @@ export function ReceivePaymentsPage() {
     setBanner(null);
     try {
       if (!current.agreement) {
-        const dueDates = current.project.installments.map((line, index) => draftDueDate(current.project.id, line.number, index));
+        const dueDates = current.project.installments.map((line, index) => draftDueDate(current.project, line.number, index));
         await saveAgreement(current.project.id, { dueDates, guarantors: [] });
       }
       const saved = await recordPayment(current.project.id, { kind: "installment", installmentNumber, paidAmount: amount, discountAmount, paymentDate, paymentMode });
@@ -402,7 +402,7 @@ export function ReceivePaymentsPage() {
                   <OpeningCard current={current} paidAmount={paidAmount} saving={saving} onReceived={(amount) => void saveOpening(amount)} />
                   {(current.agreement ? current.agreement.schedule : current.project.installments.map((line, index) => ({
                     number: line.number,
-                    dueDate: draftDueDate(current.project.id, line.number, index),
+                    dueDate: draftDueDate(current.project, line.number, index),
                     amount: line.amount,
                     status: "due" as const,
                     paidAmount: 0,

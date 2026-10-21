@@ -210,7 +210,7 @@ type DirectPayment = { kind: "direct"; paidAmount: number; discountAmount?: numb
 type OpeningPayment = { kind: "opening"; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode };
 type InstallmentPayment = { kind: "installment"; installmentNumber: number; paidAmount: number; discountAmount?: number; paymentDate: string; paymentMode: BankMode };
 
-const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, approved_at, source_quotation_id, status, origin, billing_project_items(line_no, description, qty, unit, price, tax_percent)";
+const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, installment_amounts, installment_due_dates, approved_at, source_quotation_id, status, origin, billing_project_items(line_no, description, qty, unit, price, tax_percent)";
 
 function discountRelief(workspace: Workspace): number {
   if (workspace.project.paymentMode === "installments") {

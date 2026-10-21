@@ -33,6 +33,7 @@ export type QuotationDraft = {
   planDiscount?: number | null;
   installmentCount: number | null;
   installmentAmounts?: number[] | null;
+  installmentDueDates?: string[] | null;
   items: QuotationItemInput[];
 };
 
@@ -179,6 +180,15 @@ export function quotationIssues(draft: QuotationDraft): string[] {
           const rupees = (value: number) => `Rs ${value.toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
           issues.push(`Installment amounts add up to ${rupees(entered)}. They must add up to the remaining ${rupees(remaining)}.`);
         }
+      }
+    }
+    if (draft.installmentDueDates != null && Number.isInteger(draft.installmentCount)) {
+      const dates = draft.installmentDueDates;
+      if (dates.length !== draft.installmentCount) issues.push("Choose a due date for each installment.");
+      else {
+        dates.forEach((date, index) => {
+          if (!DATE.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00`))) issues.push(`Choose a due date for installment ${index + 1}.`);
+        });
       }
     }
   }

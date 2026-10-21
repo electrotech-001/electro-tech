@@ -22,6 +22,10 @@ function sizedAmounts(amounts: number[], count: number | null): number[] {
   return Array.from({ length: Math.max(0, count ?? 0) }, (_, index) => amounts[index] ?? 0);
 }
 
+function sizedDates(dates: string[], count: number | null): string[] {
+  return Array.from({ length: Math.max(0, count ?? 0) }, (_, index) => dates[index] ?? "");
+}
+
 function updateItem(items: QuotationItemInput[], index: number, patch: Partial<QuotationItemInput>) {
   return items.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item));
 }
@@ -37,6 +41,7 @@ export function QuotationForm({
   submitLabel = "Save quotation",
   installmentDueDates,
   onInstallmentDueDate,
+  dueDatesOnDraft = false,
   advancePayment = true,
   onChange,
   onCancel,
@@ -52,13 +57,19 @@ export function QuotationForm({
   submitLabel?: string;
   installmentDueDates?: string[];
   onInstallmentDueDate?: (index: number, value: string) => void;
+  dueDatesOnDraft?: boolean;
   advancePayment?: boolean;
   onChange: (draft: QuotationDraft) => void;
   onCancel: () => void;
   onSubmit: () => void;
 }) {
   const totals = computeTotals(draft);
-  const issues = quotationIssues(draft).filter((issue) => showDate || issue !== "Choose a quotation date.");
+  const draftDates = dueDatesOnDraft && draft.paymentMode === "installments" ? sizedDates(draft.installmentDueDates ?? [], draft.installmentCount) : null;
+  const dueDates = draftDates ?? installmentDueDates;
+  const onDueDate = draftDates
+    ? (index: number, value: string) => onChange({ ...draft, installmentDueDates: draftDates.map((date, dateIndex) => dateIndex === index ? value : date) })
+    : onInstallmentDueDate;
+  const issues = quotationIssues(draftDates ? { ...draft, installmentDueDates: draftDates } : draft).filter((issue) => showDate || issue !== "Choose a quotation date.");
   const balance = installmentBalance(totals.grandTotal, draft.downPayment, planDiscountOf(draft));
   const customAmounts = draft.installmentAmounts != null;
   const enteredTotal = roundMoney((draft.installmentAmounts ?? []).reduce((sum, amount) => sum + (Number(amount) || 0), 0));
@@ -160,6 +171,7 @@ export function QuotationForm({
                 planDiscount: draft.planDiscount ?? 0,
                 installmentCount: paymentMode === "installments" ? draft.installmentCount ?? 1 : null,
                 installmentAmounts: paymentMode === "installments" ? draft.installmentAmounts ?? null : null,
+                installmentDueDates: paymentMode === "installments" ? draft.installmentDueDates ?? null : null,
               });
             }}
           />
@@ -305,6 +317,7 @@ export function QuotationForm({
                   ...draft,
                   installmentCount: count,
                   installmentAmounts: customAmounts ? sizedAmounts(draft.installmentAmounts ?? [], count) : null,
+                  installmentDueDates: draft.installmentDueDates ? sizedDates(draft.installmentDueDates, count) : draft.installmentDueDates,
                 })}
               />
             </label>
@@ -331,7 +344,7 @@ export function QuotationForm({
               ) : null}
               <ol>
                 {(customAmounts ? sizedAmounts(draft.installmentAmounts ?? [], draft.installmentCount).map((amount, index) => ({ number: index + 1, amount })) : totals.installments).map((line, index) => (
-                  <li key={line.number} className={onInstallmentDueDate || customAmounts ? styles.dueDateLine : undefined}>
+                  <li key={line.number} className={onDueDate || customAmounts ? styles.dueDateLine : undefined}>
                     <span>Installment {line.number}</span>
                     {customAmounts ? (
                       <label className={styles.field}>
@@ -342,13 +355,13 @@ export function QuotationForm({
                         />
                       </label>
                     ) : <strong>{formatRupees(line.amount)}</strong>}
-                    {onInstallmentDueDate ? (
+                    {onDueDate ? (
                       <label className={styles.field}>
                         <span>Installment {line.number} due date</span>
                         <input
                           type="date"
-                          value={installmentDueDates?.[index] ?? ""}
-                          onChange={(event) => onInstallmentDueDate(index, event.target.value)}
+                          value={dueDates?.[index] ?? ""}
+                          onChange={(event) => onDueDate(index, event.target.value)}
                         />
                       </label>
                     ) : null}

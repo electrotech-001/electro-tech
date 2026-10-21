@@ -39,6 +39,7 @@ export function readQuotationDraft(body: unknown): QuotationDraft {
     planDiscount: source.planDiscount == null || source.planDiscount === "" ? 0 : numberValue(source.planDiscount),
     installmentCount: source.installmentCount == null || source.installmentCount === "" ? null : numberValue(source.installmentCount),
     installmentAmounts: Array.isArray(source.installmentAmounts) ? source.installmentAmounts.map(numberValue) : null,
+    installmentDueDates: Array.isArray(source.installmentDueDates) ? source.installmentDueDates.map((date) => String(date ?? "")) : null,
     items: items.map((item): QuotationItemInput => {
       const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
       return {

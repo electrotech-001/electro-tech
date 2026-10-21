@@ -4,7 +4,8 @@ import { afterEach, expect, test, vi } from "vitest";
 import { DirectSaleForm } from "@/components/billing/DirectSaleForm";
 import { QuotationForm } from "@/components/billing/QuotationForm";
 import { createDirectSale } from "@/lib/billing/documents-api";
-import { blankDraft } from "@/lib/billing/quotation-math";
+import { useState } from "react";
+import { blankDraft, type QuotationDraft } from "@/lib/billing/quotation-math";
 
 vi.mock("@/lib/billing/documents-api", () => ({
   createDirectSale: vi.fn(),
@@ -34,6 +35,47 @@ test("quotation form includes a discount for a direct payment", () => {
   );
   expect(screen.getByText("Discount")).toBeDefined();
   expect(screen.getByText(/Remaining after advance payment and discount/)).toBeDefined();
+});
+
+test("an installment quotation asks for each due date and keeps them on the draft", async () => {
+  const onSubmit = vi.fn();
+  let latest: QuotationDraft = blankDraft();
+  function Harness() {
+    const [draft, setDraft] = useState<QuotationDraft>(blankDraft());
+    latest = draft;
+    return (
+      <QuotationForm
+        serial="QT-001"
+        draft={draft}
+        saving={false}
+        error={null}
+        dueDatesOnDraft
+        onChange={setDraft}
+        onCancel={() => undefined}
+        onSubmit={onSubmit}
+      />
+    );
+  }
+  const user = userEvent.setup();
+  render(<Harness />);
+  await user.type(screen.getByLabelText("Customer name"), "Ali Khan");
+  await user.type(screen.getByLabelText("Address"), "Attock City");
+  await user.type(screen.getByLabelText("Customer package"), "Solar");
+  await user.type(screen.getByLabelText("Description 1"), "Solar");
+  await user.clear(screen.getByLabelText("Price 1"));
+  await user.type(screen.getByLabelText("Price 1"), "100000");
+  await user.click(screen.getByRole("button", { name: "Payment mode" }));
+  await user.click(screen.getByRole("option", { name: "Installments" }));
+  await user.clear(screen.getByLabelText("Total number of installments"));
+  await user.type(screen.getByLabelText("Total number of installments"), "2");
+  expect((screen.getByLabelText("Installment 1 due date") as HTMLInputElement).value).toBe("");
+  expect(screen.getByText("Choose a due date for installment 1.")).toBeDefined();
+  expect((screen.getByRole("button", { name: "Save quotation" }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("Installment 1 due date"), { target: { value: "2026-11-15" } });
+  fireEvent.change(screen.getByLabelText("Installment 2 due date"), { target: { value: "2026-12-15" } });
+  await user.click(screen.getByRole("button", { name: "Save quotation" }));
+  expect(onSubmit).toHaveBeenCalled();
+  expect(latest.installmentDueDates).toEqual(["2026-11-15", "2026-12-15"]);
 });
 
 test("direct invoice form includes a discount", () => {

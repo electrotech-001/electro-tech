@@ -35,6 +35,7 @@ export type QuotationDraft = {
   planDiscount?: number | null;
   installmentCount: number | null;
   installmentAmounts?: number[] | null;
+  installmentDueDates?: string[] | null;
   items: QuotationItemInput[];
 };
 
@@ -216,6 +217,15 @@ export function quotationIssues(draft: QuotationDraft): string[] {
         if (issues.length === 0 && entered !== remaining) {
           issues.push(`Installment amounts add up to ${formatRupees(entered)}. They must add up to the remaining ${formatRupees(remaining)}.`);
         }
+      }
+    }
+    if (draft.installmentDueDates != null && Number.isInteger(draft.installmentCount)) {
+      const dates = draft.installmentDueDates;
+      if (dates.length !== draft.installmentCount) issues.push("Choose a due date for each installment.");
+      else {
+        dates.forEach((date, index) => {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00`))) issues.push(`Choose a due date for installment ${index + 1}.`);
+        });
       }
     }
   }

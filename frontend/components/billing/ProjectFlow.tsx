@@ -40,7 +40,7 @@ export function AgreementDialog({
   onSaved: () => void;
 }) {
   const installments = project.paymentMode === "installments";
-  const [dueDates, setDueDates] = useState<string[]>(() => Array.from({ length: project.installmentCount ?? 0 }, () => ""));
+  const [dueDates, setDueDates] = useState<string[]>(() => Array.from({ length: project.installmentCount ?? 0 }, (_, index) => project.installmentDueDates?.[index] ?? ""));
   const [guarantor, setGuarantor] = useState<GuarantorInput>(emptyGuarantor);
   const [wording, setWording] = useState(() => defaultAgreementWording(project));
   const [downAmount, setDownAmount] = useState(0);

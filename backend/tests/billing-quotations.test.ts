@@ -207,3 +207,14 @@ test("quotation routes require billing login and reject an incomplete CNIC", asy
   const body = await created.json() as { message: string };
   assert.match(body.message, /CNIC/);
 });
+
+test("installment due dates are saved on the quotation and copied to the approved project", async () => {
+  const repository = createMemoryQuotationRepository();
+  const dates = ["2026-11-05", "2026-12-20", "2027-02-01"];
+  const saved = await repository.create(sample({ installmentDueDates: dates }));
+  assert.deepEqual(saved.installmentDueDates, dates);
+  const project = await repository.approve(saved.id);
+  assert.deepEqual(project.installmentDueDates, dates);
+  await assert.rejects(() => repository.create(sample({ installmentDueDates: ["2026-11-05", ""] })), /due date for each installment/);
+  await assert.rejects(() => repository.create(sample({ installmentDueDates: ["2026-11-05", "", "2027-02-01"] })), /due date for installment 2/);
+});

@@ -708,3 +708,11 @@ test("a daily sale is removed when its last invoice is deleted, and a sale with 
   await repository.deleteDirectSale(paid.project.id);
   assert.equal((await repository.listReceiveProjects()).some((row) => row.project.id === paid.project.id), false);
 });
+
+test("due dates chosen on the quotation fill the installment agreement", async () => {
+  const repository = createMemoryDocumentsRepository([{ ...project("installments"), installmentDueDates: ["2026-11-05", "2026-12-20", "2027-02-01"] }]);
+  const agreement = await repository.saveAgreement("project-1", { dueDates: [], guarantors: [] });
+  assert.deepEqual(agreement.schedule.map((line) => line.dueDate), ["2026-11-05", "2026-12-20", "2027-02-01"]);
+  const invoices = await repository.listInvoices();
+  assert.equal(invoices.find((invoice) => invoice.installmentNumber === 2)?.dueDate, "2026-12-20");
+});

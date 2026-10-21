@@ -113,6 +113,7 @@ type QuotationRow = {
   plan_discount?: number | string | null;
   installment_count: number | null;
   installment_amounts?: (number | string)[] | null;
+  installment_due_dates?: string[] | null;
   approved_at: string | null;
   source_quotation_id?: string | null;
   status?: string | null;
@@ -139,6 +140,7 @@ function draftFromRow(row: QuotationRow, items: ItemRow[]): QuotationDraft {
     planDiscount: asNumber(row.plan_discount),
     installmentCount: row.installment_count,
     installmentAmounts: Array.isArray(row.installment_amounts) ? row.installment_amounts.map((amount) => asNumber(amount)) : null,
+    installmentDueDates: Array.isArray(row.installment_due_dates) ? row.installment_due_dates.map((date) => String(date).slice(0, 10)) : null,
     items: [...items]
       .sort((a, b) => a.line_no - b.line_no)
       .map((item) => ({
@@ -223,6 +225,9 @@ function assertDraft(draft: QuotationDraft): QuotationDraft {
     installmentAmounts: draft.paymentMode === "installments" && Array.isArray(draft.installmentAmounts) && draft.installmentAmounts.length > 0
       ? draft.installmentAmounts.map((amount) => roundMoney(Number(amount)))
       : null,
+    installmentDueDates: draft.paymentMode === "installments" && Array.isArray(draft.installmentDueDates) && draft.installmentDueDates.length > 0
+      ? draft.installmentDueDates.map((date) => String(date ?? "").slice(0, 10))
+      : null,
     items: draft.items.map((item) => ({
       description: item.description.trim(),
       qty: item.qty,
@@ -266,6 +271,7 @@ function parentPayload(draft: QuotationDraft, serialNumber: number) {
     plan_discount: planDiscountOf(draft),
     installment_count: draft.installmentCount,
     installment_amounts: draft.installmentAmounts ?? null,
+    installment_due_dates: draft.installmentDueDates ?? null,
   };
 }
 
@@ -341,6 +347,7 @@ export function createMemoryQuotationRepository(): QuotationRepository {
         plan_discount: record.planDiscount ?? 0,
         installment_count: record.installmentCount,
         installment_amounts: record.installmentAmounts ?? null,
+        installment_due_dates: record.installmentDueDates ?? null,
         approved_at: record.approvedAt,
         source_quotation_id: null,
         status: "in_process",
@@ -394,6 +401,7 @@ export function createMemoryQuotationRepository(): QuotationRepository {
         plan_discount: clean.planDiscount ?? 0,
         installment_count: clean.installmentCount,
         installment_amounts: clean.installmentAmounts ?? null,
+        installment_due_dates: clean.installmentDueDates ?? null,
         billing_quotation_items: totals.items.map((item) => ({
           line_no: item.lineNo,
           description: item.description,
@@ -423,6 +431,7 @@ export function createMemoryQuotationRepository(): QuotationRepository {
         plan_discount: clean.planDiscount ?? 0,
         installment_count: clean.installmentCount,
         installment_amounts: clean.installmentAmounts ?? null,
+        installment_due_dates: clean.installmentDueDates ?? null,
         billing_project_items: totals.items.map((item) => ({
           line_no: item.lineNo,
           description: item.description,
@@ -518,8 +527,8 @@ export function createMemoryQuotationRepository(): QuotationRepository {
   };
 }
 
-const QUOTATION_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, installment_amounts, approved_at, billing_quotation_items(line_no, description, qty, unit, price, tax_percent)";
-const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, installment_amounts, approved_at, source_quotation_id, status, origin, billing_project_items(line_no, description, qty, unit, price, tax_percent)";
+const QUOTATION_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, installment_amounts, installment_due_dates, approved_at, billing_quotation_items(line_no, description, qty, unit, price, tax_percent)";
+const PROJECT_SELECT = "id, serial, serial_number, quotation_date, customer_name, cnic, address, contact_no, whatsapp_no, customer_package, payment_mode, down_payment, plan_discount, installment_count, installment_amounts, installment_due_dates, approved_at, source_quotation_id, status, origin, billing_project_items(line_no, description, qty, unit, price, tax_percent)";
 
 function storageFailure(error: { message: string }, action: string): QuotationServiceError {
   console.error(`Quotation could not be ${action}.`, error.message);
@@ -684,6 +693,7 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
           plan_discount: clean.planDiscount ?? 0,
           installment_count: clean.installmentCount,
           installment_amounts: clean.installmentAmounts ?? null,
+          installment_due_dates: clean.installmentDueDates ?? null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", existing.id);
@@ -720,6 +730,7 @@ export function createSupabaseQuotationRepository(client: SupabaseClient): Quota
           plan_discount: clean.planDiscount ?? 0,
           installment_count: clean.installmentCount,
           installment_amounts: clean.installmentAmounts ?? null,
+          installment_due_dates: clean.installmentDueDates ?? null,
         })
         .eq("id", id);
       if (updated.error) throw storageFailure(updated.error, "updated");

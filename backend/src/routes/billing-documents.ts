@@ -53,6 +53,7 @@ function saleDraft(body: unknown): QuotationDraft {
     planDiscount: source.planDiscount == null || source.planDiscount === "" ? 0 : amount(source.planDiscount),
     installmentCount: source.installmentCount == null || source.installmentCount === "" ? null : amount(source.installmentCount),
     installmentAmounts: Array.isArray(source.installmentAmounts) ? source.installmentAmounts.map(amount) : null,
+    installmentDueDates: Array.isArray(source.installmentDueDates) ? source.installmentDueDates.map((date) => String(date ?? "")) : null,
     items: items.map((item): QuotationItemInput => {
       const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
       return {

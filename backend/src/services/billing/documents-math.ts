@@ -814,7 +814,7 @@ export function createAgreement(
     };
   }
   const project = projectWithPlanDiscount(workspace.project, input.planDiscount);
-  const schedule = buildSchedule(project, input.dueDates);
+  const schedule = buildSchedule(project, input.dueDates.length > 0 ? input.dueDates : project.installmentDueDates ?? []);
   const guarantors: GuarantorRecord[] = people.map((guarantor) => ({
     ...guarantor,
     id: crypto.randomUUID(),

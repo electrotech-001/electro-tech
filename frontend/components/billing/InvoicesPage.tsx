@@ -229,6 +229,7 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
       planDiscount: project.planDiscount ?? 0,
       installmentCount: project.paymentMode === "installments" ? project.installmentCount ?? null : null,
       installmentAmounts: project.paymentMode === "installments" ? project.installmentAmounts ?? null : null,
+      installmentDueDates: project.paymentMode === "installments" ? project.installmentDueDates ?? null : null,
       items: project.items.map((item) => ({
         description: item.description,
         qty: item.qty,
@@ -602,7 +603,7 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
           prepare={plannedInvoice(receiving)
             ? async () => {
               const today = todayIsoDate();
-              const dueDates = receiving.project.installments.map((_, index) => addMonths(today, index + 1));
+              const dueDates = receiving.project.installments.map((_, index) => receiving.project.installmentDueDates?.[index] || addMonths(today, index + 1));
               await saveAgreement(receiving.project.id, { dueDates, guarantors: [] });
             }
             : undefined}

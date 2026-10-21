@@ -28,6 +28,7 @@ function toDraft(record: QuotationRecord): QuotationDraft {
     planDiscount: record.planDiscount ?? 0,
     installmentCount: record.installmentCount,
     installmentAmounts: record.installmentAmounts ?? null,
+    installmentDueDates: record.installmentDueDates ?? null,
     items: record.items.map((item) => ({
       description: item.description,
       qty: item.qty,
@@ -240,6 +241,7 @@ export function QuotationsPage() {
             draft={draft}
             saving={saving}
             error={formError}
+            dueDatesOnDraft
             onChange={setDraft}
             onCancel={() => {
               setCreating(false);

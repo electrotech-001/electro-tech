@@ -91,7 +91,7 @@ function balanceInvoice(
     kind: input.kind,
     status: "due",
     invoiceDate: project.quotationDate,
-    dueDate: null,
+    dueDate: input.installmentNumber == null ? null : project.installmentDueDates?.[input.installmentNumber - 1] || null,
     paymentDate: null,
     paymentMode: null,
     advancePaid: 0,
