@@ -1511,6 +1511,45 @@
   line-height: 1.2;
 }
 
+.installmentSummary {
+  display: grid;
+  gap: 6px;
+  width: min(100%, 320px);
+  margin: 10px 0 0 auto;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f7f4ee;
+  color: #171717;
+}
+
+.installmentSummary p {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0;
+  font-weight: 700;
+}
+
+.installmentSummary .balance {
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px solid #171717;
+  font-weight: 800;
+}
+
+.sheet .installmentSummary {
+  gap: 4px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 0;
+  background: #f2f2f2;
+}
+
+.sheet .installmentSummary p {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
 .sheet .paymentInstructions {
   max-width: 280px;
   padding: 0;
@@ -2213,6 +2252,19 @@
     padding: 1px 4px;
     font-size: 8pt;
     line-height: 1.2;
+  }
+
+  :global(.print-host) .sheet .installmentSummary {
+    margin-top: 2mm;
+    padding: 2mm 3mm;
+    background: #f2f2f2 !important;
+    color: #171717 !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  :global(.print-host) .sheet .installmentSummary p {
+    font-size: 8pt;
   }
 
   :global(.print-host) .sheet .plan {

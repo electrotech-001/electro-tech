@@ -211,6 +211,39 @@ test("an installment invoice lists the installments that are still unpaid", () =
   expect(screen.getByText(/Installment 2/)).toBeDefined();
   expect(screen.getByText(/Installment 3/)).toBeDefined();
   expect(screen.getAllByText("Paid").length).toBeGreaterThan(0);
+  const totals = within(screen.getByRole("region", { name: "Installment totals" }));
+  expect(totals.getByText("Installments amount").parentElement?.textContent).toContain("Rs 423,000.00");
+  expect(totals.getByText("Total paid").parentElement?.textContent).toContain("Rs 141,000.00");
+  expect(totals.queryByText("Discount")).toBeNull();
+  expect(totals.getByText("Installments balance").parentElement?.textContent).toContain("Rs 282,000.00");
+});
+
+test("installment totals count a partial payment and a discount", () => {
+  const record = project({
+    id: "inst-2",
+    paymentMode: "installments",
+    downPayment: 0,
+    installmentCount: 2,
+    installments: [
+      { number: 1, amount: 10000 },
+      { number: 2, amount: 5000 },
+    ],
+  });
+  render(<InvoiceLetter invoice={invoice(record, {
+    kind: "installment",
+    installmentNumber: 1,
+    grandTotal: 10000,
+    balanceDue: 4000,
+    schedule: [
+      { number: 1, dueDate: "2026-11-01", amount: 10000, status: "due", paidAmount: 5000, discountAmount: 1000, paidDate: null, paymentMode: null },
+      { number: 2, dueDate: "2026-12-01", amount: 5000, status: "paid", paidAmount: 4000, discountAmount: 1000, paidDate: "2026-10-01", paymentMode: "cash" },
+    ],
+  })} />);
+  const totals = within(screen.getByRole("region", { name: "Installment totals" }));
+  expect(totals.getByText("Installments amount").parentElement?.textContent).toContain("Rs 15,000.00");
+  expect(totals.getByText("Total paid").parentElement?.textContent).toContain("Rs 9,000.00");
+  expect(totals.getByText("Discount").parentElement?.textContent).toContain("Rs 2,000.00");
+  expect(totals.getByText("Installments balance").parentElement?.textContent).toContain("Rs 4,000.00");
 });
 
 test("a direct installment invoice can change its due date after it is created", async () => {

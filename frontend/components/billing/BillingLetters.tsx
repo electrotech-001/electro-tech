@@ -1,7 +1,7 @@
 import { agreementWording } from "@/lib/billing/agreement-wording";
 import type { AgreementRecord, GuarantorRecord, InvoiceRecord, PaymentRecord } from "@/lib/billing/documents-api";
 import { installmentDueDate } from "@/lib/billing/pending-invoices";
-import { formatDisplayDate, formatRupees, installmentBalance, letterhead, planDiscountOf, type QuotationRecord } from "@/lib/billing/quotation-math";
+import { formatDisplayDate, formatRupees, installmentBalance, letterhead, planDiscountOf, roundMoney, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { DocumentTermsNote } from "./DocumentTerms";
 import styles from "./quotation.module.css";
 
@@ -209,6 +209,13 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
       paidDate: null,
       paymentMode: null,
     }));
+  const installmentAmount = roundMoney(breakdownLines.reduce((sum, line) => sum + line.amount, 0));
+  const installmentPaid = roundMoney(breakdownLines.reduce((sum, line) => sum + (line.paidAmount || 0), 0));
+  const installmentRemaining = roundMoney(breakdownLines.reduce((sum, line) => {
+    if (line.status === "paid") return sum;
+    return sum + Math.max(0, line.amount - (line.paidAmount || 0) - (line.discountAmount ?? 0));
+  }, 0));
+  const installmentDiscount = roundMoney(Math.max(0, installmentAmount - installmentPaid - installmentRemaining));
 
   return (
     <article className={`${styles.letter} ${styles.sheet} quotation-letter ${paper ? styles.letterPaper : ""}`}>
@@ -345,6 +352,12 @@ export function InvoiceLetter({ invoice, paper = false }: { invoice: InvoiceReco
               </tbody>
             </table>
           </div>
+          <section className={styles.installmentSummary} aria-label="Installment totals">
+            <p>Installments amount <strong>{formatRupees(installmentAmount)}</strong></p>
+            <p>Total paid <strong>{formatRupees(installmentPaid)}</strong></p>
+            {installmentDiscount > 0 ? <p>Discount <strong>{formatRupees(installmentDiscount)}</strong></p> : null}
+            <p className={styles.balance}>Installments balance <strong>{formatRupees(installmentRemaining)}</strong></p>
+          </section>
         </section>
       ) : null}
       <div className={styles.sheetClose}>
