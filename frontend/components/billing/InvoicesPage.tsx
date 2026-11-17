@@ -6,7 +6,7 @@ import { deleteInvoice, DocumentApiError, listInvoices, nextDirectSaleSerial, sa
 import { consolidatedInvoice, groupInvoices, installmentDueDate, outstandingBalances, plannedInvoice } from "@/lib/billing/pending-invoices";
 import { thankYouCardMessage } from "@/lib/billing/message-templates";
 import { downloadQuotationPdf, quotationToPdf } from "@/lib/billing/quotation-pdf";
-import { downloadFromControl, printBillingLetter, printFromControl } from "@/lib/billing/print-letter";
+import { downloadFromControl, findBillingLetter, printBillingLetter, printFromControl } from "@/lib/billing/print-letter";
 import { addMonths, customInstallments, formatDisplayDate, formatRupees, isDirectSale, todayIsoDate, withoutAdvance, type QuotationDraft, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { disapproveProject, listProjects, QuotationApiError, setPlanDiscount, updateProject } from "@/lib/billing/quotations-api";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
@@ -92,6 +92,7 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
   const [editDraft, setEditDraft] = useState<QuotationDraft | null>(null);
   const [receiving, setReceiving] = useState<InvoiceRecord | null>(null);
   const [slip, setSlip] = useState<{ project: QuotationRecord; payment: PaymentRecord } | null>(null);
+  const [sendingSlip, setSendingSlip] = useState(false);
   const captureRef = useRef<HTMLDivElement>(null);
 
   async function sendInvoice(invoice: InvoiceRecord) {
@@ -190,6 +191,39 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
       setCapture(null);
       setCaptureKind("invoice");
       setBusy(false);
+    }
+  }
+
+  async function sendOpenSlip(control: Element) {
+    if (!slip) return;
+    const { project, payment } = slip;
+    const destination = project.whatsappNo.trim();
+    if (!destination) {
+      setBanner({ tone: "bad", text: "Save a WhatsApp number on this customer before sending the paid slip." });
+      return;
+    }
+    setSendingSlip(true);
+    setBanner(null);
+    try {
+      const dialog = control.closest("[role='dialog']");
+      const letter = findBillingLetter(dialog instanceof HTMLElement ? dialog : document.body);
+      if (!letter) throw new DocumentApiError("The paid slip could not be prepared.");
+      const installment = payment.installmentNumber ? `-installment-${payment.installmentNumber}` : "";
+      const file = await quotationToPdf(letter, `${project.serial}${installment}-paid-slip`);
+      await sendWhatsAppDocument({
+        phone: destination,
+        kind: "slip",
+        message: `Assalam o Alaikum ${project.customerName}, your Electro Tech paid slip for ${project.serial} is attached.`,
+        file,
+      });
+      setBanner({ tone: "ok", text: `The paid slip for ${project.serial} was sent to ${project.customerName} on ${destination}.` });
+    } catch (error) {
+      const message = error instanceof WhatsAppApiError || error instanceof DocumentApiError
+        ? error.message
+        : "The paid slip could not be sent on WhatsApp.";
+      setBanner({ tone: "bad", text: message });
+    } finally {
+      setSendingSlip(false);
     }
   }
 
@@ -672,7 +706,10 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
               <h2>Paid slip</h2>
               <div>
                 <button className={styles.secondaryButton} type="button" onClick={(event) => printFromControl(event.currentTarget)}>Print</button>
-                <button className={styles.secondaryButton} type="button" onClick={(event) => downloadOpenDocument(event.currentTarget, `${slip.project.serial}${slip.payment.installmentNumber ? `-installment-${slip.payment.installmentNumber}` : ""}-paid-slip`)} disabled={busy}><Download size={15} /> Download PDF</button>
+                <button className={styles.secondaryButton} type="button" onClick={(event) => downloadOpenDocument(event.currentTarget, `${slip.project.serial}${slip.payment.installmentNumber ? `-installment-${slip.payment.installmentNumber}` : ""}-paid-slip`)} disabled={busy || sendingSlip}><Download size={15} /> Download PDF</button>
+                <button className={`${styles.secondaryButton} ${styles.whatsappButton}`} type="button" onClick={(event) => void sendOpenSlip(event.currentTarget)} disabled={busy || sendingSlip || !slip.project.whatsappNo.trim()} title={slip.project.whatsappNo.trim() ? `Send this paid slip to ${slip.project.customerName} on ${slip.project.whatsappNo.trim()}` : "Save a WhatsApp number on this customer first"}>
+                  <MessageCircle size={15} /> {sendingSlip ? "Sending…" : slip.project.whatsappNo.trim() ? `WhatsApp · ${slip.project.whatsappNo.trim()}` : "WhatsApp"}
+                </button>
                 <button className={styles.secondaryButton} type="button" onClick={() => setSlip(null)}>Close</button>
               </div>
             </div>

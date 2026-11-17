@@ -2,6 +2,7 @@ import makeWASocket, {
   Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  fetchLatestWaWebVersion,
   makeCacheableSignalKeyStore,
   type AuthenticationCreds,
   type ConnectionState,
@@ -94,14 +95,29 @@ async function renderWhatsAppQr(value: string): Promise<string> {
   });
 }
 
+async function resolveWaVersion(): Promise<[number, number, number] | undefined> {
+  try {
+    const web = await fetchLatestWaWebVersion();
+    if (web.isLatest) return web.version;
+  } catch (error) {
+    console.error("WhatsApp web version could not be read.", error instanceof Error ? error.message : error);
+  }
+  try {
+    const latest = await fetchLatestBaileysVersion();
+    if (!latest.isLatest) {
+      const reason = "error" in latest && latest.error instanceof Error ? latest.error.message : "fallback version";
+      console.error("WhatsApp is using a saved client version.", reason);
+    }
+    return latest.version;
+  } catch (error) {
+    console.error("WhatsApp client version could not be refreshed.", error instanceof Error ? error.message : error);
+    return undefined;
+  }
+}
+
 async function createBaileysSocket(auth: LoadedAuthState["state"]): Promise<WhatsAppSocket> {
   const logger = pino({ level: "silent" });
-  let version: [number, number, number] | undefined;
-  try {
-    version = (await fetchLatestBaileysVersion()).version;
-  } catch {
-    version = undefined;
-  }
+  const version = await resolveWaVersion();
   return makeWASocket({
     auth: {
       creds: auth.creds,
@@ -109,7 +125,8 @@ async function createBaileysSocket(auth: LoadedAuthState["state"]): Promise<What
     },
     ...(version ? { version } : {}),
     logger,
-    browser: Browsers.macOS("Electro Tech"),
+    browser: Browsers.ubuntu("Chrome"),
+    qrTimeout: 60_000,
     syncFullHistory: false,
     shouldSyncHistoryMessage: () => false,
     markOnlineOnConnect: false,
@@ -227,7 +244,7 @@ export class WhatsAppSession {
     const socket = this.socket;
     if (this.status !== "connected" || !socket) {
       throw new WhatsAppServiceError(
-        "Connect the official WhatsApp before sending a message.",
+        "Connect the official WhatsApp before sending a message. Open WhatsApp in billing and scan the QR with the official phone.",
         409,
         "not_connected",
       );
@@ -339,10 +356,24 @@ export class WhatsAppSession {
     if (this.stopping) return;
     this.socket = null;
     const code = disconnectCode(error);
+    if (code === DisconnectReason.restartRequired) {
+      if (this.auth) {
+        await this.auth.saveCreds();
+        this.savedSession = credsAreLinked(this.auth.state.creds);
+      }
+      this.reconnects = 0;
+      this.error = null;
+      this.status = "connecting";
+      await this.persist();
+      await this.openSocket();
+      return;
+    }
     if (code === DisconnectReason.connectionReplaced) {
       this.socket = null;
       this.qrDataUrl = null;
+      this.status = "disconnected";
       this.error = null;
+      await this.persist();
       return;
     }
     const loggedOut = code === DisconnectReason.loggedOut

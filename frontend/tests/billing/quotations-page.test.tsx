@@ -22,7 +22,7 @@ vi.mock("@/lib/billing/quotations-api", () => ({
 }));
 vi.mock("@/lib/billing/documents-api", () => ({ issueDirectInvoice: vi.fn(), DocumentApiError: class DocumentApiError extends Error {} }));
 vi.mock("@/lib/billing/whatsapp-api", () => ({ sendWhatsAppDocument: vi.fn(), WhatsAppApiError: class WhatsAppApiError extends Error {} }));
-vi.mock("@/lib/billing/quotation-pdf", () => ({ quotationToPdf: vi.fn() }));
+vi.mock("@/lib/billing/quotation-pdf", () => ({ quotationToPdf: vi.fn(), downloadQuotationPdf: vi.fn() }));
 
 afterEach(() => {
   cleanup();
@@ -60,6 +60,7 @@ test("approved quotations leave the quotations page", async () => {
   ]);
   render(<QuotationsPage />);
   expect(await screen.findByRole("heading", { name: "Waiting Customer" })).toBeDefined();
+  expect(screen.getByRole("button", { name: /download/i })).toBeDefined();
   expect(screen.queryByRole("heading", { name: "Approved Customer" })).toBeNull();
   expect(screen.queryByText("QT-002")).toBeNull();
 });

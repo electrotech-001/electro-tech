@@ -229,6 +229,11 @@ export function ReceivePaymentsPage() {
 
   async function sendSlip(payment: PaymentRecord) {
     if (!current) return;
+    const destination = current.project.whatsappNo.trim();
+    if (!destination) {
+      setBanner({ tone: "bad", text: "Save a WhatsApp number on this customer before sending the paid slip." });
+      return;
+    }
     setSendingId(payment.id);
     setBanner(null);
     setCapture(payment);
@@ -238,12 +243,12 @@ export function ReceivePaymentsPage() {
       if (!(node instanceof HTMLElement)) throw new DocumentApiError("The paid slip could not be prepared.");
       const file = await quotationToPdf(node, `${current.project.serial}-paid-slip`);
       await sendWhatsAppDocument({
-        phone: current.project.whatsappNo,
+        phone: destination,
         kind: "slip",
         message: `Assalam o Alaikum ${current.project.customerName}, your Electro Tech paid slip for ${current.project.serial} is attached.`,
         file,
       });
-      setBanner({ tone: "ok", text: `The paid slip for ${current.project.serial} was sent on WhatsApp.` });
+      setBanner({ tone: "ok", text: `The paid slip for ${current.project.serial} was sent to ${current.project.customerName} on ${destination}.` });
     } catch (error) {
       const message = error instanceof WhatsAppApiError || error instanceof DocumentApiError
         ? error.message
@@ -503,7 +508,7 @@ export function ReceivePaymentsPage() {
                         <button type="button" onClick={() => setSlip(payment)}><Eye size={15} /> View</button>
                         <button type="button" onClick={() => void printSlip(payment)} disabled={sendingId === payment.id}><Printer size={15} /> Print</button>
                         <button type="button" onClick={() => void downloadSlip(payment)} disabled={sendingId === payment.id}><Download size={15} /> Download</button>
-                        <button type="button" onClick={() => void sendSlip(payment)} disabled={sendingId === payment.id}>
+                        <button type="button" onClick={() => void sendSlip(payment)} disabled={sendingId === payment.id || !current.project.whatsappNo.trim()} title={current.project.whatsappNo.trim() ? `Send this paid slip to ${current.project.customerName} on ${current.project.whatsappNo.trim()}` : "Save a WhatsApp number on this customer first"}>
                           <MessageCircle size={15} /> {sendingId === payment.id ? "Sending…" : "WhatsApp"}
                         </button>
                         <button type="button" onClick={() => setEditing(payment)}><Pencil size={15} /> Edit</button>
@@ -540,8 +545,8 @@ export function ReceivePaymentsPage() {
               <div>
                 <button className={styles.secondaryButton} type="button" onClick={(event) => printFromControl(event.currentTarget)}>Print</button>
                 <button className={styles.secondaryButton} type="button" onClick={(event) => void downloadFromControl(event.currentTarget, slipFileName(slip)).catch(() => setBanner({ tone: "bad", text: "The paid slip PDF could not be downloaded." }))} disabled={sendingId === slip.id}><Download size={15} /> Download PDF</button>
-                <button className={styles.secondaryButton} type="button" onClick={() => void sendSlip(slip)} disabled={sendingId === slip.id}>
-                  <MessageCircle size={15} /> {sendingId === slip.id ? "Sending…" : "Send on WhatsApp"}
+                <button className={styles.secondaryButton} type="button" onClick={() => void sendSlip(slip)} disabled={sendingId === slip.id || !current.project.whatsappNo.trim()} title={current.project.whatsappNo.trim() ? `Send this paid slip to ${current.project.customerName} on ${current.project.whatsappNo.trim()}` : "Save a WhatsApp number on this customer first"}>
+                  <MessageCircle size={15} /> {sendingId === slip.id ? "Sending…" : current.project.whatsappNo.trim() ? `WhatsApp · ${current.project.whatsappNo.trim()}` : "WhatsApp"}
                 </button>
                 <button className={styles.secondaryButton} type="button" onClick={() => setSlip(null)}>Close</button>
               </div>

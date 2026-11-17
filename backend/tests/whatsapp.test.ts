@@ -229,6 +229,45 @@ test("a stored WhatsApp identity reconnects without a new QR", async () => {
   assert.ok(await repository.read("creds"));
 });
 
+test("a scanned pairing restarts and finishes the login", async () => {
+  const repository = createMemoryAuthRepository();
+  let opened = 0;
+  const session = new WhatsAppSession({
+    repository,
+    connections: createMemoryConnectionStore(),
+    createSocket: async (auth) => {
+      opened += 1;
+      const socket = createFakeSocket();
+      if (opened === 1) {
+        setTimeout(() => {
+          auth.creds.registered = true;
+          auth.creds.me = { id: "923001234567:1@s.whatsapp.net", name: "Electro Tech" };
+          socket.emit({
+            connection: "close",
+            lastDisconnect: {
+              error: Object.assign(new Error("restart"), { output: { statusCode: 515 } }),
+              date: new Date(),
+            },
+          });
+        }, 0);
+      } else {
+        assert.equal(auth.creds.registered, true);
+        setTimeout(() => socket.emit({ connection: "open" }), 0);
+      }
+      return socket as unknown as WhatsAppSocket;
+    },
+  });
+
+  await session.connect();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  await session.idle();
+  const snapshot = session.snapshot();
+  assert.equal(opened, 2);
+  assert.equal(snapshot.status, "connected");
+  assert.equal(snapshot.savedSession, true);
+  assert.equal(snapshot.phone, "923001234567");
+});
+
 test("a replaced connection keeps the saved WhatsApp session", async () => {
   const repository = createMemoryAuthRepository();
   const session = new WhatsAppSession({

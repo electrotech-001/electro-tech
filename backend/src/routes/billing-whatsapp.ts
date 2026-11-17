@@ -60,7 +60,7 @@ async function resumeOfficialSession(gateway: SessionGateway): Promise<void> {
   }
   if (snapshot.status === "connected") return;
   throw new WhatsAppServiceError(
-    "Connect the official WhatsApp before sending a message.",
+    "Connect the official WhatsApp before sending a message. Open WhatsApp in billing and scan the QR with the official phone.",
     409,
     "not_connected",
   );
@@ -150,6 +150,10 @@ export function createBillingWhatsAppRouter(dependencies: BillingWhatsAppRouterD
     }
   }
 
+  router.use((_request, response, next) => {
+    response.setHeader("Cache-Control", "no-store");
+    next();
+  });
   router.use(auth);
   router.get("/", async (_request, response, next) => {
     try {

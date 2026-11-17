@@ -1,8 +1,8 @@
 "use client";
 
-import { Check, Copy, Eye, MessageCircle, Pencil, Printer, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, Download, Eye, MessageCircle, Pencil, Printer, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { quotationToPdf } from "@/lib/billing/quotation-pdf";
+import { downloadQuotationPdf, quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { blankDraft, formatDisplayDate, formatRupees, todayIsoDate, type QuotationDraft, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { DocumentApiError, issueDirectInvoice } from "@/lib/billing/documents-api";
 import { approveQuotation, deleteQuotation, listQuotations, nextQuotationSerial, QuotationApiError, saveQuotation } from "@/lib/billing/quotations-api";
@@ -53,7 +53,7 @@ export function QuotationsPage() {
   const [viewing, setViewing] = useState<QuotationRecord | null>(null);
   const [approving, setApproving] = useState<QuotationRecord | null>(null);
   const [deleting, setDeleting] = useState<QuotationRecord | null>(null);
-  const [busy, setBusy] = useState<{ id: string; action: "whatsapp" | "approve" | "delete" | "duplicate" } | null>(null);
+  const [busy, setBusy] = useState<{ id: string; action: "whatsapp" | "approve" | "delete" | "duplicate" | "download" } | null>(null);
   const [capture, setCapture] = useState<QuotationRecord | null>(null);
   const captureRef = useRef<HTMLDivElement>(null);
 
@@ -200,6 +200,23 @@ export function QuotationsPage() {
     }, 80);
   }
 
+  async function onDownload(quotation: QuotationRecord) {
+    setBusy({ id: quotation.id, action: "download" });
+    setBanner(null);
+    setCapture(quotation);
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, 60));
+      const node = captureRef.current?.querySelector("article");
+      if (!(node instanceof HTMLElement)) throw new QuotationApiError("The quotation PDF could not be prepared.");
+      await downloadQuotationPdf(node, quotation.serial);
+    } catch (error) {
+      setBanner({ tone: "bad", text: error instanceof QuotationApiError ? error.message : "The quotation PDF could not be downloaded." });
+    } finally {
+      setCapture(null);
+      setBusy(null);
+    }
+  }
+
   async function onWhatsApp(quotation: QuotationRecord) {
     setBusy({ id: quotation.id, action: "whatsapp" });
     setBanner(null);
@@ -296,6 +313,7 @@ export function QuotationsPage() {
             <p className={styles.total}>{formatRupees(quotation.grandTotal)}</p>
             <div className={styles.cardActions}>
               <button type="button" onClick={() => setViewing(quotation)}><Eye size={15} /> View</button>
+              <button type="button" onClick={() => void onDownload(quotation)} disabled={busy?.id === quotation.id}><Download size={15} /> Download</button>
               <button type="button" onClick={() => startEdit(quotation)}><Pencil size={15} /> Edit</button>
               <button type="button" onClick={() => void onDuplicate(quotation)} disabled={busy?.id === quotation.id}>
                 <Copy size={15} /> {busy?.id === quotation.id && busy.action === "duplicate" ? "Copying…" : "Duplicate"}

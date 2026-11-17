@@ -1,6 +1,10 @@
+"use client";
+
 import type { QuotationRecord } from "@/lib/billing/quotation-math";
 import { formatDisplayDate, formatRupees, installmentBalance, planDiscountOf } from "@/lib/billing/quotation-math";
-import { printFromControl } from "@/lib/billing/print-letter";
+import { Download } from "lucide-react";
+import { useState } from "react";
+import { downloadFromControl, printFromControl } from "@/lib/billing/print-letter";
 import { Letterhead } from "./BillingLetters";
 import { DocumentTermsNote } from "./DocumentTerms";
 import styles from "./quotation.module.css";
@@ -147,6 +151,7 @@ export function QuotationDialog({
   quotation: QuotationRecord;
   onClose: () => void;
 }) {
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   return (
     <div className={styles.modal} role="presentation" onClick={onClose}>
       <div
@@ -160,9 +165,11 @@ export function QuotationDialog({
           <h2 id="quotation-dialog-title">{quotation.serial}</h2>
           <div>
             <button className={styles.secondaryButton} type="button" onClick={(event) => printFromControl(event.currentTarget)}>Print</button>
+            <button className={styles.secondaryButton} type="button" onClick={(event) => { setDownloadError(null); void downloadFromControl(event.currentTarget, quotation.serial).catch(() => setDownloadError("The quotation PDF could not be downloaded.")); }}><Download size={15} /> Download PDF</button>
             <button className={styles.secondaryButton} type="button" onClick={onClose}>Close</button>
           </div>
         </div>
+        {downloadError ? <p className={styles.error}>{downloadError}</p> : null}
         <div className={styles.modalScroll}>
           <QuotationLetter quotation={quotation} />
         </div>

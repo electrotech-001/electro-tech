@@ -5,7 +5,8 @@ import { GreetingCard, InvoiceLetter } from "@/components/billing/BillingLetters
 import { InvoicesPage } from "@/components/billing/InvoicesPage";
 import { ProjectsPage } from "@/components/billing/ProjectsPage";
 import type { InvoiceRecord } from "@/lib/billing/documents-api";
-import { formatDisplayDate, letterhead, type QuotationRecord } from "@/lib/billing/quotation-math";
+import { formatDisplayDate, letterhead, todayIsoDate, type QuotationRecord } from "@/lib/billing/quotation-math";
+import { sendWhatsAppDocument } from "@/lib/billing/whatsapp-api";
 
 const api = vi.hoisted(() => ({
   listProjects: vi.fn(),
@@ -372,6 +373,38 @@ test("receive payment on a direct invoice records a direct payment", async () =>
   await user.type(within(dialog).getByLabelText("Paid amount"), "1000");
   await user.click(within(dialog).getByRole("button", { name: "Receive payment" }));
   await waitFor(() => expect(api.recordPayment).toHaveBeenCalledWith("sale-9", expect.objectContaining({ kind: "direct", paidAmount: 1000 })));
+});
+
+test("a paid slip can be sent to that customer's WhatsApp", async () => {
+  const work = project({ id: "p-2", paymentMode: "installments", customerName: "Usman Czn", whatsappNo: "0300-1112233" });
+  const payment = {
+    id: "pay-9",
+    projectId: "p-2",
+    invoiceId: "inv-7",
+    installmentNumber: 2,
+    expectedAmount: 20000,
+    paidAmount: 20000,
+    discountAmount: 0,
+    paymentDate: todayIsoDate(),
+    paymentMode: "cash" as const,
+  };
+  api.listProjects.mockResolvedValue([]);
+  api.listInvoices.mockResolvedValue([invoice(work, { id: "inv-7", serial: "INV-007", kind: "installment", installmentNumber: 2, grandTotal: 50000, balanceDue: 50000 })]);
+  api.recordPayment.mockResolvedValue({ project: work, invoices: [], payments: [payment], agreement: null, paidTotal: 20000, balance: 30000 });
+  vi.mocked(sendWhatsAppDocument).mockResolvedValue(undefined);
+  const user = userEvent.setup();
+  render(<InvoicesPage />);
+  await user.click(await screen.findByRole("button", { name: /receive payment/i }));
+  const payDialog = screen.getByRole("dialog");
+  await user.type(within(payDialog).getByLabelText("Paid amount"), "20000");
+  await user.click(within(payDialog).getByRole("button", { name: "Receive payment" }));
+  expect(await screen.findByRole("heading", { name: "Paid slip" })).toBeDefined();
+  await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /whatsapp/i }));
+  await waitFor(() => expect(sendWhatsAppDocument).toHaveBeenCalledWith(expect.objectContaining({
+    phone: "0300-1112233",
+    kind: "slip",
+    message: expect.stringContaining("Usman Czn"),
+  })));
 });
 
 test("an installment invoice shows its due date instead of the invoice date", () => {
