@@ -24,3 +24,15 @@ export async function quotationToPdf(element: HTMLElement, serial: string): Prom
   }
   return new File([pdf.output("blob")], `Electro-Tech-${serial}.pdf`, { type: "application/pdf" });
 }
+
+export async function downloadQuotationPdf(element: HTMLElement, serial: string): Promise<void> {
+  const file = await quotationToPdf(element, serial);
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = file.name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}

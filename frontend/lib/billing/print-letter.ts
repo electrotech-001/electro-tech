@@ -87,3 +87,12 @@ export function printFromControl(control: Element): Promise<void> {
   const dialog = control.closest("[role='dialog']");
   return printBillingLetter(dialog instanceof HTMLElement ? dialog : document.body);
 }
+
+export async function downloadFromControl(control: Element, serial: string): Promise<void> {
+  const dialog = control.closest("[role='dialog']");
+  const letter = findBillingLetter(dialog instanceof HTMLElement ? dialog : document.body);
+  if (!letter) throw new Error("The document could not be prepared for download.");
+  await waitForImages(letter);
+  const { downloadQuotationPdf } = await import("@/lib/billing/quotation-pdf");
+  await downloadQuotationPdf(letter, serial);
+}

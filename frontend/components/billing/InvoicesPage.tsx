@@ -1,15 +1,16 @@
 "use client";
 
-import { Copy, Eye, FileSignature, MessageCircle, Pencil, Plus, Printer, Search, Trash2, Undo2, Wallet } from "lucide-react";
+import { Copy, Download, Eye, FileSignature, MessageCircle, Pencil, Plus, Printer, Search, Trash2, Undo2, Wallet } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { deleteInvoice, DocumentApiError, listInvoices, nextDirectSaleSerial, saveAgreement, updateDueDate, updateInvoiceDiscount, type InvoiceRecord, type PaymentRecord } from "@/lib/billing/documents-api";
 import { consolidatedInvoice, groupInvoices, installmentDueDate, outstandingBalances, plannedInvoice } from "@/lib/billing/pending-invoices";
-import { quotationToPdf } from "@/lib/billing/quotation-pdf";
-import { printBillingLetter, printFromControl } from "@/lib/billing/print-letter";
+import { thankYouCardMessage } from "@/lib/billing/message-templates";
+import { downloadQuotationPdf, quotationToPdf } from "@/lib/billing/quotation-pdf";
+import { downloadFromControl, printBillingLetter, printFromControl } from "@/lib/billing/print-letter";
 import { addMonths, customInstallments, formatDisplayDate, formatRupees, isDirectSale, todayIsoDate, withoutAdvance, type QuotationDraft, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { disapproveProject, listProjects, QuotationApiError, setPlanDiscount, updateProject } from "@/lib/billing/quotations-api";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
-import { InvoiceLetter, PaymentSlip } from "./BillingLetters";
+import { GreetingCard, InvoiceLetter, PaymentSlip } from "./BillingLetters";
 import { DirectSaleForm } from "./DirectSaleForm";
 import { QuotationForm } from "./QuotationForm";
 import { AgreementDialog, DirectPaymentDialog, type PaymentTarget } from "./ProjectFlow";
@@ -82,6 +83,7 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
   const [undoing, setUndoing] = useState<InvoiceRecord | null>(null);
   const [busy, setBusy] = useState(false);
   const [capture, setCapture] = useState<InvoiceRecord | null>(null);
+  const [captureKind, setCaptureKind] = useState<"invoice" | "thanks">("invoice");
   const [creating, setCreating] = useState(false);
   const [agreementProject, setAgreementProject] = useState<QuotationRecord | null>(null);
   const [saleSerial, setSaleSerial] = useState("DS-001");
@@ -100,6 +102,7 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
     }
     setBusy(true);
     setBanner(null);
+    setCaptureKind("invoice");
     setCapture(invoice);
     try {
       await new Promise((resolve) => window.setTimeout(resolve, 80));
@@ -120,25 +123,82 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
       setBanner({ tone: "bad", text: message });
     } finally {
       setCapture(null);
+      setCaptureKind("invoice");
       setBusy(false);
     }
   }
 
-  async function printInvoice(invoice: InvoiceRecord) {
+  async function sendThanks(invoice: InvoiceRecord) {
+    const destination = invoice.project.whatsappNo.trim();
+    const name = invoice.project.customerName.trim();
+    if (!destination) {
+      setBanner({ tone: "bad", text: "Save a WhatsApp number on this customer before sending the thank you card." });
+      return;
+    }
+    if (!name) {
+      setBanner({ tone: "bad", text: "Save the customer name before sending the thank you card." });
+      return;
+    }
+    const message = thankYouCardMessage(name, invoice.project.serial);
     setBusy(true);
     setBanner(null);
+    setCaptureKind("thanks");
+    setCapture(invoice);
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, 80));
+      const node = captureRef.current?.querySelector("article");
+      if (!(node instanceof HTMLElement)) throw new DocumentApiError("The thank you card could not be prepared.");
+      const file = await quotationToPdf(node, `${invoice.project.serial}-thank-you`);
+      await sendWhatsAppDocument({
+        phone: destination,
+        kind: "thanks",
+        message,
+        file,
+      });
+      setBanner({ tone: "ok", text: `Thank you card for ${name} was sent to ${destination} on WhatsApp.` });
+    } catch (error) {
+      const text = error instanceof WhatsAppApiError || error instanceof DocumentApiError
+        ? error.message
+        : "The thank you card could not be sent on WhatsApp.";
+      setBanner({ tone: "bad", text });
+    } finally {
+      setCapture(null);
+      setCaptureKind("invoice");
+      setBusy(false);
+    }
+  }
+
+  async function useInvoiceCapture(invoice: InvoiceRecord, action: "print" | "download") {
+    setBusy(true);
+    setBanner(null);
+    setCaptureKind("invoice");
     setCapture(invoice);
     try {
       await new Promise((resolve) => window.setTimeout(resolve, 80));
       const root = captureRef.current;
-      if (!root) throw new DocumentApiError("The invoice could not be prepared for printing.");
-      await printBillingLetter(root);
+      if (!root) throw new DocumentApiError("The invoice could not be prepared.");
+      if (action === "print") {
+        await printBillingLetter(root);
+        return;
+      }
+      const node = root.querySelector("article");
+      if (!(node instanceof HTMLElement)) throw new DocumentApiError("The invoice could not be prepared for download.");
+      await downloadQuotationPdf(node, invoice.serial);
     } catch (error) {
-      setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The invoice could not be printed." });
+      setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : action === "print" ? "The invoice could not be printed." : "The invoice PDF could not be downloaded." });
     } finally {
       setCapture(null);
+      setCaptureKind("invoice");
       setBusy(false);
     }
+  }
+
+  function downloadOpenDocument(control: Element, serial: string) {
+    setBusy(true);
+    setBanner(null);
+    void downloadFromControl(control, serial).catch(() => {
+      setBanner({ tone: "bad", text: "The PDF could not be downloaded." });
+    }).finally(() => setBusy(false));
   }
 
   async function refresh() {
@@ -378,11 +438,13 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
         {(invoice.discountAmount ?? 0) > 0 ? <p>Discount {formatRupees(invoice.discountAmount ?? 0)}</p> : null}
         <div className={styles.cardActions}>
           <button type="button" onClick={() => openInvoice(invoice)}><Eye size={15} /> View</button>
+          <button type="button" onClick={() => void useInvoiceCapture(invoice, "download")} disabled={busy}><Download size={15} /> Download</button>
           {completed || invoice.balanceDue <= 0 ? null : <button type="button" onClick={() => { setBanner(null); setReceiving(invoice); }} disabled={busy}><Wallet size={15} /> Receive payment</button>}
           <button type="button" onClick={() => beginEdit(invoice)}><Pencil size={15} /> Edit</button>
           <button type="button" onClick={() => void onDuplicate(invoice)} disabled={busy}><Copy size={15} /> Duplicate</button>
           {needsAgreement ? <button type="button" onClick={() => setAgreementProject(invoice.project)}><FileSignature size={15} /> Agreement</button> : null}
-          {completed ? <button type="button" onClick={() => void printInvoice(invoice)} disabled={busy}><Printer size={15} /> Print</button> : null}
+          {completed ? <button type="button" onClick={() => void useInvoiceCapture(invoice, "print")} disabled={busy}><Printer size={15} /> Print</button> : null}
+          {completed ? <button type="button" onClick={() => void sendThanks(invoice)} disabled={busy || !destination} title={destination ? `Send a thank you card to ${invoice.project.customerName}` : "Save a WhatsApp number on this customer first"}><MessageCircle size={15} /> Thank you</button> : null}
           <button className={styles.whatsappButton} type="button" onClick={() => void sendInvoice(invoice)} disabled={busy || !destination} title={destination ? `Send to ${destination}` : "Save a WhatsApp number on this customer first"}><MessageCircle size={15} /> WhatsApp</button>
           {undoable(invoice) ? <button type="button" onClick={() => { setBanner(null); setUndoing(invoice); }} disabled={busy}><Undo2 size={15} /> Undo approval</button> : null}
           {plannedInvoice(invoice) || consolidatedInvoice(invoice) ? null : <button className={styles.danger} type="button" onClick={() => setDeleting(invoice)} disabled={busy}><Trash2 size={15} /> Delete</button>}
@@ -459,7 +521,7 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
           <h1 className={shell.title}>{completed ? "Completed Invoices" : "Invoices"}</h1>
           <p className={shell.summary}>
             {completed
-              ? "Fully paid invoices stay here. An installment plan moves here as one combined invoice once every installment is paid. You can view, edit, and print them."
+              ? "Fully paid invoices stay here. An installment plan moves here as one combined invoice once every installment is paid. You can view, download, edit, print, and send a thank you card."
               : "Direct invoices from daily sales and invoices from approved quotations. Each one stays here until the balance is received."}
           </p>
         </div>
@@ -519,6 +581,7 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
                   WhatsApp{viewing.project.whatsappNo.trim() ? ` · ${viewing.project.whatsappNo.trim()}` : ""}
                 </button>
                 <button className={styles.secondaryButton} type="button" onClick={(event) => printFromControl(event.currentTarget)}>Print</button>
+                <button className={styles.secondaryButton} type="button" onClick={(event) => downloadOpenDocument(event.currentTarget, viewing.serial)} disabled={busy}><Download size={15} /> Download PDF</button>
                 <button className={styles.secondaryButton} type="button" onClick={() => setViewing(null)}>Close</button>
               </div>
             </div>
@@ -609,6 +672,7 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
               <h2>Paid slip</h2>
               <div>
                 <button className={styles.secondaryButton} type="button" onClick={(event) => printFromControl(event.currentTarget)}>Print</button>
+                <button className={styles.secondaryButton} type="button" onClick={(event) => downloadOpenDocument(event.currentTarget, `${slip.project.serial}${slip.payment.installmentNumber ? `-installment-${slip.payment.installmentNumber}` : ""}-paid-slip`)} disabled={busy}><Download size={15} /> Download PDF</button>
                 <button className={styles.secondaryButton} type="button" onClick={() => setSlip(null)}>Close</button>
               </div>
             </div>
@@ -628,7 +692,11 @@ export function InvoicesPage({ completed = false }: { completed?: boolean }) {
       ) : null}
       {capture ? (
         <div className={styles.capture} ref={captureRef} data-capture>
-          <InvoiceLetter invoice={capture} paper />
+          {captureKind === "thanks" ? (
+            <GreetingCard variant="thanks" customerName={capture.project.customerName} body={thankYouCardMessage(capture.project.customerName, capture.project.serial)} paper />
+          ) : (
+            <InvoiceLetter invoice={capture} paper />
+          )}
         </div>
       ) : null}
     </>

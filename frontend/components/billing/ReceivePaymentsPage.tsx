@@ -1,12 +1,12 @@
 "use client";
 
-import { Eye, MessageCircle, Pencil, Plus, Printer, Trash2 } from "lucide-react";
+import { Download, Eye, MessageCircle, Pencil, Plus, Printer, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { deleteDirectSale, deletePayment, DocumentApiError, listReceiveProjects, nextDirectSaleSerial, recordPayment, saveAgreement, updateDueDate, updatePayment, type BankMode, type PaymentRecord, type ReceiveProject } from "@/lib/billing/documents-api";
-import { quotationToPdf } from "@/lib/billing/quotation-pdf";
+import { downloadQuotationPdf, quotationToPdf } from "@/lib/billing/quotation-pdf";
 import { addMonths, formatDisplayDate, formatRupees, isDirectSale, todayIsoDate, type QuotationRecord } from "@/lib/billing/quotation-math";
 import { DirectSaleForm } from "./DirectSaleForm";
-import { printBillingLetter, printFromControl } from "@/lib/billing/print-letter";
+import { downloadFromControl, printBillingLetter, printFromControl } from "@/lib/billing/print-letter";
 import { sendWhatsAppDocument, WhatsAppApiError } from "@/lib/billing/whatsapp-api";
 import { PaymentSlip } from "./BillingLetters";
 import { AmountInput, FancySelect } from "./FancyControls";
@@ -255,6 +255,30 @@ export function ReceivePaymentsPage() {
     }
   }
 
+  function slipFileName(payment: PaymentRecord): string {
+    if (!current) return "paid-slip";
+    const installment = payment.installmentNumber ? `-installment-${payment.installmentNumber}` : "";
+    return `${current.project.serial}${installment}-paid-slip`;
+  }
+
+  async function downloadSlip(payment: PaymentRecord) {
+    if (!current) return;
+    setSendingId(payment.id);
+    setBanner(null);
+    setCapture(payment);
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, 80));
+      const node = captureRef.current?.querySelector("article");
+      if (!(node instanceof HTMLElement)) throw new DocumentApiError("The paid slip could not be prepared for download.");
+      await downloadQuotationPdf(node, slipFileName(payment));
+    } catch (error) {
+      setBanner({ tone: "bad", text: error instanceof DocumentApiError ? error.message : "The paid slip PDF could not be downloaded." });
+    } finally {
+      setCapture(null);
+      setSendingId(null);
+    }
+  }
+
   async function printSlip(payment: PaymentRecord) {
     setSendingId(payment.id);
     setBanner(null);
@@ -478,6 +502,7 @@ export function ReceivePaymentsPage() {
                       <div className={styles.cardActions}>
                         <button type="button" onClick={() => setSlip(payment)}><Eye size={15} /> View</button>
                         <button type="button" onClick={() => void printSlip(payment)} disabled={sendingId === payment.id}><Printer size={15} /> Print</button>
+                        <button type="button" onClick={() => void downloadSlip(payment)} disabled={sendingId === payment.id}><Download size={15} /> Download</button>
                         <button type="button" onClick={() => void sendSlip(payment)} disabled={sendingId === payment.id}>
                           <MessageCircle size={15} /> {sendingId === payment.id ? "Sending…" : "WhatsApp"}
                         </button>
@@ -514,6 +539,7 @@ export function ReceivePaymentsPage() {
               <h2>Paid slip</h2>
               <div>
                 <button className={styles.secondaryButton} type="button" onClick={(event) => printFromControl(event.currentTarget)}>Print</button>
+                <button className={styles.secondaryButton} type="button" onClick={(event) => void downloadFromControl(event.currentTarget, slipFileName(slip)).catch(() => setBanner({ tone: "bad", text: "The paid slip PDF could not be downloaded." }))} disabled={sendingId === slip.id}><Download size={15} /> Download PDF</button>
                 <button className={styles.secondaryButton} type="button" onClick={() => void sendSlip(slip)} disabled={sendingId === slip.id}>
                   <MessageCircle size={15} /> {sendingId === slip.id ? "Sending…" : "Send on WhatsApp"}
                 </button>

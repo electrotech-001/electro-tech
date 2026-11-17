@@ -451,12 +451,18 @@ export function GreetingCard({
   paper?: boolean;
 }) {
   const thanks = variant === "thanks";
+  const shownName = customerName.trim() || "Valued customer";
   return (
     <article className={`${styles.greeting} ${thanks ? styles.greetingThanks : styles.greetingFeedback} quotation-letter ${paper ? styles.letterPaper : ""}`}>
       <img className={styles.greetingLogo} src="/logos/logo-1.png" alt="Electro Tech" decoding="sync" />
       <p className={styles.greetingBrand}>Electro Tech</p>
       <h2>{thanks ? "Thank You" : "We Value Your Feedback"}</h2>
-      <p className={styles.greetingName}>{customerName || "Valued customer"}</p>
+      <strong
+        className={styles.greetingName}
+        style={{ display: "block", margin: "10px 0 0", color: "#101410", fontFamily: "Arial, Helvetica, sans-serif", fontSize: "28px", fontWeight: 700, lineHeight: 1.2, textAlign: "center" }}
+      >
+        {shownName}
+      </strong>
       <p className={styles.greetingBody}>{body}</p>
       <p className={styles.greetingClose}>{thanks ? "With gratitude" : "Your words help us serve you better"}</p>
       <small>Electrical & Solar Solutions · Attock</small>

@@ -14,6 +14,7 @@ import {
 import {
   fillTemplate,
   templateCardTitle,
+  withCustomerName,
   templateKindLabel,
   templateSendsCard,
   type TemplateKind,
@@ -142,7 +143,8 @@ export function TemplatesPage() {
     if (!sending || !selectedCustomer || !filled.trim()) return;
     setBusy(true);
     setBanner(null);
-    const payload = { template: sending, customer: selectedCustomer, message: filled };
+    const message = withCustomerName(filled, selectedCustomer.customerName);
+    const payload = { template: sending, customer: selectedCustomer, message };
     setCapture(payload);
     try {
       await new Promise((resolve) => window.setTimeout(resolve, 80));
@@ -153,7 +155,7 @@ export function TemplatesPage() {
       await sendWhatsAppDocument({
         phone: selectedCustomer.whatsappNo,
         kind: whatsAppKind(sending.kind),
-        message: filled,
+        message,
         file,
       });
       setBanner({ tone: "ok", text: `${sending.name} was sent to ${selectedCustomer.customerName} on WhatsApp.` });
@@ -258,7 +260,7 @@ export function TemplatesPage() {
                 <GreetingCard
                   variant={sending.kind === "feedback" ? "feedback" : "thanks"}
                   customerName={selectedCustomer.customerName}
-                  body={filled}
+                  body={withCustomerName(filled, selectedCustomer.customerName)}
                 />
               ) : null}
               {selectedCustomer && !templateSendsCard(sending.kind) ? (

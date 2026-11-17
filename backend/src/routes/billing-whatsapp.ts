@@ -47,6 +47,25 @@ function fieldValue(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+const RESUME_WAIT_MS = 12_000;
+
+async function resumeOfficialSession(gateway: SessionGateway): Promise<void> {
+  if (gateway.snapshot().status === "connected") return;
+  let snapshot = await gateway.connect();
+  const deadline = Date.now() + RESUME_WAIT_MS;
+  while (snapshot.status !== "connected" && Date.now() < deadline) {
+    if (snapshot.status === "qr" || snapshot.status === "disconnected") break;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    snapshot = gateway.snapshot();
+  }
+  if (snapshot.status === "connected") return;
+  throw new WhatsAppServiceError(
+    "Connect the official WhatsApp before sending a message.",
+    409,
+    "not_connected",
+  );
+}
+
 export function createBillingWhatsAppRouter(dependencies: BillingWhatsAppRouterDependencies = {}) {
   const router = Router();
   const auth = dependencies.authMiddleware ?? createAuthenticateBilling();
@@ -104,6 +123,7 @@ export function createBillingWhatsAppRouter(dependencies: BillingWhatsAppRouterD
           });
           return;
         }
+        await resumeOfficialSession(session());
         const result = await session().sendText({ phone: parsed.data.phone, message: parsed.data.message });
         response.status(200).json({ ok: true, id: result.id });
         return;
@@ -115,6 +135,7 @@ export function createBillingWhatsAppRouter(dependencies: BillingWhatsAppRouterD
         });
         return;
       }
+      await resumeOfficialSession(session());
       const result = await session().send({
         phone: parsed.data.phone,
         kind: parsed.data.kind as WhatsAppDocumentKind,

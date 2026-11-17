@@ -162,11 +162,12 @@ export class WhatsAppSession {
 
   connect(): Promise<WhatsAppSnapshot> {
     return this.enqueue(async () => {
-      if (this.status === "connected" || this.status === "qr" || this.status === "connecting") {
+      if ((this.status === "connected" || this.status === "qr" || this.status === "connecting") && this.socket) {
         return this.snapshot();
       }
       this.stopping = false;
       this.error = null;
+      this.reconnects = 0;
       await this.openSocket();
       return this.snapshot();
     });

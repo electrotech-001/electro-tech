@@ -378,3 +378,51 @@ test("disconnect and document upload use the official session", async () => {
   assert.equal(sent.status, 200);
   assert.equal(received, "agreement:03001234567:application/pdf");
 });
+
+test("a saved WhatsApp session is resumed before a document is sent", async () => {
+  let status: WhatsAppSnapshot["status"] = "disconnected";
+  let sent = false;
+  const snapshot = (): WhatsAppSnapshot => ({
+    status,
+    phone: status === "connected" ? "923001234567" : null,
+    pushName: null,
+    qrDataUrl: null,
+    savedSession: true,
+    error: null,
+  });
+  const app = express();
+  app.use("/api/billing/whatsapp", createBillingWhatsAppRouter({
+    authMiddleware: (request, response, next) => {
+      request.billingUser = { userId: "staff-1", email: "billing@electrotech.test" };
+      next();
+    },
+    sendRateLimitMax: 20,
+    session: {
+      snapshot,
+      connect: async () => {
+        status = "connected";
+        return snapshot();
+      },
+      disconnect: async () => snapshot(),
+      send: async () => {
+        sent = true;
+        return { id: "DOC2" };
+      },
+      sendText: async () => ({ id: "MSG2" }),
+    },
+  }));
+  const baseUrl = await listen(app);
+  const form = new FormData();
+  form.set("phone", "03001234567");
+  form.set("kind", "invoice");
+  form.set("message", "Your invoice is attached.");
+  form.set("document", new File([Buffer.from("%PDF-1.4")], "invoice.pdf", { type: "application/pdf" }));
+  const sentResponse = await fetch(`${baseUrl}/api/billing/whatsapp/send`, {
+    method: "POST",
+    headers: { Authorization: "Bearer staff" },
+    body: form,
+  });
+  assert.equal(sentResponse.status, 200);
+  assert.equal(sent, true);
+  assert.equal(status, "connected");
+});

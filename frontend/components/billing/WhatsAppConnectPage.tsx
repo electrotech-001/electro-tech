@@ -303,7 +303,7 @@ export function WhatsAppConnectPage() {
               {mode === "thanks" || mode === "feedback" ? (
                 <label className={styles.field}>
                   <span>Name on the card</span>
-                  <input value={cardName} onChange={(event) => setCardName(event.target.value)} placeholder="Customer name" />
+                  <input value={cardName} onChange={(event) => setCardName(event.target.value)} placeholder="Customer name" required />
                 </label>
               ) : null}
               <label className={styles.field}>

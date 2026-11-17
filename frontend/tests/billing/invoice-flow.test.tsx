@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
-import { InvoiceLetter } from "@/components/billing/BillingLetters";
+import { GreetingCard, InvoiceLetter } from "@/components/billing/BillingLetters";
 import { InvoicesPage } from "@/components/billing/InvoicesPage";
 import { ProjectsPage } from "@/components/billing/ProjectsPage";
 import type { InvoiceRecord } from "@/lib/billing/documents-api";
@@ -412,7 +412,15 @@ test("installment invoices stay on the invoices page until every installment is 
   expect(screen.getByText(/^Paid . 2 installments$/)).toBeDefined();
   expect(screen.getAllByRole("heading", { name: "Plan Customer" })).toHaveLength(1);
   expect(screen.getByRole("button", { name: /edit/i })).toBeDefined();
+  expect(screen.getByRole("button", { name: /download/i })).toBeDefined();
+  expect(screen.getByRole("button", { name: /thank you/i })).toBeDefined();
   expect(screen.queryByRole("button", { name: /delete/i })).toBeNull();
+});
+
+test("a thank you card prints the customer name", () => {
+  render(<GreetingCard variant="thanks" customerName="Usman Czn" body="Thank you for completing your payments." />);
+  expect(screen.getByText("Usman Czn")).toBeDefined();
+  expect(screen.getByText("Thank You")).toBeDefined();
 });
 
 test("an approved quotation's invoice can be undone back to quotations until a payment is recorded", async () => {

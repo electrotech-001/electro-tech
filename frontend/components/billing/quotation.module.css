@@ -843,6 +843,12 @@
   color: #667066;
 }
 
+.card .greeting,
+.card .greeting p,
+.card .greeting strong {
+  color: #101410;
+}
+
 .packageText {
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -1156,7 +1162,6 @@
 }
 
 .greeting {
-  container-type: inline-size;
   width: min(100%, 640px);
   margin: 0 auto;
   padding: 48px 52px 40px;
