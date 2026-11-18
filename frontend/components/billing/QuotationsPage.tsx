@@ -218,6 +218,10 @@ export function QuotationsPage() {
   }
 
   async function onWhatsApp(quotation: QuotationRecord) {
+    if (!quotation.whatsappNo.trim()) {
+      setBanner({ tone: "bad", text: "Save a WhatsApp number on this customer before sending the quotation." });
+      return;
+    }
     setBusy({ id: quotation.id, action: "whatsapp" });
     setBanner(null);
     setCapture(quotation);

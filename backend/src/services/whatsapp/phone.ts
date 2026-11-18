@@ -14,21 +14,18 @@ const DOCUMENT_LABELS = {
 export type WhatsAppDocumentKind = keyof typeof DOCUMENT_LABELS;
 
 export function normalizeCustomerPhone(input: string): string {
-  const compact = input.trim().replace(/[\s()-]/g, "");
-  const withoutPrefix = compact.startsWith("+")
-    ? compact.slice(1)
-    : compact.startsWith("00")
-      ? compact.slice(2)
-      : compact;
-  const local = /^0\d{10}$/.test(withoutPrefix) ? `92${withoutPrefix.slice(1)}` : withoutPrefix;
-  if (!/^\d{8,15}$/.test(local)) {
+  let digits = input.trim().replace(/\D/g, "");
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  if (/^0\d{10}$/.test(digits)) digits = `92${digits.slice(1)}`;
+  else if (/^3\d{9}$/.test(digits)) digits = `92${digits}`;
+  if (!/^\d{8,15}$/.test(digits)) {
     throw new WhatsAppServiceError(
       "Enter a valid customer WhatsApp number.",
       400,
       "invalid_phone",
     );
   }
-  return local;
+  return digits;
 }
 
 export function formatWhatsAppPhone(phone: string): string {

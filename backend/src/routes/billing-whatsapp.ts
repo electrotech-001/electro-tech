@@ -23,7 +23,9 @@ const sendFieldsSchema = z.object({
   message: z.string().trim().min(1).max(1000),
 });
 
-type SessionGateway = Pick<WhatsAppSession, "snapshot" | "connect" | "disconnect" | "send" | "sendText">;
+type SessionGateway = Pick<WhatsAppSession, "snapshot" | "connect" | "disconnect" | "send" | "sendText"> & {
+  ensureReady?: () => Promise<void>;
+};
 
 export type BillingWhatsAppRouterDependencies = {
   authMiddleware?: RequestHandler;
@@ -50,6 +52,10 @@ function fieldValue(value: unknown): string {
 const RESUME_WAIT_MS = 12_000;
 
 async function resumeOfficialSession(gateway: SessionGateway): Promise<void> {
+  if (gateway.ensureReady) {
+    await gateway.ensureReady();
+    return;
+  }
   if (gateway.snapshot().status === "connected") return;
   let snapshot = await gateway.connect();
   const deadline = Date.now() + RESUME_WAIT_MS;

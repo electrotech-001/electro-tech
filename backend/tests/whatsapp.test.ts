@@ -28,6 +28,8 @@ test("customer numbers accept local, international, and 00 prefixes", () => {
   assert.equal(normalizeCustomerPhone("0300 1234567"), "923001234567");
   assert.equal(normalizeCustomerPhone("+92 300 1234567"), "923001234567");
   assert.equal(normalizeCustomerPhone("00923001234567"), "923001234567");
+  assert.equal(normalizeCustomerPhone("0300-1234567"), "923001234567");
+  assert.equal(normalizeCustomerPhone("3001234567"), "923001234567");
   assert.throws(() => normalizeCustomerPhone("123"), /valid customer WhatsApp number/);
 });
 
@@ -266,6 +268,51 @@ test("a scanned pairing restarts and finishes the login", async () => {
   assert.equal(snapshot.status, "connected");
   assert.equal(snapshot.savedSession, true);
   assert.equal(snapshot.phone, "923001234567");
+});
+
+test("a pairing restart keeps the new login when credential storage fails", async () => {
+  const repository = createMemoryAuthRepository();
+  const write = repository.write.bind(repository);
+  repository.write = async (key, value) => {
+    if (key === "creds") throw new Error("storage down");
+    await write(key, value);
+  };
+  let opened = 0;
+  const session = new WhatsAppSession({
+    repository,
+    connections: createMemoryConnectionStore(),
+    createSocket: async (auth) => {
+      opened += 1;
+      const socket = createFakeSocket();
+      if (opened === 1) {
+        setTimeout(() => {
+          auth.creds.registered = true;
+          auth.creds.me = { id: "923001234567:1@s.whatsapp.net", name: "Electro Tech" };
+          socket.emit({
+            connection: "close",
+            lastDisconnect: {
+              error: Object.assign(new Error("restart"), { output: { statusCode: 515 } }),
+              date: new Date(),
+            },
+          });
+        }, 0);
+      } else {
+        assert.equal(auth.creds.registered, true);
+        setTimeout(() => socket.emit({ connection: "open" }), 0);
+      }
+      return socket as unknown as WhatsAppSocket;
+    },
+  });
+
+  await session.connect();
+  const deadline = Date.now() + 5000;
+  while (session.snapshot().status !== "connected" && Date.now() < deadline) {
+    await session.idle();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.equal(opened, 2);
+  assert.equal(session.snapshot().status, "connected");
+  assert.equal(session.snapshot().phone, "923001234567");
 });
 
 test("a replaced connection keeps the saved WhatsApp session", async () => {

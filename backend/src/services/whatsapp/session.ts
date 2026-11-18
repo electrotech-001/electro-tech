@@ -146,6 +146,7 @@ export class WhatsAppSession {
   private saveGeneration = 0;
   private reconnects = 0;
   private retryTimer: NodeJS.Timeout | null = null;
+  private replacedRetries = 0;
   private stopping = false;
   private status: WhatsAppLinkStatus = "disconnected";
   private phone: string | null = null;
@@ -188,6 +189,24 @@ export class WhatsAppSession {
       await this.openSocket();
       return this.snapshot();
     });
+  }
+
+  async ensureReady(): Promise<void> {
+    if (this.status === "connected" && this.socket) return;
+    await this.connect();
+    const deadline = Date.now() + 20_000;
+    while (Date.now() < deadline) {
+      if (this.status === "connected" && this.socket) return;
+      if (this.status === "qr") break;
+      if (this.status === "disconnected" && !this.savedSession) break;
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    }
+    if (this.status === "connected" && this.socket) return;
+    throw new WhatsAppServiceError(
+      this.error?.trim() || "Connect the official WhatsApp before sending a message. Open WhatsApp in billing and scan the QR with the official phone.",
+      409,
+      "not_connected",
+    );
   }
 
   async restore(): Promise<void> {
@@ -250,16 +269,25 @@ export class WhatsAppSession {
       );
     }
     const jid = customerJid(normalizeCustomerPhone(phone));
-    const matches = await socket.onWhatsApp(jid);
-    const match = matches?.find((item) => item.exists);
-    if (!match) {
-      throw new WhatsAppServiceError(
-        "That number is not registered on WhatsApp.",
-        422,
-        "not_on_whatsapp",
+    try {
+      const matches = await socket.onWhatsApp(jid);
+      const match = matches?.find((item) => item.exists);
+      if (match?.jid) return match.jid;
+      if (matches && matches.length > 0) {
+        throw new WhatsAppServiceError(
+          "That number is not registered on WhatsApp.",
+          422,
+          "not_on_whatsapp",
+        );
+      }
+    } catch (error) {
+      if (error instanceof WhatsAppServiceError) throw error;
+      console.error(
+        "WhatsApp could not confirm this number. The message will still be sent to it.",
+        error instanceof Error ? error.message : error,
       );
     }
-    return match.jid;
+    return jid;
   }
 
   private sentId(sent: { key?: { id?: string | null } } | undefined, failure: string): string {
@@ -296,7 +324,10 @@ export class WhatsAppSession {
     this.qrDataUrl = null;
     await this.persist();
 
-    const auth = await loadAuthState(this.repository);
+    const currentAuth = this.auth;
+    const auth = currentAuth && credsAreLinked(currentAuth.state.creds)
+      ? currentAuth
+      : await loadAuthState(this.repository);
     this.auth = auth;
     this.savedSession = credsAreLinked(auth.state.creds);
     const socket = await this.createSocket(auth.state);
@@ -309,9 +340,7 @@ export class WhatsAppSession {
       const generation = this.saveGeneration;
       void this.enqueue(async () => {
         if (generation !== this.saveGeneration) return;
-        await auth.saveCreds();
-        if (generation !== this.saveGeneration) return;
-        this.savedSession = credsAreLinked(auth.state.creds);
+        await this.keepLinkedCreds();
       }).catch((error: unknown) => {
         console.error("WhatsApp credentials were not saved.", error instanceof Error ? error.message : error);
       });
@@ -341,7 +370,7 @@ export class WhatsAppSession {
       this.status = "connected";
       this.qrDataUrl = null;
       this.reconnects = 0;
-      this.savedSession = true;
+      this.savedSession = credsAreLinked(this.auth.state.creds);
       this.error = null;
       this.phone = identity.phone;
       this.pushName = identity.pushName;
@@ -356,11 +385,9 @@ export class WhatsAppSession {
     if (this.stopping) return;
     this.socket = null;
     const code = disconnectCode(error);
+    console.error("WhatsApp connection closed.", code ?? "unknown");
     if (code === DisconnectReason.restartRequired) {
-      if (this.auth) {
-        await this.auth.saveCreds();
-        this.savedSession = credsAreLinked(this.auth.state.creds);
-      }
+      await this.keepLinkedCreds();
       this.reconnects = 0;
       this.error = null;
       this.status = "connecting";
@@ -369,6 +396,15 @@ export class WhatsAppSession {
       return;
     }
     if (code === DisconnectReason.connectionReplaced) {
+      if (this.auth && credsAreLinked(this.auth.state.creds) && this.replacedRetries < 1) {
+        this.replacedRetries += 1;
+        await this.keepLinkedCreds();
+        this.error = null;
+        this.status = "connecting";
+        await this.persist();
+        await this.openSocket();
+        return;
+      }
       this.socket = null;
       this.qrDataUrl = null;
       this.status = "disconnected";
@@ -434,6 +470,25 @@ export class WhatsAppSession {
     this.error = null;
     this.stopping = false;
     await this.persist();
+  }
+
+  private async keepLinkedCreds(): Promise<void> {
+    if (!this.auth) return;
+    this.savedSession = credsAreLinked(this.auth.state.creds);
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await this.auth.saveCreds();
+        return;
+      } catch (error) {
+        lastError = error;
+        await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+      }
+    }
+    console.error(
+      "WhatsApp credentials were not saved.",
+      lastError instanceof Error ? lastError.message : lastError,
+    );
   }
 
   private async forgetSavedSession(): Promise<void> {

@@ -84,8 +84,9 @@ export function WhatsAppConnectPage() {
         if (cancelled) return;
         setStatus(next);
         setLoading(false);
-        if (next.status === "qr" || next.status === "connecting") {
-          timer = window.setTimeout(() => void load(), 1000);
+        const delay = next.status === "connected" ? 4000 : 1000;
+        if (next.status === "qr" || next.status === "connecting" || next.status === "connected") {
+          timer = window.setTimeout(() => void load(), delay);
         }
       } catch (error) {
         if (cancelled) return;
