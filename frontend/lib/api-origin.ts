@@ -1,3 +1,5 @@
+export const SAME_ORIGIN_API_PREFIX = "/backend";
+
 export function getApiOrigin(): string {
   const configured = process.env.NEXT_PUBLIC_API_ORIGIN?.trim();
   if (configured) return configured.replace(/\/+$/, "");
@@ -7,6 +9,12 @@ export function getApiOrigin(): string {
 
 export function apiUrl(path: string): string {
   return `${getApiOrigin()}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+// Production builds rewrite /backend/* on the site's own domain to the API, for networks that block the API host.
+export function sameOriginApiUrl(path: string): string | null {
+  if (process.env.NODE_ENV !== "production" || typeof window === "undefined") return null;
+  return `${SAME_ORIGIN_API_PREFIX}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 export function friendlyFetchError(caught: unknown, fallback: string): string {

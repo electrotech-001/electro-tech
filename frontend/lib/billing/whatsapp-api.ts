@@ -25,8 +25,8 @@ async function billingFetch(path: string, options: RequestInit = {}): Promise<Re
   try {
     return await requestBilling(path, options);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "The billing API is not running. Start it, then try connecting again.";
-    throw new WhatsAppApiError(message.includes("not running") ? "The billing API is not running. Start it, then try connecting again." : message);
+    const message = error instanceof Error ? error.message : "The billing server could not be reached. Check the internet connection, then try connecting again.";
+    throw new WhatsAppApiError(message.includes("could not be reached") ? "The billing server could not be reached. Check the internet connection, then try connecting again." : message);
   }
 }
 

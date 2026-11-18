@@ -12,7 +12,7 @@ async function billingFetch(path: string, options: RequestInit = {}): Promise<Re
   try {
     return await requestBilling(path, options);
   } catch (error) {
-    throw new QuotationApiError(error instanceof Error ? error.message : "The billing API is not running. Start it, then try again.");
+    throw new QuotationApiError(error instanceof Error ? error.message : "The billing server could not be reached. Check the internet connection, then try again.");
   }
 }
 

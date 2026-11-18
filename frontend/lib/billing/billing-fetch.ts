@@ -1,7 +1,22 @@
-import { apiUrl } from "../api-origin";
+import { apiUrl, sameOriginApiUrl } from "../api-origin";
 import { billingSupabase } from "./supabase";
 
-const NETWORK_MESSAGE = "The billing API is not running. Start it, then try again.";
+const NETWORK_MESSAGE = "The billing server could not be reached. Check the internet connection, then try again.";
+
+let throughSiteDomain = false;
+
+async function send(path: string, init: RequestInit): Promise<Response> {
+  const fallback = sameOriginApiUrl(path);
+  if (!throughSiteDomain || !fallback) {
+    try {
+      return await fetch(apiUrl(path), init);
+    } catch (error) {
+      if (!fallback || init.signal?.aborted) throw error;
+      throughSiteDomain = true;
+    }
+  }
+  return fetch(fallback, init);
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -47,7 +62,7 @@ export async function billingFetch(path: string, options: RequestInit = {}): Pro
       headers.set("Content-Type", "application/json");
     }
     try {
-      const response = await fetch(apiUrl(path), { ...options, headers, cache: "no-store" });
+      const response = await send(path, { ...options, headers, cache: "no-store" });
       const overloaded = response.status === 502 || response.status === 503 || response.status === 429;
       const sessionLate = response.status === 401 && !token;
       if (retry && (overloaded || sessionLate) && attempt < 2) {
