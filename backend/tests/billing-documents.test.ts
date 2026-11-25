@@ -709,7 +709,7 @@ test("a daily sale is removed when its last invoice is deleted, and a sale with 
   assert.equal((await repository.listReceiveProjects()).some((row) => row.project.id === paid.project.id), false);
 });
 
-test("customer balances list every customer in order and shrink when a payment is received", async () => {
+test("customer balances list only open invoice remainders and drop quotations plus settled invoices", async () => {
   const ayesha = {
     ...project("direct"),
     id: "project-ayesha",
@@ -724,10 +724,10 @@ test("customer balances list every customer in order and shrink when a payment i
   await repository.issueInvoice("project-1");
   const before = await repository.listCustomerBalances();
   assert.deepEqual(before.map((row) => [row.serial, row.customerName, row.pending, row.paid, row.remaining]), [
-    [1, "Ayesha Khan", 100000, 0, 100000],
-    [2, "Sheikh Zain", 1346000, 0, 1346000],
+    [1, "Sheikh Zain", 673000, 0, 673000],
   ]);
-  assert.equal(before[1]?.projects.map((item) => item.serial).join(","), "QT-001,QT-002");
+  assert.equal(before[0]?.projects.map((item) => item.serial).join(","), "INV-001");
+  assert.equal(before.some((row) => row.customerName === "Ayesha Khan"), false);
 
   const paid = await repository.recordPayment("project-1", {
     kind: "direct",
@@ -740,9 +740,17 @@ test("customer balances list every customer in order and shrink when a payment i
   const zain = after.find((row) => row.customerName === "Sheikh Zain");
   assert.ok(zain);
   assert.equal(zain.paid, 250000);
-  assert.equal(zain.remaining, 1096000);
+  assert.equal(zain.remaining, 423000);
   assert.equal(zain.pending, zain.paid + zain.remaining);
-  assert.equal(after.find((row) => row.customerName === "Ayesha Khan")?.remaining, 100000);
+  assert.equal(after.find((row) => row.customerName === "Ayesha Khan"), undefined);
+
+  await repository.recordPayment("project-1", {
+    kind: "direct",
+    paidAmount: 423000,
+    paymentDate: "2026-11-01",
+    paymentMode: "bank_transfer",
+  });
+  assert.deepEqual(await repository.listCustomerBalances(), []);
 });
 
 test("due dates chosen on the quotation fill the installment agreement", async () => {

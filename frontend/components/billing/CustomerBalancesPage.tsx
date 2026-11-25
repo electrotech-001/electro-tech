@@ -159,7 +159,7 @@ export function CustomerBalancesPage() {
           <p className={shell.kicker}>Billing CMS</p>
           <h1 className={shell.title}>Pending Balances</h1>
           <p className={shell.summary}>
-            Every customer in serial order, with the amount pending, the amount paid, and the balance left. A new payment updates the balance automatically.
+            Open invoice balances only — quotations and fully paid invoices are excluded. A new payment updates the remaining amount automatically.
           </p>
         </div>
         <div className={quote.ledgerActions}>
@@ -175,8 +175,8 @@ export function CustomerBalancesPage() {
       {loading ? <p className={quote.hint}>Loading customer balances…</p> : null}
       {!loading && !banner && rows.length === 0 ? (
         <section className={`${shell.panel} ${shell.empty}`}>
-          <h2>No customer balances yet</h2>
-          <p>Approve a quotation or create a direct invoice. The pending amount, payments, and remaining balance will appear here.</p>
+          <h2>No pending balances</h2>
+          <p>Open invoices with an unpaid balance appear here. Quotations and fully paid invoices stay off this list.</p>
         </section>
       ) : null}
       {!loading && rows.length > 0 ? (
@@ -226,7 +226,7 @@ export function CustomerBalancesPage() {
             <div className={styles.tableHead}>
               <div>
                 <h2>Customer balances</h2>
-                <p>Serial order with live paid and remaining figures</p>
+                <p>Open invoices only, with live paid and remaining figures</p>
               </div>
               <span className={styles.countPill}>{visible.length} shown</span>
             </div>
@@ -237,7 +237,7 @@ export function CustomerBalancesPage() {
                     <tr>
                       <th>Serial</th>
                       <th>Customer</th>
-                      <th>Projects</th>
+                      <th>Invoices</th>
                       <th className={styles.amount}>Pending</th>
                       <th className={styles.amount}>Paid</th>
                       <th className={styles.amount}>Balance remaining</th>
@@ -262,7 +262,7 @@ export function CustomerBalancesPage() {
                               </div>
                             </div>
                           </td>
-                          <td data-label="Projects">
+                          <td data-label="Invoices">
                             <div className={styles.projects}>
                               {row.projects.map((project) => (
                                 <span className={styles.projectChip} key={project.projectId}>{project.serial}</span>

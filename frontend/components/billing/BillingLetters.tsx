@@ -548,7 +548,7 @@ export function BalancesLetter({
             <tr>
               <th>Serial</th>
               <th>Customer</th>
-              <th>Projects</th>
+              <th>Invoices</th>
               <th>Status</th>
               <th>Pending</th>
               <th>Paid</th>

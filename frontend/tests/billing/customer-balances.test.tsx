@@ -38,7 +38,7 @@ const rows: CustomerBalance[] = [
     pending: 100000,
     paid: 0,
     remaining: 100000,
-    projects: [{ projectId: "p-3", serial: "QT-003", pending: 100000, paid: 0, remaining: 100000 }],
+    projects: [{ projectId: "p-3", serial: "INV-003", pending: 100000, paid: 0, remaining: 100000 }],
   },
   {
     serial: 2,
@@ -50,7 +50,7 @@ const rows: CustomerBalance[] = [
     pending: 673000,
     paid: 250000,
     remaining: 423000,
-    projects: [{ projectId: "p-1", serial: "QT-001", pending: 673000, paid: 250000, remaining: 423000 }],
+    projects: [{ projectId: "p-1", serial: "INV-001", pending: 673000, paid: 250000, remaining: 423000 }],
   },
 ];
 
@@ -70,7 +70,7 @@ test("lists customers in serial order with pending, paid, and remaining balance"
   expect(body).toHaveLength(2);
   expect(body[0]?.textContent).toContain("1");
   expect(body[0]?.textContent).toContain("Ayesha Khan");
-  expect(body[0]?.textContent).toContain("QT-003");
+  expect(body[0]?.textContent).toContain("INV-003");
   expect(body[0]?.textContent).toContain(formatRupees(100000));
   expect(body[1]?.textContent).toContain("Sheikh Zain");
   expect(body[1]?.textContent).toContain(formatRupees(250000));
@@ -82,7 +82,7 @@ test("lists customers in serial order with pending, paid, and remaining balance"
 test("pending only hides cleared customers and renumbers serials from 1", async () => {
   api.listCustomerBalances.mockResolvedValue([
     rows[0] as CustomerBalance,
-    { ...rows[1], serial: 2, paid: 673000, remaining: 0, pending: 673000, projects: [{ projectId: "p-1", serial: "QT-001", pending: 673000, paid: 673000, remaining: 0 }] },
+    { ...rows[1], serial: 2, paid: 673000, remaining: 0, pending: 673000, projects: [{ projectId: "p-1", serial: "INV-001", pending: 673000, paid: 673000, remaining: 0 }] },
     {
       serial: 3,
       key: "3710188888881",
@@ -93,7 +93,7 @@ test("pending only hides cleared customers and renumbers serials from 1", async 
       pending: 50000,
       paid: 10000,
       remaining: 40000,
-      projects: [{ projectId: "p-4", serial: "QT-004", pending: 50000, paid: 10000, remaining: 40000 }],
+      projects: [{ projectId: "p-4", serial: "INV-004", pending: 50000, paid: 10000, remaining: 40000 }],
     },
   ]);
   const user = userEvent.setup();

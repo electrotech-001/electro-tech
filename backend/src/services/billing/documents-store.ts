@@ -265,16 +265,37 @@ function balanceCustomerKey(project: { cnic: string; customerName: string; whats
   return `open:${name}:${phone || "na"}`;
 }
 
+function openInvoices(workspace: Workspace) {
+  return workspace.invoices.filter((invoice) => invoice.balanceDue > 0.009);
+}
+
+function openInvoiceSerials(workspace: Workspace): string {
+  return openInvoices(workspace)
+    .map((invoice) => invoice.serial)
+    .sort((left, right) => left.localeCompare(right))
+    .join(", ");
+}
+
 export function buildCustomerBalances(workspaces: Workspace[]): CustomerBalance[] {
   const groups = new Map<string, CustomerBalance & { latest: string }>();
   for (const workspace of workspaces) {
-    const view = present(workspace);
-    const project = view.project;
+    // Quotations with no invoice, and fully paid invoices, stay off this list.
+    const open = openInvoices(workspace);
+    if (open.length === 0) continue;
+    const remaining = balanceMoney(open.reduce((sum, invoice) => sum + invoice.balanceDue, 0));
+    if (!(remaining > 0.009)) continue;
+
+    const project = workspace.project;
     const key = balanceCustomerKey(project);
-    const paid = balanceMoney(view.paidTotal);
-    const remaining = balanceMoney(view.balance);
+    const paid = balanceMoney(open.reduce((sum, invoice) => sum + invoice.advancePaid, 0));
     const pending = balanceMoney(paid + remaining);
-    const line: CustomerBalanceProject = { projectId: project.id, serial: project.serial, pending, paid, remaining };
+    const line: CustomerBalanceProject = {
+      projectId: project.id,
+      serial: openInvoiceSerials(workspace) || project.serial,
+      pending,
+      paid,
+      remaining,
+    };
     const existing = groups.get(key);
     if (!existing) {
       groups.set(key, {
@@ -305,6 +326,7 @@ export function buildCustomerBalances(workspaces: Workspace[]): CustomerBalance[
     existing.projects.push(line);
   }
   return [...groups.values()]
+    .filter((group) => group.remaining > 0.009)
     .sort((left, right) => left.customerName.localeCompare(right.customerName) || left.key.localeCompare(right.key))
     .map((group, index) => ({
       serial: index + 1,
