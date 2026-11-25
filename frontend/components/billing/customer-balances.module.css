@@ -1,0 +1,510 @@
+.summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.metric {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 18px 18px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(16, 20, 16, 0.06);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), #fff),
+    #fff;
+  box-shadow: 0 12px 28px rgba(23, 32, 25, 0.05);
+}
+
+.metric::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+}
+
+.metricIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+}
+
+.metricLabel {
+  margin: 0;
+  color: #667066;
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.metricValue {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.4vw, 1.85rem);
+  font-weight: 780;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  word-break: break-word;
+}
+
+.metricHint {
+  margin: 0;
+  color: #8a918b;
+  font-size: 0.82rem;
+}
+
+.pending::before {
+  background: #b42318;
+}
+
+.pending .metricIcon {
+  background: #fdecec;
+  color: #b42318;
+}
+
+.pending .metricValue {
+  color: #b42318;
+}
+
+.paid::before {
+  background: #1f6b45;
+}
+
+.paid .metricIcon {
+  background: #e8f6ee;
+  color: #1f6b45;
+}
+
+.paid .metricValue {
+  color: #1f6b45;
+}
+
+.remaining::before {
+  background: #c99200;
+}
+
+.remaining .metricIcon {
+  background: #fff6d6;
+  color: #9a6700;
+}
+
+.remaining .metricValue {
+  color: #9a6700;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border-radius: 16px;
+  background:
+    radial-gradient(420px 120px at 0% 0%, rgba(245, 196, 0, 0.14), transparent 55%),
+    linear-gradient(180deg, #fffdf8, #fff);
+  border: 1px solid rgba(16, 20, 16, 0.06);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip,
+.chipOn {
+  appearance: none;
+  border-radius: 999px;
+  padding: 9px 14px;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.chip {
+  border: 1px solid rgba(16, 20, 16, 0.1);
+  background: #fff;
+  color: #3d463f;
+}
+
+.chip:hover {
+  border-color: rgba(31, 107, 69, 0.35);
+  color: #1f6b45;
+}
+
+.chipOn {
+  border: 1px solid #1f6b45;
+  background: #1f6b45;
+  color: #fff;
+}
+
+.search {
+  display: grid;
+  gap: 6px;
+  width: min(320px, 100%);
+}
+
+.search span {
+  color: #667066;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.search input {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(16, 20, 16, 0.12);
+  background: #fff;
+  padding: 0 14px;
+  font: inherit;
+  color: #172019;
+}
+
+.search input:focus {
+  outline: 2px solid rgba(31, 107, 69, 0.28);
+  border-color: #1f6b45;
+}
+
+.tablePanel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.tableHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid rgba(16, 20, 16, 0.06);
+  background:
+    linear-gradient(90deg, rgba(31, 107, 69, 0.06), transparent 48%),
+    #fff;
+}
+
+.tableHead h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  letter-spacing: -0.03em;
+}
+
+.tableHead p {
+  margin: 4px 0 0;
+  color: #667066;
+  font-size: 0.88rem;
+}
+
+.countPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: #e8f6ee;
+  color: #1f6b45;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 14px 16px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f7f5ef;
+  color: #5c665e;
+  font-size: 0.74rem;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(16, 20, 16, 0.08);
+}
+
+.table tbody tr {
+  border-bottom: 1px solid rgba(16, 20, 16, 0.05);
+  transition: background 140ms ease;
+}
+
+.table tbody tr:hover {
+  background: #fbfaf6;
+}
+
+.table tbody tr:nth-child(even) {
+  background: #fcfbf8;
+}
+
+.table tbody tr:nth-child(even):hover {
+  background: #f7f4ec;
+}
+
+.amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.serial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #101410;
+  color: #f5c400;
+  font-size: 0.85rem;
+  font-weight: 780;
+}
+
+.customer {
+  display: grid;
+  gap: 4px;
+}
+
+.customer a,
+.customerName {
+  color: #172019;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.customer a:hover {
+  color: #1f6b45;
+}
+
+.cnic {
+  color: #8a918b;
+  font-size: 0.82rem;
+}
+
+.projects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.projectChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #eef5f0;
+  color: #1f6b45;
+  font-size: 0.78rem;
+  font-weight: 720;
+}
+
+.moneyPending,
+.moneyPaid,
+.moneyRemaining {
+  display: inline-flex;
+  justify-content: flex-end;
+  min-width: 108px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-weight: 750;
+}
+
+.moneyPending {
+  background: #fdecec;
+  color: #b42318;
+}
+
+.moneyPaid {
+  background: #e8f6ee;
+  color: #1f6b45;
+}
+
+.moneyRemaining {
+  background: #fff6d6;
+  color: #9a6700;
+}
+
+.moneyCleared {
+  background: #e8f6ee;
+  color: #1f6b45;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 780;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.statusDue {
+  background: #fdecec;
+  color: #b42318;
+}
+
+.statusPartial {
+  background: #fff6d6;
+  color: #9a6700;
+}
+
+.statusClear {
+  background: #e8f6ee;
+  color: #1f6b45;
+}
+
+.progress {
+  width: min(140px, 100%);
+  height: 7px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: rgba(16, 20, 16, 0.08);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #1f6b45, #f5c400);
+}
+
+.footerRow td {
+  padding-top: 16px;
+  padding-bottom: 16px;
+  background: #101410;
+  color: #f6f5f2;
+  font-weight: 750;
+}
+
+.footerRow .moneyPending,
+.footerRow .moneyPaid,
+.footerRow .moneyRemaining {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.footerRow .moneyPending {
+  color: #ffb4ae;
+}
+
+.footerRow .moneyPaid {
+  color: #8fddb4;
+}
+
+.footerRow .moneyRemaining {
+  color: #f5c400;
+}
+
+.emptyMatch {
+  margin: 0;
+  padding: 28px 20px;
+  color: #667066;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .summary {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbar {
+    align-items: stretch;
+  }
+
+  .search {
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .table {
+    min-width: 0;
+  }
+
+  .table thead {
+    display: none;
+  }
+
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+
+  .table tbody tr {
+    margin: 0;
+    padding: 14px 16px 16px;
+    border-bottom: 1px solid rgba(16, 20, 16, 0.08);
+  }
+
+  .table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 8px 0;
+    text-align: left;
+  }
+
+  .table td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    color: #8a918b;
+    font-size: 0.74rem;
+    font-weight: 780;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .amount {
+    text-align: left;
+  }
+
+  .moneyPending,
+  .moneyPaid,
+  .moneyRemaining {
+    min-width: 0;
+  }
+
+  .footerRow td {
+    background: #101410;
+  }
+
+  .footerRow td:first-child {
+    border-radius: 0;
+  }
+}

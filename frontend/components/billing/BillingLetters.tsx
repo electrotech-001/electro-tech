@@ -519,6 +519,69 @@ export function LedgerLetter({
   );
 }
 
+export function BalancesLetter({
+  period,
+  rows,
+  totals,
+}: {
+  period: string;
+  rows: Array<{
+    id: string;
+    serial: string;
+    customer: string;
+    cnic: string;
+    projects: string;
+    status: string;
+    pending: string;
+    paid: string;
+    remaining: string;
+  }>;
+  totals: { pending: string; paid: string; remaining: string };
+}) {
+  return (
+    <article className={`${styles.letter} ${styles.ledgerSheet} ${styles.ledgerPrint} quotation-letter`}>
+      <Letterhead title="PENDING BALANCES" />
+      <p className={styles.ledgerPeriod}>{period}</p>
+      <div className={styles.tableWrap}>
+        <table>
+          <thead>
+            <tr>
+              <th>Serial</th>
+              <th>Customer</th>
+              <th>Projects</th>
+              <th>Status</th>
+              <th>Pending</th>
+              <th>Paid</th>
+              <th>Balance remaining</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id}>
+                <td>{row.serial}</td>
+                <td>{row.customer}{row.cnic ? <small>{row.cnic}</small> : null}</td>
+                <td>{row.projects}</td>
+                <td>{row.status}</td>
+                <td className={styles.num}>{row.pending}</td>
+                <td className={styles.num}>{row.paid}</td>
+                <td className={styles.num}>{row.remaining}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={4}>Total</td>
+              <td className={styles.num}>{totals.pending}</td>
+              <td className={styles.num}>{totals.paid}</td>
+              <td className={styles.num}>{totals.remaining}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </article>
+  );
+}
+
 export function CustomerNoteCard({
   title,
   customerName,
