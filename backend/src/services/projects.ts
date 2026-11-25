@@ -175,6 +175,23 @@ export function generateSlug(title: string): string {
 }
 
 /**
+ * Picks the requested slug, or the next free `slug-2`, `slug-3`, … when it is taken.
+ * The result always fits the public slug format and the 100 character column.
+ */
+export function allocateProjectSlug(requested: string, taken: Iterable<string>): string {
+  const used = new Set(taken);
+  const root = requested.trim().toLowerCase().replace(/^-+|-+$/g, "").slice(0, 100) || "project";
+  if (!used.has(root)) return root;
+  for (let number = 2; number <= 999; number += 1) {
+    const suffix = `-${number}`;
+    const stem = root.slice(0, 100 - suffix.length).replace(/-+$/g, "") || "project";
+    const candidate = `${stem}${suffix}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  throw new ProjectConflictError("Project slug already exists");
+}
+
+/**
  * Maps a database row to a public project response, excluding internal/admin fields.
  */
 export function toPublicProject(
@@ -419,22 +436,17 @@ export async function createProject(
   dependencies: ProjectServiceDependencies = {},
 ): Promise<AdminProjectResponse> {
   const supabase = dependencies.client ?? getSupabaseClient();
-  const slug = input.slug ? input.slug.trim().toLowerCase() : generateSlug(input.title);
-
-  // Check for slug collision
-  const { data: existing, error: checkError } = await supabase
-    .from("projects")
-    .select("id")
-    .eq("slug", slug)
-    .maybeSingle();
+  const requested = input.slug ? input.slug.trim().toLowerCase() : generateSlug(input.title);
+  const { data: slugRows, error: checkError } = await supabase.from("projects").select("slug");
 
   if (checkError) {
     throw new Error("Database query failed.");
   }
 
-  if (existing) {
-    throw new ProjectConflictError("Project slug already exists");
-  }
+  const taken = new Set(
+    ((slugRows ?? []) as Array<{ slug?: string | null }>).map((row) => (row.slug ?? "").trim().toLowerCase()),
+  );
+  let slug = allocateProjectSlug(requested, taken);
 
   const shortSummary = input.shortSummary ? input.shortSummary.trim() : null;
   const description = input.description ? input.description.trim() : shortSummary;
@@ -461,20 +473,33 @@ export async function createProject(
     status: "draft" as const,
   };
 
-  const { data, error } = await supabase
-    .from("projects")
-    .insert(insertPayload)
-    .select("*, project_media(*)")
-    .single();
+  let created: ProjectDatabaseRow | null = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const { data, error } = await supabase
+      .from("projects")
+      .insert({ ...insertPayload, slug })
+      .select("*, project_media(*)")
+      .single();
 
-  if (error) {
-    if (error.code === "23505" || error.message?.toLowerCase().includes("unique")) {
-      throw new ProjectConflictError("Project slug already exists");
+    if (!error) {
+      created = data as ProjectDatabaseRow;
+      break;
     }
-    throw new Error("Database query failed.");
+
+    const unique = error.code === "23505" || error.message?.toLowerCase().includes("unique");
+    if (!unique || attempt === 3) {
+      if (unique) throw new ProjectConflictError("Project slug already exists");
+      throw new Error("Database query failed.");
+    }
+    taken.add(slug);
+    slug = allocateProjectSlug(requested, taken);
   }
 
-  return toAdminProject(data as ProjectDatabaseRow, dependencies.publicUrlBase ?? dependencies.client);
+  if (!created) {
+    throw new ProjectConflictError("Project slug already exists");
+  }
+
+  return toAdminProject(created, dependencies.publicUrlBase ?? dependencies.client);
 }
 
 /**

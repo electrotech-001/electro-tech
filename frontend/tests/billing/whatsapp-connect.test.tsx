@@ -42,6 +42,24 @@ it("shows a saved session resume action and the document sender when connected",
   expect(screen.getByLabelText("Customer WhatsApp")).toBeTruthy();
 });
 
+it("restores a saved session without asking for another scan", async () => {
+  status.fetchWhatsAppStatus.mockResolvedValue({
+    status: "connecting",
+    phone: "923001234567",
+    phoneDisplay: "+92 300 1234567",
+    pushName: "Electro Tech",
+    qrDataUrl: null,
+    savedSession: true,
+    error: null,
+  });
+
+  render(<WhatsAppConnectPage />);
+
+  expect(await screen.findByText("Restoring the saved WhatsApp session. You do not need to scan again.")).toBeTruthy();
+  expect(screen.queryByText("Scan this code. It refreshes on its own.")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Connect WhatsApp" })).toBeNull();
+});
+
 it("offers a fresh QR connection when nothing is saved", async () => {
   status.fetchWhatsAppStatus.mockResolvedValue({
     status: "disconnected",

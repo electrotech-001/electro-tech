@@ -709,6 +709,42 @@ test("a daily sale is removed when its last invoice is deleted, and a sale with 
   assert.equal((await repository.listReceiveProjects()).some((row) => row.project.id === paid.project.id), false);
 });
 
+test("customer balances list every customer in order and shrink when a payment is received", async () => {
+  const ayesha = {
+    ...project("direct"),
+    id: "project-ayesha",
+    serial: "QT-003",
+    serialNumber: 3,
+    customerName: "Ayesha Khan",
+    cnic: "37101-9999999-1",
+    grandTotal: 100000,
+  };
+  const second = { ...project("direct"), id: "project-2", serial: "QT-002", serialNumber: 2 };
+  const repository = createMemoryDocumentsRepository([project("direct"), second, ayesha]);
+  await repository.issueInvoice("project-1");
+  const before = await repository.listCustomerBalances();
+  assert.deepEqual(before.map((row) => [row.serial, row.customerName, row.pending, row.paid, row.remaining]), [
+    [1, "Ayesha Khan", 100000, 0, 100000],
+    [2, "Sheikh Zain", 1346000, 0, 1346000],
+  ]);
+  assert.equal(before[1]?.projects.map((item) => item.serial).join(","), "QT-001,QT-002");
+
+  const paid = await repository.recordPayment("project-1", {
+    kind: "direct",
+    paidAmount: 250000,
+    paymentDate: "2026-10-09",
+    paymentMode: "cash",
+  });
+  assert.equal(paid.balance, 423000);
+  const after = await repository.listCustomerBalances();
+  const zain = after.find((row) => row.customerName === "Sheikh Zain");
+  assert.ok(zain);
+  assert.equal(zain.paid, 250000);
+  assert.equal(zain.remaining, 1096000);
+  assert.equal(zain.pending, zain.paid + zain.remaining);
+  assert.equal(after.find((row) => row.customerName === "Ayesha Khan")?.remaining, 100000);
+});
+
 test("due dates chosen on the quotation fill the installment agreement", async () => {
   const repository = createMemoryDocumentsRepository([{ ...project("installments"), installmentDueDates: ["2026-11-05", "2026-12-20", "2027-02-01"] }]);
   const agreement = await repository.saveAgreement("project-1", { dueDates: [], guarantors: [] });

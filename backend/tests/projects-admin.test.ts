@@ -380,22 +380,23 @@ test("5 & 6. Create project starts as draft and rejects client injection of stat
   assert.equal(resImage.status, 400);
 });
 
-// 7 & 8. Auto-generate slug and collision check
-test("7 & 8. Create project auto-generates slug and rejects collisions with 409", async () => {
+// 7 & 8. Auto-generate slug and keep a colliding title by allocating the next free slug
+test("7 & 8. Create project auto-generates slug and stores the next free slug when it is taken", async () => {
   const { client } = createMockClient([sampleCompleteProject]);
   const baseUrl = await startAdminServer(client);
 
-  // Attempt to create with colliding slug
   const resCollision = await fetch(`${baseUrl}/api/admin/projects`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      title: "Completed Draft Project", // Generates identical slug
+      title: "Completed Draft Project",
     }),
   });
-  assert.equal(resCollision.status, 409);
-  const body = (await resCollision.json()) as { error: string };
-  assert.equal(body.error, "Project slug already exists");
+  assert.equal(resCollision.status, 201);
+  const body = (await resCollision.json()) as { slug: string; title: string; status: string };
+  assert.equal(body.title, "Completed Draft Project");
+  assert.equal(body.status, "draft");
+  assert.equal(body.slug, "completed-draft-project-2");
 });
 
 // 9 & 10. Partial update and rejection of disallowed fields

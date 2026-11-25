@@ -126,6 +126,14 @@ export function createBillingDocumentsRouter(dependencies: Dependencies = {}) {
       sendFailure(error, response, next);
     }
   });
+  router.get("/customer-balances", async (_request, response, next) => {
+    try {
+      response.setHeader("Cache-Control", "no-store");
+      response.status(200).json({ customers: await repository().listCustomerBalances() });
+    } catch (error) {
+      sendFailure(error, response, next);
+    }
+  });
   router.get("/discounts", async (_request, response, next) => {
     try {
       response.status(200).json({ entries: await repository().listDiscounts() });

@@ -217,8 +217,14 @@ export function WhatsAppConnectPage() {
           {status.status === "disconnected" && status.savedSession ? (
             <p className={styles.waNote}>A saved session is ready. Connect to resume this number without a new scan.</p>
           ) : null}
-          {status.status === "connecting" ? <p className={styles.waNote}>Opening the saved WhatsApp session…</p> : null}
-          {status.qrDataUrl ? (
+          {status.status === "connecting" ? (
+            <p className={styles.waNote}>
+              {status.savedSession
+                ? "Restoring the saved WhatsApp session. You do not need to scan again."
+                : "Opening WhatsApp…"}
+            </p>
+          ) : null}
+          {status.qrDataUrl && !status.savedSession ? (
             <>
               <div className={styles.qrFrame}>
                 <img src={status.qrDataUrl} alt="WhatsApp login QR code" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createAdminProject } from "../../lib/admin/api";
 import {
@@ -51,6 +51,7 @@ export function ProjectCreatePage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submitLock = useRef(false);
 
   // Handle title changes and auto-slug generation
   const handleTitleChange = (newTitle: string) => {
@@ -124,7 +125,8 @@ export function ProjectCreatePage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return;
+    if (submitLock.current || isSubmitting) return;
+    submitLock.current = true;
 
     setError(null);
     const trimmedTitle = title.trim();
@@ -158,6 +160,7 @@ export function ProjectCreatePage() {
       // Retain draft in sessionStorage upon failure so no work is lost
       setError(err instanceof Error ? err.message : "Failed to create project.");
     } finally {
+      submitLock.current = false;
       setIsSubmitting(false);
     }
   };
@@ -269,7 +272,7 @@ export function ProjectCreatePage() {
               />
             </div>
             <span className="form-hint">
-              Unique identifier used in the public website URL.
+              Unique identifier used in the public website URL. If it is already used, the next free address is saved automatically.
             </span>
           </div>
 

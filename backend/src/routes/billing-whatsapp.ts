@@ -25,6 +25,7 @@ const sendFieldsSchema = z.object({
 
 type SessionGateway = Pick<WhatsAppSession, "snapshot" | "connect" | "disconnect" | "send" | "sendText"> & {
   ensureReady?: () => Promise<void>;
+  resume?: () => Promise<WhatsAppSnapshot>;
 };
 
 export type BillingWhatsAppRouterDependencies = {
@@ -163,7 +164,9 @@ export function createBillingWhatsAppRouter(dependencies: BillingWhatsAppRouterD
   router.use(auth);
   router.get("/", async (_request, response, next) => {
     try {
-      response.status(200).json(present(session().snapshot()));
+      const gateway = session();
+      const snapshot = gateway.resume ? await gateway.resume() : gateway.snapshot();
+      response.status(200).json(present(snapshot));
     } catch (error) {
       sendFailure(error, response, next);
     }

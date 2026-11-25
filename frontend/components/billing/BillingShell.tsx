@@ -4,6 +4,7 @@ import { Menu, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { getDocumentTerms } from "@/lib/billing/documents-api";
+import { fetchWhatsAppStatus } from "@/lib/billing/whatsapp-api";
 import { billingNav, isBillingNavActive } from "@/lib/billing/navigation";
 import { currentAssuranceLevel, hasBillingAccess, needsAuthenticatorEnrollment, signOutBilling } from "@/lib/billing/mfa";
 import { billingSupabase } from "@/lib/billing/supabase";
@@ -45,6 +46,7 @@ export function BillingShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready) return;
     let active = true;
+    fetchWhatsAppStatus().catch(() => undefined);
     getDocumentTerms()
       .then((body) => {
         if (active) publishDocumentTerms(body);

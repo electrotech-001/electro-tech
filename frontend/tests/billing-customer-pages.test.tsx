@@ -87,6 +87,7 @@ test("sidebar customers group lists profiles and the payment ledger", () => {
   const customers = billingNav.find((group) => group.label === "Customers");
   expect(customers?.items.map((item) => [item.label, item.href])).toEqual([
     ["Customer Profiles", "/billing/profiles"],
+    ["Pending Balances", "/billing/balances"],
     ["Payment Ledger", "/billing/ledger"],
   ]);
 });

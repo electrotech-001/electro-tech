@@ -40,11 +40,33 @@ export type ReceiveProject = Workspace & {
   balance: number;
 };
 
+export type CustomerBalanceProject = {
+  projectId: string;
+  serial: string;
+  pending: number;
+  paid: number;
+  remaining: number;
+};
+
+export type CustomerBalance = {
+  serial: number;
+  key: string;
+  customerName: string;
+  cnic: string;
+  contactNo: string;
+  whatsappNo: string;
+  pending: number;
+  paid: number;
+  remaining: number;
+  projects: CustomerBalanceProject[];
+};
+
 export type DocumentsRepository = {
   listAgreements(includeImages?: boolean): Promise<AgreementRecord[]>;
   listGuarantors(): Promise<GuarantorRecord[]>;
   listInvoices(): Promise<InvoiceRecord[]>;
   listReceiveProjects(): Promise<ReceiveProject[]>;
+  listCustomerBalances(): Promise<CustomerBalance[]>;
   createDirectSale(draft: QuotationDraft, opening?: OpeningReceipt | null, dueDates?: string[]): Promise<ReceiveProject>;
   workspace(projectId: string): Promise<ReceiveProject>;
   saveAgreement(projectId: string, input: { dueDates: string[]; guarantors: GuarantorInput[]; body?: string; opening?: OpeningReceipt | null; planDiscount?: number }): Promise<AgreementRecord>;
@@ -231,6 +253,73 @@ function present(workspace: Workspace): ReceiveProject {
   return { ...workspace, paidTotal: collected, balance };
 }
 
+function balanceMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function balanceCustomerKey(project: { cnic: string; customerName: string; whatsappNo?: string; contactNo?: string }): string {
+  const digits = project.cnic.replace(/\D/g, "");
+  if (digits) return digits;
+  const name = project.customerName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "customer";
+  const phone = (project.whatsappNo || project.contactNo || "").replace(/\D/g, "");
+  return `open:${name}:${phone || "na"}`;
+}
+
+export function buildCustomerBalances(workspaces: Workspace[]): CustomerBalance[] {
+  const groups = new Map<string, CustomerBalance & { latest: string }>();
+  for (const workspace of workspaces) {
+    const view = present(workspace);
+    const project = view.project;
+    const key = balanceCustomerKey(project);
+    const paid = balanceMoney(view.paidTotal);
+    const remaining = balanceMoney(view.balance);
+    const pending = balanceMoney(paid + remaining);
+    const line: CustomerBalanceProject = { projectId: project.id, serial: project.serial, pending, paid, remaining };
+    const existing = groups.get(key);
+    if (!existing) {
+      groups.set(key, {
+        serial: 0,
+        key,
+        customerName: project.customerName,
+        cnic: project.cnic,
+        contactNo: project.contactNo,
+        whatsappNo: project.whatsappNo,
+        pending,
+        paid,
+        remaining,
+        projects: [line],
+        latest: project.quotationDate,
+      });
+      continue;
+    }
+    if (project.quotationDate >= existing.latest) {
+      existing.latest = project.quotationDate;
+      existing.customerName = project.customerName;
+      existing.cnic = project.cnic;
+      existing.contactNo = project.contactNo;
+      existing.whatsappNo = project.whatsappNo;
+    }
+    existing.pending = balanceMoney(existing.pending + pending);
+    existing.paid = balanceMoney(existing.paid + paid);
+    existing.remaining = balanceMoney(existing.remaining + remaining);
+    existing.projects.push(line);
+  }
+  return [...groups.values()]
+    .sort((left, right) => left.customerName.localeCompare(right.customerName) || left.key.localeCompare(right.key))
+    .map((group, index) => ({
+      serial: index + 1,
+      key: group.key,
+      customerName: group.customerName,
+      cnic: group.cnic,
+      contactNo: group.contactNo,
+      whatsappNo: group.whatsappNo,
+      pending: group.pending,
+      paid: group.paid,
+      remaining: group.remaining,
+      projects: [...group.projects].sort((left, right) => left.serial.localeCompare(right.serial) || left.projectId.localeCompare(right.projectId)),
+    }));
+}
+
 function isFullySettled(workspace: Workspace): boolean {
   if (workspace.project.origin === "direct_sale") return false;
   if (workspace.invoices.length === 0) return false;
@@ -282,6 +371,9 @@ export function createMemoryDocumentsRepository(projects: QuotationRecord[]): Do
     },
     async listReceiveProjects() {
       return [...workspaces.values()].filter((workspace) => workspace.project.status !== "completed").map(present);
+    },
+    async listCustomerBalances() {
+      return buildCustomerBalances([...workspaces.values()]);
     },
     async createDirectSale(draft, opening, dueDates = []) {
       const serialNumber = [...workspaces.values()]
@@ -860,6 +952,9 @@ export function createSupabaseDocumentsRepository(client: SupabaseClient): Docum
     },
     async listReceiveProjects() {
       return (await listedWorkspaces("none")).filter((workspace) => workspace.project.status !== "completed").map(present);
+    },
+    async listCustomerBalances() {
+      return buildCustomerBalances(await listedWorkspaces("none"));
     },
     async createDirectSale(draft, opening, dueDates = []) {
       const project = await getQuotationRepository().createDirectSale(draft);

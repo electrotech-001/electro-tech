@@ -153,6 +153,9 @@ export class WhatsAppSession {
   private pushName: string | null = null;
   private qrDataUrl: string | null = null;
   private savedSession = false;
+  private openedFromStored = false;
+  private storedQrSkips = 0;
+  private acceptNewPairing = false;
   private error: string | null = null;
 
   constructor(dependencies: WhatsAppSessionDependencies) {
@@ -209,12 +212,41 @@ export class WhatsAppSession {
     );
   }
 
+  /**
+   * Loads the official number saved in storage and opens that socket.
+   * A fresh QR is not started from here. Opening the CMS calls this so a
+   * previous scan is reused instead of asking for another one.
+   */
+  resume(): Promise<WhatsAppSnapshot> {
+    return this.enqueue(async () => {
+      if (this.socket && (this.status === "connected" || this.status === "connecting")) {
+        return this.snapshot();
+      }
+      if (this.socket && this.status === "qr" && !this.openedFromStored) {
+        return this.snapshot();
+      }
+      const saved = await this.repository.read("creds");
+      const linked = credsAreLinked(saved) || Boolean(this.auth && credsAreLinked(this.auth.state.creds));
+      if (!linked) {
+        this.savedSession = Boolean(this.auth && credsAreLinked(this.auth.state.creds));
+        return this.snapshot();
+      }
+      this.savedSession = true;
+      if (saved && typeof saved === "object") {
+        const identity = readIdentity(saved as AuthenticationCreds);
+        this.phone = this.phone ?? identity.phone;
+        this.pushName = this.pushName ?? identity.pushName;
+      }
+      this.stopping = false;
+      this.error = null;
+      this.reconnects = 0;
+      await this.openSocket();
+      return this.snapshot();
+    });
+  }
+
   async restore(): Promise<void> {
-    const saved = await this.repository.read("creds");
-    const linked = credsAreLinked(saved);
-    this.savedSession = linked;
-    if (!linked) return;
-    await this.connect();
+    await this.resume();
   }
 
   disconnect(): Promise<WhatsAppSnapshot> {
@@ -329,7 +361,9 @@ export class WhatsAppSession {
       ? currentAuth
       : await loadAuthState(this.repository);
     this.auth = auth;
-    this.savedSession = credsAreLinked(auth.state.creds);
+    const linked = credsAreLinked(auth.state.creds);
+    this.savedSession = linked || this.savedSession;
+    this.openedFromStored = linked;
     const socket = await this.createSocket(auth.state);
     if (this.stopping || token !== this.socketToken) {
       await socket.end(undefined).catch(() => undefined);
@@ -358,11 +392,27 @@ export class WhatsAppSession {
 
   private async applyUpdate(token: number, update: Partial<ConnectionState>): Promise<void> {
     if (token !== this.socketToken || this.stopping) return;
+    if (update.qr && this.openedFromStored && !this.acceptNewPairing) {
+      this.storedQrSkips += 1;
+      this.qrDataUrl = null;
+      this.status = "connecting";
+      this.error = null;
+      await this.persist();
+      if (this.storedQrSkips <= 2) {
+        this.auth = null;
+        await this.openSocket();
+        return;
+      }
+      this.openedFromStored = false;
+      this.acceptNewPairing = true;
+      this.savedSession = false;
+      this.error = "The saved WhatsApp session could not be restored. Scan the QR code to connect again.";
+    }
     if (update.qr) {
       this.qrDataUrl = await this.renderQr(update.qr);
       this.status = "qr";
       this.reconnects = 0;
-      this.error = null;
+      if (!this.error) this.error = null;
       await this.persist();
     }
     if (update.connection === "open" && this.auth) {
@@ -370,10 +420,13 @@ export class WhatsAppSession {
       this.status = "connected";
       this.qrDataUrl = null;
       this.reconnects = 0;
+      this.storedQrSkips = 0;
+      this.acceptNewPairing = false;
       this.savedSession = credsAreLinked(this.auth.state.creds);
       this.error = null;
       this.phone = identity.phone;
       this.pushName = identity.pushName;
+      await this.keepLinkedCreds();
       await this.persist();
     }
     if (update.connection === "close") {
@@ -474,7 +527,9 @@ export class WhatsAppSession {
 
   private async keepLinkedCreds(): Promise<void> {
     if (!this.auth) return;
-    this.savedSession = credsAreLinked(this.auth.state.creds);
+    const linked = credsAreLinked(this.auth.state.creds);
+    if (!linked && this.openedFromStored && !this.acceptNewPairing) return;
+    if (linked) this.savedSession = true;
     let lastError: unknown;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
@@ -495,6 +550,9 @@ export class WhatsAppSession {
     this.saveGeneration += 1;
     this.auth = null;
     this.savedSession = false;
+    this.openedFromStored = false;
+    this.storedQrSkips = 0;
+    this.acceptNewPairing = false;
     await this.repository.clear();
   }
 

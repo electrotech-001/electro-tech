@@ -231,6 +231,45 @@ test("a stored WhatsApp identity reconnects without a new QR", async () => {
   assert.ok(await repository.read("creds"));
 });
 
+test("a stored session ignores a new QR and reconnects the saved login", async () => {
+  const repository = createMemoryAuthRepository();
+  const seeded = await loadAuthState(repository);
+  seeded.state.creds.registered = true;
+  seeded.state.creds.me = { id: "923001234567:1@s.whatsapp.net", name: "Electro Tech" };
+  await seeded.saveCreds();
+
+  let opened = 0;
+  const session = new WhatsAppSession({
+    repository,
+    connections: createMemoryConnectionStore(),
+    renderQr: async () => "data:image/png;base64,qr",
+    createSocket: async (auth) => {
+      opened += 1;
+      assert.equal(auth.creds.me?.id, "923001234567:1@s.whatsapp.net");
+      const socket = createFakeSocket();
+      setTimeout(() => {
+        if (opened === 1) socket.emit({ qr: "replace-me" });
+        else socket.emit({ connection: "open" });
+      }, 0);
+      return socket as unknown as WhatsAppSocket;
+    },
+  });
+
+  const started = await session.resume();
+  assert.equal(started.savedSession, true);
+  assert.equal(started.qrDataUrl, null);
+  assert.equal(started.status, "connecting");
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  await session.idle();
+  const snapshot = session.snapshot();
+  assert.equal(opened, 2);
+  assert.equal(snapshot.status, "connected");
+  assert.equal(snapshot.qrDataUrl, null);
+  assert.equal(snapshot.phone, "923001234567");
+  const saved = await repository.read("creds") as { me?: { id?: string } } | null;
+  assert.equal(saved?.me?.id, "923001234567:1@s.whatsapp.net");
+});
+
 test("a scanned pairing restarts and finishes the login", async () => {
   const repository = createMemoryAuthRepository();
   let opened = 0;

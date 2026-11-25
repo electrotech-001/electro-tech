@@ -10,6 +10,7 @@ import {
   Receipt,
   BadgePercent,
   CircleCheck,
+  CircleDollarSign,
   Smartphone,
   SunMedium,
   Users,
@@ -41,6 +42,7 @@ export const billingNav: BillingNavGroup[] = [
     label: "Customers",
     items: [
       { href: "/billing/profiles", label: "Customer Profiles", icon: IdCard },
+      { href: "/billing/balances", label: "Pending Balances", icon: CircleDollarSign },
       { href: "/billing/ledger", label: "Payment Ledger", icon: BookOpen },
     ],
   },
