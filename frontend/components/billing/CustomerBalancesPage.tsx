@@ -33,11 +33,29 @@ function statusClass(row: CustomerBalance): string {
   return styles.statusDue;
 }
 
-function viewLabel(pendingOnly: boolean, query: string, count: number): string {
-  const parts = [pendingOnly ? "Pending customers only" : "All customers"];
+type BalanceSort = "name" | "highest" | "lowest";
+
+function sortLabel(sort: BalanceSort): string {
+  if (sort === "highest") return "Highest to lowest";
+  if (sort === "lowest") return "Lowest to highest";
+  return "By name";
+}
+
+function viewLabel(pendingOnly: boolean, sort: BalanceSort, query: string, count: number): string {
+  const parts = [pendingOnly ? "Pending customers only" : "All customers", sortLabel(sort)];
   if (query.trim()) parts.push(`Search “${query.trim()}”`);
   parts.push(`${count} customer${count === 1 ? "" : "s"}`);
   return parts.join(" · ");
+}
+
+function compareBalances(left: CustomerBalance, right: CustomerBalance, sort: BalanceSort): number {
+  if (sort === "highest") {
+    return right.remaining - left.remaining || left.customerName.localeCompare(right.customerName) || left.key.localeCompare(right.key);
+  }
+  if (sort === "lowest") {
+    return left.remaining - right.remaining || left.customerName.localeCompare(right.customerName) || left.key.localeCompare(right.key);
+  }
+  return left.customerName.localeCompare(right.customerName) || left.key.localeCompare(right.key);
 }
 
 export function CustomerBalancesPage() {
@@ -47,6 +65,7 @@ export function CustomerBalancesPage() {
   const [banner, setBanner] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [pendingOnly, setPendingOnly] = useState(false);
+  const [sort, setSort] = useState<BalanceSort>("name");
   const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
@@ -84,8 +103,9 @@ export function CustomerBalancesPage() {
         if (!needle) return true;
         return [row.customerName, row.cnic, row.contactNo, row.whatsappNo, projectSerials(row)].join(" ").toLowerCase().includes(needle);
       })
+      .sort((left, right) => compareBalances(left, right, sort))
       .map((row, index) => ({ ...row, serial: index + 1 }));
-  }, [pendingOnly, query, rows]);
+  }, [pendingOnly, query, rows, sort]);
 
   const totals = visible.reduce(
     (sum, row) => ({
@@ -97,7 +117,7 @@ export function CustomerBalancesPage() {
   );
 
   const pendingCustomers = visible.filter((row) => row.remaining > 0).length;
-  const period = viewLabel(pendingOnly, query, visible.length);
+  const period = viewLabel(pendingOnly, sort, query, visible.length);
   const letterRows = visible.map((row) => ({
     id: row.key,
     serial: String(row.serial),
@@ -183,9 +203,18 @@ export function CustomerBalancesPage() {
           </section>
 
           <div className={styles.toolbar}>
-            <div className={styles.filters} role="group" aria-label="Balance filter">
-              <button className={pendingOnly ? styles.chip : styles.chipOn} type="button" onClick={() => setPendingOnly(false)}>All customers</button>
-              <button className={pendingOnly ? styles.chipOn : styles.chip} type="button" onClick={() => setPendingOnly(true)}>Pending only</button>
+            <div className={styles.filterGroups}>
+              <div className={styles.filters} role="group" aria-label="Customer filter">
+                <span className={styles.filterLabel}>Customers</span>
+                <button className={pendingOnly ? styles.chip : styles.chipOn} type="button" onClick={() => setPendingOnly(false)}>All customers</button>
+                <button className={pendingOnly ? styles.chipOn : styles.chip} type="button" onClick={() => setPendingOnly(true)}>Pending only</button>
+              </div>
+              <div className={styles.filters} role="group" aria-label="Balance amount sort">
+                <span className={styles.filterLabel}>Balance remaining</span>
+                <button className={sort === "name" ? styles.chipOn : styles.chip} type="button" onClick={() => setSort("name")}>By name</button>
+                <button className={sort === "highest" ? styles.chipOn : styles.chip} type="button" onClick={() => setSort("highest")}>Highest to lowest</button>
+                <button className={sort === "lowest" ? styles.chipOn : styles.chip} type="button" onClick={() => setSort("lowest")}>Lowest to highest</button>
+              </div>
             </div>
             <label className={styles.search}>
               <span>Search</span>

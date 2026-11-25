@@ -112,3 +112,26 @@ test("pending only hides cleared customers and renumbers serials from 1", async 
   expect(body[1]?.textContent).toMatch(/^2/);
   expect(body[1]?.textContent).toContain("Bilal Ahmed");
 });
+
+test("highest to lowest and lowest to highest sort by remaining balance and renumber", async () => {
+  api.listCustomerBalances.mockResolvedValue(rows);
+  const user = userEvent.setup();
+  render(<CustomerBalancesPage />);
+  expect(await screen.findByRole("heading", { name: "Pending Balances" })).toBeTruthy();
+
+  await user.click(screen.getByRole("button", { name: "Highest to lowest" }));
+  let body = within(screenTable()).getAllByRole("row").filter((row) => row.parentElement?.tagName === "TBODY");
+  expect(body[0]?.textContent).toContain("1");
+  expect(body[0]?.textContent).toContain("Sheikh Zain");
+  expect(body[0]?.textContent).toContain(formatRupees(423000));
+  expect(body[1]?.textContent).toContain("2");
+  expect(body[1]?.textContent).toContain("Ayesha Khan");
+
+  await user.click(screen.getByRole("button", { name: "Lowest to highest" }));
+  body = within(screenTable()).getAllByRole("row").filter((row) => row.parentElement?.tagName === "TBODY");
+  expect(body[0]?.textContent).toContain("1");
+  expect(body[0]?.textContent).toContain("Ayesha Khan");
+  expect(body[0]?.textContent).toContain(formatRupees(100000));
+  expect(body[1]?.textContent).toContain("2");
+  expect(body[1]?.textContent).toContain("Sheikh Zain");
+});

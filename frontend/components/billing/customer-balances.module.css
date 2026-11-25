@@ -114,10 +114,28 @@
   border: 1px solid rgba(16, 20, 16, 0.06);
 }
 
+.filterGroups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  min-width: 0;
+  flex: 1;
+}
+
 .filters {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+}
+
+.filterLabel {
+  margin-right: 2px;
+  color: #8a918b;
+  font-size: 0.72rem;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .chip,
